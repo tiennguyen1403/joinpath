@@ -1,0 +1,19 @@
+# dependencies and build output
+node_modules/
+dist/
+.next/
+coverage/
+*.tsbuildinfo
+
+# local env and logs
+.env
+.env.*
+!.env.example
+*.log
+
+# OS and editor
+.DS_Store
+Thumbs.db
+
+# Claude Code: per-machine settings stay local; skills and CLAUDE.md are shared
+.claude/settings.local.json
