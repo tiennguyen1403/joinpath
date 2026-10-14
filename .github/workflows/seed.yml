@@ -1,0 +1,23 @@
+name: Seed production
+
+# Recreates the fixed demo org (PLAN §11) in the production database. Run it by hand:
+# gh workflow run seed.yml. Secrets: DATABASE_URL (Neon, direct connection), SEED_PASSWORD.
+on: workflow_dispatch
+
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      APP_ORIGIN: https://joinpath.vercel.app
+      SEED_PASSWORD: ${{ secrets.SEED_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter '@joinpath/api...' build
+      - run: pnpm db:seed
