@@ -9,7 +9,7 @@
 ## Quy ước session
 
 - Mỗi session = một lát cắt kiểm chứng được, có tiêu chí "xong khi". Xong thì đóng session, kể cả khi xong sớm.
-- Việc lớn hơn dự kiến hoặc context đã dài (`/context`): dừng ở điểm sạch, ghi phần dở vào handoff, tách thành M?.?a / M?.?b.
+- Việc lớn hơn dự kiến, hoặc user thấy `/context` đã quá nửa (user là người theo dõi mức context): dừng ở điểm sạch, ghi phần dở vào handoff, tách thành M?.?a / M?.?b.
 - File handoff: `docs/sessions/NNN-<ID>-<slug>.md` (NNN tăng dần toàn dự án, theo `docs/sessions/TEMPLATE.md`).
 - Session đầu của mỗi mốc M1–M5 chi tiết hóa lại các session của mốc đó (sửa bảng dưới) trước khi code.
 
@@ -62,5 +62,5 @@ Chưa có code. M0.1 sẽ điền các lệnh (`docker compose up -d`, `pnpm dev
 ## Môi trường đã biết
 
 - Windows 11, PowerShell 5.1 + Git Bash. Git 2.41 (`core.autocrlf=true` ở mức system → repo dùng `.gitattributes` `eol=lf`).
-- pnpm 12.11.2 cài global; Docker Desktop đã có. Node 24 LTS theo PLAN (kiểm tra `node -v` ở M0.1).
+- Đã kiểm tra lúc đóng S0: Node v24.21.0, pnpm 12.11.2 (global), Docker 29.5.3 (engine đang chạy).
 - Thiết kế: canvas "Joinpath Screens" https://claude.ai/artifact/Xr3pRZbd14D78pqUignjWV (đọc bằng Artifact tool, action `read`).

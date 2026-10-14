@@ -48,7 +48,7 @@ Chốt kế hoạch triển khai, thiết kế giao diện, và quy trình làm 
 ## Session kế tiếp
 
 - **ID và mục tiêu:** M0.1 · Khung repo — pnpm workspace `apps/web`, `apps/api`, `packages/core`, Postgres 18 qua docker compose, script gốc chạy xanh (chi tiết trong bảng STATUS).
-- **Bước đầu tiên:** kiểm tra môi trường bằng `node -v` (cần Node 24 LTS), `pnpm -v` (12.x) và `docker version`. Thiếu gì thì hỏi user trước khi cài.
+- **Bước đầu tiên:** môi trường đã đủ lúc đóng S0 (Node v24.21.0, pnpm 12.11.2, Docker 29.5.3). Chạy lại nhanh `node -v` và `docker version` để chắc, rồi dựng workspace theo PLAN §6.3.
 - **Đọc trước:** PLAN §6.2 (stack, version pin), §6.3 (cấu trúc repo), §6.6 (ràng buộc deploy ảnh hưởng cấu trúc), §12 (kiểm thử).
 - **Lưu ý:**
   - Dùng generator chính thức (`create-next-app`, Nest CLI) nhưng pin version theo §6.2.

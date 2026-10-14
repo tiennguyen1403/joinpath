@@ -13,7 +13,7 @@ Dự án chạy qua nhiều session ngắn; mỗi session là một dòng trong 
 
 **Trong session:**
 - Chỉ làm việc của session này. Thấy việc ngoài phạm vi: ghi vào handoff, không tự làm.
-- Việc lớn hơn dự kiến, hoặc `/context` cho thấy đã dùng quá nửa: dừng ở điểm sạch (build và test xanh), đóng session, chuyển phần còn lại sang session tách (M?.?a / M?.?b).
+- Việc lớn hơn dự kiến, hoặc user báo `/context` đã quá nửa (Claude không tự xem được mức context): dừng ở điểm sạch (build và test xanh), đóng session, chuyển phần còn lại sang session tách (M?.?a / M?.?b).
 
 **Đóng session** (hoặc `/session-end`):
 1. Chạy đủ kiểm chứng của session; ghi kết quả thật, kể cả phần fail.
