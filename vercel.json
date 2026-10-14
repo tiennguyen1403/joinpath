@@ -1,0 +1,26 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "regions": ["sin1"],
+  "services": {
+    "web": {
+      "root": "apps/web",
+      "buildCommand": "pnpm --filter '@joinpath/web...' build",
+      "bindings": [
+        {
+          "type": "service",
+          "service": "api",
+          "format": "url",
+          "env": "API_URL"
+        }
+      ]
+    },
+    "api": {
+      "root": "apps/api",
+      "buildCommand": "pnpm --filter '@joinpath/api...' build && if [ \"$VERCEL_ENV\" = production ]; then DATABASE_URL=\"$DATABASE_URL_UNPOOLED\" pnpm exec prisma migrate deploy; fi"
+    }
+  },
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": { "service": "api" } },
+    { "source": "/(.*)", "destination": { "service": "web" } }
+  ]
+}

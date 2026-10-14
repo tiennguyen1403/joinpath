@@ -9,7 +9,9 @@ const apiUrl = process.env.API_URL ?? 'http://localhost:3001';
 export const getMe = cache(async (): Promise<Me | null> => {
   const sid = (await cookies()).get(SESSION_COOKIE)?.value;
   if (!sid) return null;
-  const res = await fetch(`${apiUrl}/api/auth/me`, {
+  // Relative path: on Vercel, API_URL is the api service's binding, a URL base that may
+  // carry a path of its own (vercel.json).
+  const res = await fetch(new URL('api/auth/me', apiUrl), {
     headers: { cookie: `${SESSION_COOKIE}=${sid}` },
   });
   if (res.status === 401) return null;

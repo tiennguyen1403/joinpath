@@ -24,3 +24,6 @@ Thumbs.db
 
 # Playwright CLI snapshots and screenshots (.playwright/cli.config.json)
 .playwright-cli/
+
+# Vercel CLI link (vercel link); its .env.local is covered by .env.* above
+.vercel/
