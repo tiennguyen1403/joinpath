@@ -1,3 +1,4 @@
+import { inspect } from 'node:util';
 import {
   type ArgumentsHost,
   Catch,
@@ -22,12 +23,13 @@ const CODE_BY_STATUS: Record<number, ErrorCode> = {
 @Catch()
 export class HttpErrorFilter implements ExceptionFilter {
   catch(error: unknown, host: ArgumentsHost) {
-    const [status, body] = toApiError(error);
-    host.switchToHttp().getResponse<Response>().status(status).json(body);
+    const res = host.switchToHttp().getResponse<Response>();
+    const [status, body] = toApiError(error, res.get('X-Request-Id'));
+    res.status(status).json(body);
   }
 }
 
-function toApiError(error: unknown): [number, ApiError] {
+function toApiError(error: unknown, requestId?: string): [number, ApiError] {
   if (error instanceof ZodError) {
     return [
       400,
@@ -45,6 +47,6 @@ function toApiError(error: unknown): [number, ApiError] {
       { code: CODE_BY_STATUS[status] ?? 'INTERNAL', message: error.message },
     ];
   }
-  new Logger('HttpErrorFilter').error(error);
+  new Logger('HttpErrorFilter').error(`(req ${requestId}) ${inspect(error)}`);
   return [500, { code: 'INTERNAL', message: 'Internal server error' }];
 }

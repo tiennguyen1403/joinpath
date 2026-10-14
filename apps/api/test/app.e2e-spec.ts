@@ -15,11 +15,12 @@ describe('AppController (e2e)', () => {
     await app.close();
   });
 
-  it('/api/health (GET) is public and sends helmet headers', async () => {
+  it('/api/health (GET) is public and sends helmet headers and a request id', async () => {
     const res = await request(app.getHttpServer())
       .get('/api/health')
       .expect(200);
     expect(healthSchema.parse(res.body)).toEqual({ status: 'ok' });
     expect(res.get('X-Content-Type-Options')).toBe('nosniff');
+    expect(res.get('X-Request-Id')).toMatch(/^[0-9a-f-]{36}$/);
   });
 });

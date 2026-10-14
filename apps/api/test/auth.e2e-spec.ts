@@ -142,17 +142,38 @@ describe('auth', () => {
 });
 
 describe('login rate limit', () => {
+  const attempt = (app: INestApplication<App>, forwardedFor: string) =>
+    request(app.getHttpServer())
+      .post('/api/auth/login')
+      .set('X-Forwarded-For', forwardedFor)
+      .send({ email: 'nobody@x.joinpath.demo', password: 'x' });
+
   it('BR-P06 the 11th login from one IP within a minute gets 429', async () => {
     const app = await createApp();
-    const attempt = () =>
-      request(app.getHttpServer())
-        .post('/api/auth/login')
-        .send({ email: 'nobody@x.joinpath.demo', password: 'x' });
     try {
-      for (let i = 0; i < 10; i++) await attempt().expect(401);
+      // No trusted proxy: X-Forwarded-For is whatever the client sent, so it is ignored.
+      for (let i = 0; i < 10; i++) {
+        await attempt(app, `198.51.100.${i}`).expect(401);
+      }
       expect(
-        apiErrorSchema.parse((await attempt().expect(429)).body).code,
+        apiErrorSchema.parse(
+          (await attempt(app, '198.51.100.99').expect(429)).body,
+        ).code,
       ).toBe('RATE_LIMITED');
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('BR-P06 behind one trusted proxy, each client IP has its own limit', async () => {
+    const app = await createApp(1);
+    try {
+      // The proxy appends the address it saw; entries before it are the client's own.
+      for (let i = 0; i < 10; i++) {
+        await attempt(app, `198.51.100.${i}, 203.0.113.1`).expect(401);
+      }
+      await attempt(app, '203.0.113.1').expect(429);
+      await attempt(app, '203.0.113.2').expect(401);
     } finally {
       await app.close();
     }
