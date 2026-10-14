@@ -1,0 +1,18 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "rules": {
+    "typescript/no-floating-promises": "error"
+  },
+  "env": {
+    "node": true
+  },
+  "overrides": [
+    {
+      "files": ["apps/web/**"],
+      "plugins": ["react", "nextjs", "jsx-a11y"],
+      "env": {
+        "browser": true
+      }
+    }
+  ]
+}

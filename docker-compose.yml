@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: joinpath
+      POSTGRES_PASSWORD: joinpath
+      POSTGRES_DB: joinpath
+    ports:
+      # 5433 on the host: 5432 is often taken by a locally installed Postgres
+      - '5433:5432'
+    volumes:
+      # Postgres 18 images keep data under /var/lib/postgresql/18/docker
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U joinpath -d joinpath']
+      interval: 2s
+      timeout: 5s
+      retries: 15
+
+volumes:
+  pgdata:

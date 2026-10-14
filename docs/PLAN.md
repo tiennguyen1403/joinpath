@@ -395,7 +395,7 @@ flowchart LR
 | Storage | Bucket private S3-compatible (local dùng MinIO) | |
 | Việc định kỳ | Cron gọi `POST /internal/cron/tick` | Không dùng Redis, queue hay worker |
 | Test | Vitest 4, Supertest, Playwright | Một test runner cho cả repo. Vite 8 tự xử lý decorator metadata của Nest nên không cần plugin SWC |
-| Repo | pnpm workspaces | Không dùng Turborepo |
+| Repo | pnpm workspaces, oxlint (type-aware), Prettier | Không dùng Turborepo. oxlint và Prettier mỗi công cụ một config ở gốc; Prettier có sẵn trong template Nest 12 nên giữ lại và áp cho code cả repo (không áp cho docs nội bộ) |
 | Runtime | Node 24 LTS, TypeScript 6.0 (pin cố định), pnpm 12 | TypeScript 7 chỉ còn `tsc` native, không có JS API mà Next.js và Nest CLI cần. Các thư viện khác lấy bản ổn định mới nhất lúc bắt đầu |
 
 ### 6.3 Cấu trúc repo

@@ -1,0 +1,5 @@
+pnpm-lock.yaml
+# Internal Vietnamese docs and Claude Code session files are edited by hand
+docs/
+CLAUDE.md
+.claude/

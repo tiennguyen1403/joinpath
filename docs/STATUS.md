@@ -2,9 +2,9 @@
 
 > File này được nạp vào mọi session qua `CLAUDE.md`. Giữ ngắn: chỉ trạng thái hiện tại. Lịch sử chi tiết nằm trong `docs/sessions/`.
 
-**Cập nhật:** 2026-10-14 · session 000 (S0 · lập kế hoạch)
-**Mốc hiện tại:** M0 · Walking skeleton — chưa có dòng code nào.
-**Session kế tiếp:** **M0.1 · Khung repo** (xem bảng). Handoff mới nhất: `docs/sessions/000-S0-planning.md`.
+**Cập nhật:** 2026-10-14 · session 001 (M0.1 · khung repo)
+**Mốc hiện tại:** M0 · Walking skeleton — khung repo chạy được (web, api, core, Postgres local); chưa có DB schema, auth, UI.
+**Session kế tiếp:** **M0.2 · Data + auth API** (xem bảng). Handoff mới nhất: `docs/sessions/001-M0.1-repo-skeleton.md`.
 
 ## Quy ước session
 
@@ -20,8 +20,8 @@ Trạng thái: ✅ xong · ▶ kế tiếp · ⏳ chưa làm. Mốc M1–M5 mớ
 | ID | Nội dung | Xong khi | TT |
 |---|---|---|---|
 | S0 | Kế hoạch (PLAN v0.9), thiết kế 15 bảng, bộ khung handoff | Có PLAN, canvas, CLAUDE.md, STATUS, template | ✅ |
-| **M0.1** | Khung repo: `git`, pnpm workspace (`apps/web` Next.js 16, `apps/api` NestJS 12 ESM, `packages/core` TS + Zod + Vitest), TS 6.0 pin, oxlint, `docker-compose.yml` Postgres 18, script gốc `dev/build/test/lint/typecheck` | `pnpm install`, `pnpm -r build`, `pnpm -r test`, lint, typecheck xanh; `docker compose up -d` Postgres healthy; `pnpm dev`: web :3000 hiện trang, api :3001 `/health` trả ok; cả web và api import được từ `core` | ▶ |
-| M0.2 | Data + auth API: Prisma 7.10 pin (org, departments, employees, users, sessions), migration, `seedDemoOrg` phần nhân sự cho org cố định (§11); login / logout / me bằng cookie session (ADR 007) | Test Supertest với Postgres thật pass: login đặt cookie đúng cờ, sai mật khẩu 401 chung chung, `me` đúng user/org/role, logout vô hiệu session | ⏳ |
+| M0.1 | Khung repo: `git`, pnpm workspace (`apps/web` Next.js 16, `apps/api` NestJS 12 ESM, `packages/core` TS + Zod + Vitest), TS 6.0 pin, oxlint, `docker-compose.yml` Postgres 18, script gốc `dev/build/test/lint/typecheck` | `pnpm install`, `pnpm -r build`, `pnpm -r test`, lint, typecheck xanh; `docker compose up -d` Postgres healthy; `pnpm dev`: web :3000 hiện trang, api :3001 `/health` trả ok; cả web và api import được từ `core` | ✅ |
+| **M0.2** | Data + auth API: Prisma 7.10 pin (org, departments, employees, users, sessions), migration, `seedDemoOrg` phần nhân sự cho org cố định (§11); login / logout / me bằng cookie session (ADR 007) | Test Supertest với Postgres thật pass: login đặt cookie đúng cờ, sai mật khẩu 401 chung chung, `me` đúng user/org/role, logout vô hiệu session | ▶ |
 | M0.3 | Web shell: Tailwind 4 + token beUI (kèm 3 chỗ lệch, ADR 009), component beUI qua registry, `reicon-react`, `motion` + `lib/ease.ts`, rewrite `/api/*`, trang login, layout theo vai trò (HR / IT / MEMBER) | Ở local: đăng nhập bằng user seed qua UI, thấy đúng sidebar theo vai trò, logout được; giao diện khớp bảng Login và Dashboard trên canvas | ⏳ |
 | M0.4 | CI + host + deploy: GitHub repo (hỏi user), GitHub Actions (lint, typecheck, test với Postgres service), đo cold start để chọn host (§6.6), deploy, migrate + seed, smoke test | **Có URL public đăng nhập được bằng user seed**; CI xanh trên `main` | ⏳ |
 | M1.1 | `core`: schema template + `validateTemplate` (DAG, mọi BR-T) | Unit test nhóm T pass | ⏳ |
@@ -52,15 +52,24 @@ Trạng thái: ✅ xong · ▶ kế tiếp · ⏳ chưa làm. Mốc M1–M5 mớ
 ## Quyết định còn mở
 
 - Host deploy: chọn ở M0.4 sau khi đo cold start NestJS (PLAN §6.6, phương án A hoặc B).
-- GitHub repo (tên, public hay private) và lần push đầu: hỏi user ở M0.4.
-- Formatter (Prettier hay không): hỏi user ở M0.1 nếu cần; lint dùng oxlint theo template Nest 12.
+- GitHub repo (tên, public hay private, LICENSE) và lần push đầu: hỏi user ở M0.4.
+- Prefix `/api` (PLAN §8): Nest `setGlobalPrefix('api')` (chừa `/health`) hay rewrite bỏ prefix. Chốt ở đầu M0.2.
+- Cache Components của Next 16 đang tắt (create-next-app 16.4 mặc định bật; phần sau đăng nhập chủ yếu là client components): xác nhận ở M0.3.
 
 ## Chạy dự án
 
-Chưa có code. M0.1 sẽ điền các lệnh (`docker compose up -d`, `pnpm dev`, ...).
+```sh
+pnpm install
+docker compose up -d   # Postgres 18 ở localhost:5433, user/pass/db: joinpath
+pnpm build             # build core/dist; test và typecheck của app cần nó
+pnpm dev               # web http://localhost:3000 · api http://localhost:3001/health
+pnpm test              # rồi pnpm lint · pnpm typecheck · pnpm format:check
+```
 
 ## Môi trường đã biết
 
 - Windows 11, PowerShell 5.1 + Git Bash. Git 2.41 (`core.autocrlf=true` ở mức system → repo dùng `.gitattributes` `eol=lf`).
 - Đã kiểm tra lúc đóng S0: Node v24.21.0, pnpm 12.11.2 (global), Docker 29.5.3 (engine đang chạy).
+- Postgres 16 cài sẵn trên Windows chiếm port 5432, nên Postgres của dự án (Docker) chạy ở 5433.
+- oxlint không in gì khi chạy trong Claude Code mà không có lỗi; thêm `--format=default` để thấy tổng kết.
 - Thiết kế: canvas "Joinpath Screens" https://claude.ai/artifact/Xr3pRZbd14D78pqUignjWV (đọc bằng Artifact tool, action `read`).

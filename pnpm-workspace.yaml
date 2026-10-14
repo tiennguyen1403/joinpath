@@ -1,0 +1,13 @@
+packages:
+  - apps/*
+  - packages/*
+
+# Versions shared by several packages. TypeScript stays on 6.0 (PLAN §6.2).
+catalog:
+  '@types/node': ^24.19.2
+  typescript: 6.0.3
+  vitest: ^4.1.11
+
+allowBuilds:
+  sharp: false
+  unrs-resolver: false
