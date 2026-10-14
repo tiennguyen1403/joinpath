@@ -51,8 +51,8 @@ export class AuthService {
         id: true,
         email: true,
         role: true,
-        employee: { select: { id: true, fullName: true } },
-        organization: { select: { id: true, name: true } },
+        employee: { select: { id: true, fullName: true, jobTitle: true } },
+        organization: { select: { id: true, name: true, timezone: true } },
       },
     });
   }

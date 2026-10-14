@@ -3,3 +3,5 @@ pnpm-lock.yaml
 docs/
 CLAUDE.md
 .claude/
+# beUI code stays as the shadcn CLI installed it (apps/web/components/beui/README.md)
+apps/web/components/beui/

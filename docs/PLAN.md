@@ -610,7 +610,7 @@ Thiết kế chi tiết của 12 màn, cùng các bảng Foundations (token, ico
 
 ### 10.1 Component beUI dùng ở đâu
 
-Nguyên tắc (ADR 010): có component beUI thì dùng, không tự vẽ và không dùng control mặc định của trình duyệt. Mọi slug dưới đây đều có trong registry `https://beui.dev/r`.
+Nguyên tắc (ADR 010): có component beUI thì dùng, không tự vẽ và không dùng control mặc định của trình duyệt. Mọi slug dưới đây đều có trong registry `https://beui.dev/r`, trừ `image-viewer` (registry trả 404; ứng viên thay thế là `morphing-lightbox`, chốt ở M2.4). Cài bằng shadcn CLI vào `apps/web/components/beui/` (xem README trong thư mục đó).
 
 | Việc trong Joinpath | Component beUI | Màn hình |
 |---|---|---|
@@ -634,7 +634,7 @@ Nguyên tắc (ADR 010): có component beUI thì dùng, không tự vẽ và kh�
 | Thao tác trên dòng task | `context-menu` | Onboarding detail |
 | Giải thích vì sao nút bị khóa | `tooltip` | Nút Publish của Template editor |
 | Danh sách onboarding, bảng task theo phase | `table` | Dashboard, New onboarding |
-| Bề mặt, thông báo, công tắc, nút | `card`, `alert`, `switch`, `button` | Mọi nơi |
+| Bề mặt, thông báo, công tắc, nút | `card`, `alert`, `switch`, `button-base` | Mọi nơi |
 
 Tự dựng theo token vì beUI không có: thanh tiến độ onboarding, avatar chữ cái đầu, các bước của wizard, textarea, canvas dependency graph (React Flow).
 

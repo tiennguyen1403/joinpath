@@ -21,3 +21,6 @@ Thumbs.db
 
 # Claude Code: per-machine settings stay local; skills and CLAUDE.md are shared
 .claude/settings.local.json
+
+# Playwright CLI snapshots and screenshots (.playwright/cli.config.json)
+.playwright-cli/

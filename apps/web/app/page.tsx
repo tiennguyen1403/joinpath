@@ -1,9 +1,9 @@
-import { APP_NAME } from '@joinpath/core';
+import { redirect } from 'next/navigation';
+import { homeFor } from '@/lib/nav';
+import { getMe } from '@/lib/session';
 
-export default function Home() {
-  return (
-    <main>
-      <h1>{APP_NAME}</h1>
-    </main>
-  );
+// The landing page arrives in M5.3; until then / only sends people where they belong.
+export default async function Home() {
+  const me = await getMe();
+  redirect(me ? homeFor(me.role) : '/login');
 }

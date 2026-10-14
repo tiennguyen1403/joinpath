@@ -75,11 +75,23 @@ describe('auth', () => {
 
   it('FR-01 BR-P01 me returns the user, role and organization of the session', async () => {
     const cases = [
-      { email: seeded.emails.hr, role: 'HR', fullName: 'Lan Pham' },
-      { email: seeded.emails.it, role: 'IT', fullName: 'Duc Tran' },
-      { email: seeded.emails.manager, role: 'MEMBER', fullName: 'Minh Nguyen' },
+      {
+        email: seeded.emails.hr,
+        role: 'HR',
+        employee: { fullName: 'Lan Pham', jobTitle: 'HR Specialist' },
+      },
+      {
+        email: seeded.emails.it,
+        role: 'IT',
+        employee: { fullName: 'Duc Tran', jobTitle: 'IT Support' },
+      },
+      {
+        email: seeded.emails.manager,
+        role: 'MEMBER',
+        employee: { fullName: 'Minh Nguyen', jobTitle: 'Engineering Manager' },
+      },
     ];
-    for (const { email, role, fullName } of cases) {
+    for (const { email, role, employee } of cases) {
       // Emails are trimmed and lowercased before lookup.
       const res = await me(await signIn(` ${email.toUpperCase()} `)).expect(
         200,
@@ -87,8 +99,12 @@ describe('auth', () => {
       expect(meSchema.parse(res.body)).toMatchObject({
         email,
         role,
-        employee: { fullName },
-        organization: { id: seeded.organization.id, name: 'Acme Tech' },
+        employee,
+        organization: {
+          id: seeded.organization.id,
+          name: 'Acme Tech',
+          timezone: 'Asia/Ho_Chi_Minh',
+        },
       });
     }
   });

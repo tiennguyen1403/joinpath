@@ -1,0 +1,30 @@
+@import 'tailwindcss';
+@import '../components/beui/theme.css';
+
+/*
+ * Joinpath on top of beUI (ADR 009):
+ * - White text on primary, and links, use --primary-strong: beUI #0285F7 under white text is 3.7:1, this is 5.4:1.
+ * - Nav links and list rows hover on one layer, bg-foreground/5 (bg-foreground/8 pressed).
+ * - The current nav item sits on bg-primary/10 with primary-strong text and a primary icon.
+ * - *-strong are darker shades of beUI hues, for small text on their 10% tints.
+ * No shadows on cards or other resting surfaces.
+ */
+:root {
+  --primary-strong: #0067d1;
+  --violet-strong: #6744ac;
+  --accent-strong: #007679;
+  --danger-strong: #a5292b;
+}
+
+@theme inline {
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --color-primary-strong: var(--primary-strong);
+  --color-violet-strong: var(--violet-strong);
+  --color-accent-strong: var(--accent-strong);
+  --color-danger-strong: var(--danger-strong);
+}
+
+body {
+  @apply bg-background text-foreground font-sans antialiased;
+}

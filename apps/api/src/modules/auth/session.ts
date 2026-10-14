@@ -8,14 +8,13 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import type { Role } from '@joinpath/core';
+import { type Role, SESSION_COOKIE as COOKIE } from '@joinpath/core';
 import type { CookieOptions, Request, Response } from 'express';
 import { env } from '../../env.js';
 import { PrismaService } from '../../prisma.js';
 
 // Cookie session, same origin as the web app (PLAN §9, ADR 007). The __Host- prefix
 // makes the browser enforce Secure, Path=/ and no Domain attribute.
-const COOKIE = '__Host-sid';
 export const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const cookieOptions: CookieOptions = {
   httpOnly: true,

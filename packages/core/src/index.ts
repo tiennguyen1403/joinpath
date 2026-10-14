@@ -38,11 +38,22 @@ export const loginSchema = z.object({
 });
 export type Login = z.infer<typeof loginSchema>;
 
+// Set by the API, read by the web server to ask the API who is signed in (ADR 007).
+export const SESSION_COOKIE = '__Host-sid';
+
 export const meSchema = z.object({
   id: z.uuid(),
   email: z.email(),
   role: roleSchema,
-  employee: z.object({ id: z.uuid(), fullName: z.string() }),
-  organization: z.object({ id: z.uuid(), name: z.string() }),
+  employee: z.object({
+    id: z.uuid(),
+    fullName: z.string(),
+    jobTitle: z.string(),
+  }),
+  organization: z.object({
+    id: z.uuid(),
+    name: z.string(),
+    timezone: z.string(),
+  }),
 });
 export type Me = z.infer<typeof meSchema>;
