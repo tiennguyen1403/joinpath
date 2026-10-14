@@ -24,6 +24,7 @@ export function setupApp<T extends NestExpressApplication>(
 
 // One line per request, tagged with an id that is also sent back as X-Request-Id.
 // Path only: a query string may carry a token, and tokens are never logged (PLAN §9).
+// req.ip shows whether TRUST_PROXY_HOPS matches the host: it must be the client's IP.
 function logRequest(req: Request, res: Response, next: NextFunction) {
   const id = randomUUID();
   const start = performance.now();
@@ -31,7 +32,9 @@ function logRequest(req: Request, res: Response, next: NextFunction) {
   res.on('finish', () => {
     const ms = Math.round(performance.now() - start);
     const path = req.originalUrl.split('?')[0];
-    http.log(`${req.method} ${path} ${res.statusCode} ${ms}ms (req ${id})`);
+    http.log(
+      `${req.method} ${path} ${res.statusCode} ${ms}ms ${req.ip} (req ${id})`,
+    );
   });
   next();
 }
