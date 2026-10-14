@@ -1,3 +1,4 @@
+import { loadEnv } from 'vite';
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
@@ -8,5 +9,7 @@ export default defineConfig({
     globals: true,
     root: './',
     include: ['**/*.spec.ts', '**/*.e2e-spec.ts'],
+    // DATABASE_URL and APP_ORIGIN come from .env locally; CI sets them directly.
+    env: loadEnv('test', process.cwd(), ''),
   },
 });

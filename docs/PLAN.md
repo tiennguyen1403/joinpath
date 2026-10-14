@@ -477,7 +477,7 @@ Mọi bảng nghiệp vụ đều có `organization_id` và `created_at`. Không
 
 | Bảng | Cột chính | Ràng buộc đáng chú ý |
 |---|---|---|
-| `organizations` | name, timezone, is_sandbox, clock_offset_days, expires_at?, created_ip_hash? | |
+| `organizations` | name, slug, timezone, is_sandbox, clock_offset_days, expires_at?, created_ip_hash? | unique(slug); slug là đuôi email `@{slug}.joinpath.demo` (BR-D04), nên mỗi org (kể cả org do test tạo) có bộ email đăng nhập riêng |
 | `departments` | name | unique(org, name) |
 | `employees` | full_name, email, job_title, department_id?, manager_id? | unique(org, email) |
 | `users` | employee_id, email (định danh đăng nhập), role (`HR`/`IT`/`MEMBER`), password_hash, status (`ACTIVE`/`DISABLED`) | unique(employee_id); unique(email) trên toàn hệ thống, để form login không cần biết org (xem BR-D04) |
@@ -550,6 +550,7 @@ Lỗi luôn trả về dạng `{ code, message, details? }`:
 | Code | HTTP | Khi nào |
 |---|---|---|
 | `VALIDATION_FAILED` | 400 | Sai schema hoặc vi phạm rule template (`details` liệt kê theo task key) |
+| `UNAUTHENTICATED` | 401 | Chưa đăng nhập, session hết hạn hoặc đã bị thu hồi; login sai (một message chung cho mọi lý do) |
 | `NOT_FOUND` | 404 | Không tồn tại, **hoặc** nằm ngoài phạm vi của user |
 | `FORBIDDEN` | 403 | Thấy được nhưng không có quyền thao tác |
 | `INVALID_STATE` | 409 | Sai trạng thái, hoặc thua compare-and-set |
@@ -558,6 +559,8 @@ Lỗi luôn trả về dạng `{ code, message, details? }`:
 | `TEMPLATE_VERSION_CHANGED` | 409 | Version khác với bản đã preview |
 | `ASSIGNEE_UNRESOLVED` | 422 | Activation thiếu assignee (kèm danh sách task) |
 | `INVITATION_INVALID` | 410 | Token đã dùng, hết hạn, hoặc đã bị thay bằng token mới |
+| `RATE_LIMITED` | 429 | Vượt rate limit (BR-P06) |
+| `INTERNAL` | 500 | Lỗi không lường trước; chi tiết chỉ ghi vào log |
 
 ---
 
@@ -640,10 +643,10 @@ Tự dựng theo token vì beUI không có: thanh tiến độ onboarding, avata
 ## 11. Chiến lược demo
 
 - **Landing `/`:** một màn giới thiệu, nút "Try live demo", link tới GitHub và tài liệu.
-- **`POST /demo/sandboxes`:** tạo org `is_sandbox` với `expires_at = now + 24h`, chạy `seedDemoOrg(orgId)`, rồi đăng nhập luôn với vai HR.
+- **`POST /demo/sandboxes`:** tạo org `is_sandbox` với `expires_at = now + 24h` qua `seedDemoOrg`, rồi đăng nhập luôn với vai HR.
 - **Org cố định trước M3:** local dev và bản prod ở M0–M2 dùng một org sandbox không hết hạn (`expires_at = null`), nên có thể tua ngày khi tự test. Từ M3, landing chuyển sang "Try demo"; org này giữ lại để chụp ảnh cho tài liệu, hoặc xóa đi.
-- **`seedDemoOrg(orgId, { scenarios })`** là một hàm dùng cho cả ba nơi: local dev, test fixture và sandbox. Phần nhân sự và template luôn được seed; ba onboarding A, B, C chỉ được seed khi `scenarios: true` (dùng cho sandbox, local dev và test E2E). Hàm này seed:
-  - Org với timezone Asia/Ho_Chi_Minh; các phòng ban Engineering, People, IT.
+- **`seedDemoOrg(db, { slug, password, scenarios? })`** (`apps/api/src/modules/demo/seed.ts`) là một hàm dùng cho cả ba nơi: local dev, test fixture và sandbox. Hàm tự tạo org (slug quyết định đuôi email, BR-D04) và trả về org kèm email đăng nhập của từng vai. Phần nhân sự và template luôn được seed; ba onboarding A, B, C chỉ được seed khi `scenarios: true` (dùng cho sandbox, local dev và test E2E). Org cố định dùng slug `acme`, mật khẩu lấy từ env `SEED_PASSWORD`. Hàm này seed:
+  - Org "Acme Tech" với timezone Asia/Ho_Chi_Minh; các phòng ban Engineering, People Operations, IT. Tên người lấy theo canvas.
   - 1 HR, **2 IT** (để thấy bước chọn assignee khi role có nhiều người), 1 Engineering Manager, 3 nhân viên mới; toàn bộ là tên giả.
   - Template "Engineering Onboarding" (có 2 version, để thấy versioning) và "General Onboarding".
   - Onboarding **A** ở DRAFT (start date = hôm nay + 7) chờ khách activate; **B** đang ACTIVE với một approval chờ duyệt; **C** đã COMPLETED, làm dữ liệu lịch sử cho dashboard.
@@ -666,7 +669,7 @@ Tự dựng theo token vì beUI không có: thanh tiến độ onboarding, avata
 ## 12. Kiểm thử
 
 - **Unit** cho `packages/core`: `validateTemplate` (mọi rule BR-T), tính ngày, availability, activation plan, reschedule plan. Không cần mock gì, vì các hàm thuần nhận `today` làm tham số.
-- **Integration** chạy với Postgres và MinIO thật (docker compose ở local, service container trong CI), gọi qua HTTP bằng Supertest. Mỗi test tự tạo một org bằng `seedDemoOrg({ scenarios: false })` (chỉ seed nhân sự và template, cho nhanh), nên các test độc lập và chạy song song an toàn: cô lập tenant cho ta cô lập test miễn phí. Test concurrency gửi 2 request cùng lúc bằng `Promise.all` và kiểm tra đúng 1 request thành công.
+- **Integration** chạy với Postgres và MinIO thật (docker compose ở local, service container trong CI), gọi qua HTTP bằng Supertest. Mỗi file test tự tạo một org bằng `seedDemoOrg` với slug ngẫu nhiên, không bật `scenarios` (chỉ seed nhân sự và template, cho nhanh), và xóa org đó khi chạy xong (cascade), nên các test độc lập và chạy song song an toàn: cô lập tenant cho ta cô lập test miễn phí. Test concurrency gửi 2 request cùng lúc bằng `Promise.all` và kiểm tra đúng 1 request thành công.
 - **E2E (Playwright):** 1 spec cho golden path, 1 spec kiểm tra quyền xem file.
 - **CI (GitHub Actions):** lint, typecheck, unit, integration (service container cho Postgres và MinIO); Playwright chạy khi merge vào main.
 - **Traceability:** tên test chứa ID của BR; README có bảng ánh xạ BR → test.
@@ -733,7 +736,7 @@ Mỗi mốc được chia thành các session ngắn, mỗi session một lát c
 ## 14. Sản phẩm cho portfolio
 
 - **README (tiếng Anh):** pitch một câu, GIF, link demo, "xem gì trong 3 phút" (theo golden path), sơ đồ kiến trúc (Mermaid), các quyết định chính (link sang ADR), bảng BR → test, hướng dẫn chạy local.
-- **ADR** (mỗi cái tối đa 1 trang, viết ngay lúc ra quyết định):
+- **ADR** (mỗi cái tối đa 1 trang, viết ngay lúc ra quyết định; file ở `docs/adr/NNN-<slug>.md`):
   - 001 Modular monolith.
   - 002 Template là JSON bất biến.
   - 003 Availability được tính ra, không lưu.

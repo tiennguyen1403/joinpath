@@ -1,0 +1,144 @@
+import { randomBytes } from 'node:crypto';
+import type { INestApplication } from '@nestjs/common';
+import { apiErrorSchema, meSchema } from '@joinpath/core';
+import request from 'supertest';
+import type { App } from 'supertest/types.js';
+import { seedDemoOrg } from '../src/modules/demo/seed.js';
+import { PrismaService } from '../src/prisma.js';
+import { createApp } from './app.js';
+
+const PASSWORD = 'test-password';
+
+// Logins in one app share a throttle bucket (10 per minute, BR-P06): keep this file under 10.
+describe('auth', () => {
+  let app: INestApplication<App>;
+  let prisma: PrismaService;
+  let seeded: Awaited<ReturnType<typeof seedDemoOrg>>;
+
+  const login = (email: string, password = PASSWORD) =>
+    request(app.getHttpServer())
+      .post('/api/auth/login')
+      .send({ email, password });
+  const signIn = async (email: string) => {
+    const res = await login(email).expect(204);
+    return res.get('Set-Cookie')![0].split(';')[0];
+  };
+  const me = (cookie?: string) => {
+    const req = request(app.getHttpServer()).get('/api/auth/me');
+    return cookie ? req.set('Cookie', cookie) : req;
+  };
+
+  beforeAll(async () => {
+    app = await createApp();
+    prisma = app.get(PrismaService);
+    seeded = await seedDemoOrg(prisma, {
+      slug: `t${randomBytes(4).toString('hex')}`,
+      password: PASSWORD,
+    });
+  });
+
+  afterAll(async () => {
+    await prisma.organization.delete({ where: { id: seeded.organization.id } });
+    await app.close();
+  });
+
+  it('FR-01 login sets an HttpOnly, Secure, SameSite=Lax session cookie without Domain', async () => {
+    const res = await login(seeded.emails.hr).expect(204);
+    const cookie = res.get('Set-Cookie')![0];
+    expect(cookie).toMatch(/^__Host-sid=[\w-]{43};/);
+    expect(cookie).toMatch(/; HttpOnly(;|$)/);
+    expect(cookie).toMatch(/; Secure(;|$)/);
+    expect(cookie).toMatch(/; SameSite=Lax(;|$)/);
+    expect(cookie).toMatch(/; Path=\/(;|$)/);
+    expect(cookie).not.toMatch(/Domain=/i);
+  });
+
+  it('FR-01 wrong password, unknown email and disabled user get the same generic 401', async () => {
+    await prisma.user.update({
+      where: { email: seeded.emails.it2 },
+      data: { status: 'DISABLED' },
+    });
+    const responses = await Promise.all([
+      login(seeded.emails.hr, 'wrong-password'),
+      login(`nobody@${seeded.organization.slug}.joinpath.demo`),
+      login(seeded.emails.it2),
+    ]);
+    for (const res of responses) {
+      expect(res.status).toBe(401);
+      expect(res.get('Set-Cookie')).toBeUndefined();
+      expect(apiErrorSchema.parse(res.body)).toEqual({
+        code: 'UNAUTHENTICATED',
+        message: 'Invalid email or password',
+      });
+    }
+  });
+
+  it('FR-01 BR-P01 me returns the user, role and organization of the session', async () => {
+    const cases = [
+      { email: seeded.emails.hr, role: 'HR', fullName: 'Lan Pham' },
+      { email: seeded.emails.it, role: 'IT', fullName: 'Duc Tran' },
+      { email: seeded.emails.manager, role: 'MEMBER', fullName: 'Minh Nguyen' },
+    ];
+    for (const { email, role, fullName } of cases) {
+      // Emails are trimmed and lowercased before lookup.
+      const res = await me(await signIn(` ${email.toUpperCase()} `)).expect(
+        200,
+      );
+      expect(meSchema.parse(res.body)).toMatchObject({
+        email,
+        role,
+        employee: { fullName },
+        organization: { id: seeded.organization.id, name: 'Acme Tech' },
+      });
+    }
+  });
+
+  it('FR-01 logout revokes the session server-side and clears the cookie', async () => {
+    const cookie = await signIn(seeded.emails.it);
+    await me(cookie).expect(200);
+
+    const res = await request(app.getHttpServer())
+      .post('/api/auth/logout')
+      .set('Cookie', cookie)
+      .expect(204);
+    expect(res.get('Set-Cookie')![0]).toMatch(
+      /^__Host-sid=;.*Expires=Thu, 01 Jan 1970/,
+    );
+
+    // The old cookie no longer works, even if the browser kept it.
+    expect(apiErrorSchema.parse((await me(cookie).expect(401)).body).code).toBe(
+      'UNAUTHENTICATED',
+    );
+    expect(apiErrorSchema.parse((await me().expect(401)).body).code).toBe(
+      'UNAUTHENTICATED',
+    );
+  });
+
+  it('FR-01 refuses writes sent from another origin (CSRF, PLAN §9)', async () => {
+    const res = await login(seeded.emails.hr)
+      .set('Origin', 'https://evil.example')
+      .expect(403);
+    expect(apiErrorSchema.parse(res.body).code).toBe('FORBIDDEN');
+    await login(seeded.emails.hr)
+      .set('Origin', process.env.APP_ORIGIN!)
+      .expect(204);
+  });
+});
+
+describe('login rate limit', () => {
+  it('BR-P06 the 11th login from one IP within a minute gets 429', async () => {
+    const app = await createApp();
+    const attempt = () =>
+      request(app.getHttpServer())
+        .post('/api/auth/login')
+        .send({ email: 'nobody@x.joinpath.demo', password: 'x' });
+    try {
+      for (let i = 0; i < 10; i++) await attempt().expect(401);
+      expect(
+        apiErrorSchema.parse((await attempt().expect(429)).body).code,
+      ).toBe('RATE_LIMITED');
+    } finally {
+      await app.close();
+    }
+  });
+});

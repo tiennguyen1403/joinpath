@@ -1,28 +1,25 @@
-import { Test, TestingModule } from '@nestjs/testing';
-import { INestApplication } from '@nestjs/common';
-import request from 'supertest';
-import { App } from 'supertest/types.js';
+import type { INestApplication } from '@nestjs/common';
 import { healthSchema } from '@joinpath/core';
-import { AppModule } from './../src/app.module.js';
+import request from 'supertest';
+import type { App } from 'supertest/types.js';
+import { createApp } from './app.js';
 
 describe('AppController (e2e)', () => {
   let app: INestApplication<App>;
 
-  beforeEach(async () => {
-    const moduleFixture: TestingModule = await Test.createTestingModule({
-      imports: [AppModule],
-    }).compile();
-
-    app = moduleFixture.createNestApplication();
-    await app.init();
+  beforeAll(async () => {
+    app = await createApp();
   });
 
-  it('/health (GET)', async () => {
-    const res = await request(app.getHttpServer()).get('/health').expect(200);
-    expect(healthSchema.parse(res.body)).toEqual({ status: 'ok' });
-  });
-
-  afterEach(async () => {
+  afterAll(async () => {
     await app.close();
+  });
+
+  it('/api/health (GET) is public and sends helmet headers', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/api/health')
+      .expect(200);
+    expect(healthSchema.parse(res.body)).toEqual({ status: 'ok' });
+    expect(res.get('X-Content-Type-Options')).toBe('nosniff');
   });
 });
