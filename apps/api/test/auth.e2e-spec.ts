@@ -155,11 +155,9 @@ describe('login rate limit', () => {
       for (let i = 0; i < 10; i++) {
         await attempt(app, `198.51.100.${i}`).expect(401);
       }
-      expect(
-        apiErrorSchema.parse(
-          (await attempt(app, '198.51.100.99').expect(429)).body,
-        ).code,
-      ).toBe('RATE_LIMITED');
+      const limited = await attempt(app, '198.51.100.99').expect(429);
+      expect(apiErrorSchema.parse(limited.body).code).toBe('RATE_LIMITED');
+      expect(Number(limited.get('Retry-After'))).toBeGreaterThan(0);
     } finally {
       await app.close();
     }

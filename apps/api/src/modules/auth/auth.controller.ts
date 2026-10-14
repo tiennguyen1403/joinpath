@@ -8,7 +8,6 @@ import {
   Res,
   UseGuards,
 } from '@nestjs/common';
-import { ThrottlerGuard } from '@nestjs/throttler';
 import { loginSchema, type Me } from '@joinpath/core';
 import type { Request, Response } from 'express';
 import { AuthService } from './auth.service.js';
@@ -18,13 +17,14 @@ import {
   readSessionToken,
   setSessionCookie,
 } from './session.js';
+import { ThrottleGuard } from './throttle.js';
 
 @Controller('auth')
 export class AuthController {
   constructor(private readonly auth: AuthService) {}
 
   @Public()
-  @UseGuards(ThrottlerGuard) // BR-P06
+  @UseGuards(ThrottleGuard) // BR-P06
   @Post('login')
   @HttpCode(204)
   async login(
