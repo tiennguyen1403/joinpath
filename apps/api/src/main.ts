@@ -13,6 +13,4 @@ async function bootstrap() {
   await app.listen(port);
   Logger.log(`${APP_NAME} API listening on http://localhost:${port}`);
 }
-// No top-level await: Vercel's launcher may require() this module, and require(esm)
-// refuses modules that use it. Vercel picks up the server when listen() runs.
-void bootstrap();
+await bootstrap();

@@ -18,7 +18,7 @@
     "api": {
       "root": "apps/api",
       "framework": "nestjs",
-      "buildCommand": "pnpm --filter '@joinpath/api...' build && printf '{\"type\":\"module\"}' > dist/package.json && if [ \"$VERCEL_ENV\" = production ]; then DATABASE_URL=\"$DATABASE_URL_UNPOOLED\" pnpm exec prisma migrate deploy; fi"
+      "buildCommand": "pnpm --filter '@joinpath/api^...' build && pnpm exec prisma generate && if [ \"$VERCEL_ENV\" = production ]; then DATABASE_URL=\"$DATABASE_URL_UNPOOLED\" pnpm exec prisma migrate deploy; fi"
     }
   },
   "rewrites": [
