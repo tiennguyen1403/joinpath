@@ -21,7 +21,7 @@
       "buildCommand": "pnpm --filter '@joinpath/api^...' build && pnpm exec prisma generate && if [ \"$VERCEL_ENV\" = production ]; then DATABASE_URL=\"$DATABASE_URL_UNPOOLED\" pnpm exec prisma migrate deploy; fi",
       "functions": {
         "src/main.ts": {
-          "includeFiles": "apps/api/node_modules/@nestjs/throttler"
+          "includeFiles": "apps/api/node_modules/@nestjs/throttler/**"
         }
       }
     }
