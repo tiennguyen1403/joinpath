@@ -11,7 +11,7 @@ Sessions must also be revocable on the spot: on logout, and when HR cancels an o
 
 ## Decision
 
-- **One origin.** The browser only ever talks to the web origin. Next.js rewrites `/api/*` to the API unchanged, and the API serves every route under the global prefix `/api`.
+- **One origin.** The browser only ever talks to the web origin. Next.js rewrites `/api/*` to the API unchanged, and the API serves every route under the global prefix `/api`. In production, Vercel's router does this rewrite instead (ADR 011).
 - **Opaque token.** Login creates 32 random bytes and returns them in a cookie: `__Host-sid`, `HttpOnly; Secure; SameSite=Lax; Path=/`, with no `Domain` attribute. The `__Host-` prefix makes the browser reject the cookie if any of those flags change. A session lives 7 days and is not extended.
 - **Hash at rest.** The `sessions` table stores only the SHA-256 of the token. Logout deletes the row, so revocation takes effect on the next request. Passwords are hashed with Argon2id from `node:crypto`, with no native dependency.
 - **CSRF.** On top of `SameSite=Lax`, a global guard refuses any non-GET request whose `Origin` header is not the app origin (`APP_ORIGIN`).
@@ -22,7 +22,7 @@ Sessions must also be revocable on the spot: on logout, and when HR cancels an o
 - No CORS configuration. Cookies stay first-party in every browser.
 - Every authenticated request costs one indexed lookup on `sessions`.
 - Never add a `Domain` attribute. It would tie the cookie to the API host and break login through the rewrite, again without any error.
-- Requests reach the API through the web's proxy. The real client IP must therefore come from `X-Forwarded-For`, with the right `trust proxy` setting for the host. Without it, the login rate limit (BR-P06) counts every user as the same IP.
+- Requests reach the API through the web's proxy. The real client IP must therefore come from `X-Forwarded-For`, with the right `trust proxy` setting for the host. Without it, the login rate limit (BR-P06) counts every user as the same IP. On Vercel there is one hop (`TRUST_PROXY_HOPS=1`, ADR 011).
 - In local development, `Secure` cookies work on `http://localhost` in Chrome and Firefox, but not in Safari.
 
 ## Alternatives considered

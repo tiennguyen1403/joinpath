@@ -1,6 +1,7 @@
 import type { NextConfig } from 'next';
 
 // The browser only talks to this origin; /api/* goes to NestJS unchanged (ADR 007).
+// Local only: on Vercel the platform routes /api/* before Next sees it (ADR 011).
 const apiUrl = process.env.API_URL ?? 'http://localhost:3001';
 
 const nextConfig: NextConfig = {

@@ -2,9 +2,15 @@
 
 > File này được nạp vào mọi session qua `CLAUDE.md`. Giữ ngắn: chỉ trạng thái hiện tại. Lịch sử chi tiết nằm trong `docs/sessions/`.
 
-**Cập nhật:** 2026-10-15 · session 003 (M0.3 · web shell)
-**Mốc hiện tại:** M0 · Walking skeleton — có khung repo, Prisma (5 bảng), seed org `acme`, auth API (cookie session, Origin check, throttle, helmet), web shell (Tailwind 4 + beUI vendor trong `apps/web/components/beui/` + reicon, trang login, sidebar theo vai trò HR / IT / MEMBER, rewrite `/api/*`); chưa có CI, deploy.
-**Session kế tiếp:** **M0.4 · CI + host + deploy** (xem bảng). Handoff mới nhất: `docs/sessions/003-M0.3-web-shell.md`.
+**Cập nhật:** 2026-10-15 · session 004 (M0.4 · CI + host + deploy)
+**Mốc hiện tại:** M1 · Workflow engine, chưa bắt đầu. M0 · Walking skeleton đã xong, gồm:
+- Khung repo, Prisma (5 bảng), seed org `acme`.
+- Auth API: cookie session, Origin check, throttle, helmet.
+- Web shell: trang login, sidebar theo vai trò.
+- CI trên GitHub Actions.
+- Demo public tại https://joinpath.vercel.app (Vercel Services + Neon, ADR 011).
+
+**Session kế tiếp:** **M1.1 · `core`: schema template + `validateTemplate`** (xem bảng). Đây là session đầu của M1, nên phải chi tiết hóa lại các dòng M1.x trước khi code. Handoff mới nhất: `docs/sessions/004-M0.4-ci-host-deploy.md`.
 
 ## Quy ước session
 
@@ -23,8 +29,8 @@ Trạng thái: ✅ xong · ▶ kế tiếp · ⏳ chưa làm. Mốc M1–M5 mớ
 | M0.1 | Khung repo: `git`, pnpm workspace (`apps/web` Next.js 16, `apps/api` NestJS 12 ESM, `packages/core` TS + Zod + Vitest), TS 6.0 pin, oxlint, `docker-compose.yml` Postgres 18, script gốc `dev/build/test/lint/typecheck` | `pnpm install`, `pnpm -r build`, `pnpm -r test`, lint, typecheck xanh; `docker compose up -d` Postgres healthy; `pnpm dev`: web :3000 hiện trang, api :3001 `/health` trả ok; cả web và api import được từ `core` | ✅ |
 | M0.2 | Data + auth API: Prisma 7.10 pin (org, departments, employees, users, sessions), migration, `seedDemoOrg` phần nhân sự cho org cố định (§11); login / logout / me bằng cookie session (ADR 007); thêm Origin check, throttle login, helmet (§9) | Test Supertest với Postgres thật pass: login đặt cookie đúng cờ, sai mật khẩu 401 chung chung, `me` đúng user/org/role, logout vô hiệu session | ✅ |
 | M0.3 | Web shell: Tailwind 4 + token beUI (kèm 3 chỗ lệch, ADR 009), component beUI qua registry, `reicon-react`, `motion` + `lib/ease.ts`, rewrite `/api/*` (kiểm tra giữ nguyên header `Origin`), trang login, layout theo vai trò (HR / IT / MEMBER) | Ở local: đăng nhập bằng user seed qua UI, thấy đúng sidebar theo vai trò, logout được; giao diện khớp bảng Login và Dashboard trên canvas | ✅ |
-| **M0.4** | CI + host + deploy: GitHub repo (hỏi user), GitHub Actions (lint, typecheck, test với Postgres service), đo cold start để chọn host (§6.6), deploy, migrate + seed (`SEED_PASSWORD` là secret), `trust proxy` đúng số hop để throttle login thấy IP thật (ADR 007), log kèm request id, smoke test | **Có URL public đăng nhập được bằng user seed**; CI xanh trên `main` | ▶ |
-| M1.1 | `core`: schema template + `validateTemplate` (DAG, mọi BR-T) | Unit test nhóm T pass | ⏳ |
+| M0.4 | CI + host + deploy: GitHub repo (hỏi user), GitHub Actions (lint, typecheck, test với Postgres service), đo cold start để chọn host (§6.6), deploy, migrate + seed (`SEED_PASSWORD` là secret), `trust proxy` đúng số hop để throttle login thấy IP thật (ADR 007), log kèm request id, smoke test | **Có URL public đăng nhập được bằng user seed**; CI xanh trên `main` | ✅ |
+| **M1.1** | `core`: schema template + `validateTemplate` (DAG, mọi BR-T) | Unit test nhóm T pass | ▶ |
 | M1.2 | `core`: tính ngày, availability, activation plan | Unit test tương ứng pass | ⏳ |
 | M1.3 | API template (tạo, `PUT` JSON, publish, archive) + nhân viên CRUD tối thiểu (email lowercase khi ghi, vì unique của `users.email` phân biệt hoa thường) + audit | Integration test template pass | ⏳ |
 | M1.4 | API onboarding: draft → preview → activate, checklist, business clock + endpoint tua ngày | AT-06 → AT-14 liên quan pass | ⏳ |
@@ -51,8 +57,8 @@ Trạng thái: ✅ xong · ▶ kế tiếp · ⏳ chưa làm. Mốc M1–M5 mớ
 
 ## Quyết định còn mở
 
-- Host deploy: chọn ở M0.4 sau khi đo cold start NestJS (PLAN §6.6, phương án A hoặc B).
-- GitHub repo (tên, public hay private, LICENSE) và lần push đầu: hỏi user ở M0.4.
+- Người gọi cron tick (PLAN §6.5): chốt ở M3.2. Vercel Hobby chỉ cho cron chạy mỗi ngày một lần, nên nhiều khả năng dùng GitHub Actions `schedule`.
+- Preview deployment: origin khác `APP_ORIGIN` nên mọi request ghi bị 403, và preview dùng chung DB với production. Chốt khi bắt đầu dùng PR: tắt preview, hoặc cho phép origin của preview và dùng Neon branch.
 - Swagger `/api/docs` (PLAN §8) chưa thuộc session nào; khi thêm phải chỉnh CSP của `helmet`. Gắn vào session nào?
 - `image-viewer` (PLAN §10.1) không có trên registry beUI: chọn thay thế ở M2.4 (ứng viên `morphing-lightbox`).
 
@@ -70,6 +76,20 @@ pnpm test              # cần Postgres + migration; rồi pnpm lint · pnpm typ
 pnpm exec playwright-cli -s=joinpath open http://localhost:3000/login   # Chrome có cửa sổ để kiểm tra UI; `show` mở dashboard xem trực tiếp
 ```
 
+Production: https://joinpath.vercel.app (Vercel Services + Neon Singapore, ADR 011).
+
+```sh
+git push origin main          # chạy CI và deploy production; migrate chạy trong bước build
+gh workflow run seed.yml      # tạo lại org acme trên prod, xóa sạch dữ liệu cũ của org; mật khẩu là secret SEED_PASSWORD
+vercel logs <deployment-url> --since 1h   # log runtime: mỗi request API một dòng, kèm IP và request id
+```
+
+Env trên Vercel:
+- Tự đặt: `APP_ORIGIN`, `TRUST_PROXY_HOPS=1`, `ENABLE_EXPERIMENTAL_COREPACK=1`.
+- Integration Neon cấp: `DATABASE_URL`, `DATABASE_URL_UNPOOLED`.
+
+Secret của repo GitHub: `DATABASE_URL` (giá trị unpooled), `SEED_PASSWORD`.
+
 Web đọc `API_URL` (mặc định `http://localhost:3001`, xem `apps/web/.env.example`). Thêm component beUI: `cd apps/web && pnpm dlx shadcn@4.21.5 add https://beui.dev/r/<slug>.json`, rồi làm theo `apps/web/components/beui/README.md`.
 
 ## Môi trường đã biết
@@ -83,3 +103,8 @@ Web đọc `API_URL` (mặc định `http://localhost:3001`, xem `apps/web/.env.
 - Kiểm tra UI bằng Playwright CLI (headed), không dùng Claude in Chrome: Chrome của extension nằm ở máy khác. Lệnh `open` không tự trả về trong Bash tool, nên ghi output ra file (`> .playwright-cli/cmd.log 2>&1`); `--filename` tính từ thư mục hiện tại.
 - Sửa `packages/core` khi `pnpm dev` đang chạy: web có thể giữ bản core cũ, nên build core rồi restart `pnpm dev`.
 - Thiết kế: canvas "Joinpath Screens" https://claude.ai/artifact/Xr3pRZbd14D78pqUignjWV (đọc bằng Artifact tool, action `read`).
+- Vercel CLI 62.2.0 cài global, đã đăng nhập. Hook đầu session báo "not installed" là sai.
+  - MCP Vercel trả 403 với team này, nên dùng CLI: `vercel api`, `vercel logs`, `vercel inspect --logs`.
+  - Không chạy `vercel deploy` từ máy, vì CLI sẽ upload cả `apps/api/.env`.
+- Secret không bao giờ in ra transcript. Đặt secret qua file tạm trong scratchpad rồi xóa ngay, hoặc để user tự gõ trong terminal riêng.
+- Neon (Postgres 18.6) ngủ sau 5 phút không có truy vấn; request đầu tiên khi đó chậm thêm khoảng 0,9 s.

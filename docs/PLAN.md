@@ -1,4 +1,4 @@
-# Joinpath — Kế hoạch triển khai v0.9
+# Joinpath — Kế hoạch triển khai v0.10
 
 > **Joinpath**: Employee Onboarding & Workflow Management Platform, dự án portfolio Full-stack.
 > Bản này tinh chỉnh SRS v0.4 trong thread ChatGPT "Thiết kế dự án onboarding" (14/10/2026).
@@ -7,6 +7,7 @@
 > **v0.7 (14/10/2026):** stack ghi theo phiên bản đã kiểm tra trên npm (§6.2); UI dùng token và motion của beUI (§6.2, §10, ADR 009).
 > **v0.8 (14/10/2026):** icon lấy từ reicon; mọi control dùng component beUI có sẵn, chỉ tự dựng phần beUI không có; thanh demo đổi thành Dynamic Island (§6.2, §10, ADR 010).
 > **v0.9 (14/10/2026):** hover của nav và dòng danh sách dùng chung một lớp phủ 5% (8% khi nhấn); active nav dùng tint primary (§6.2, ADR 009).
+> **v0.10 (15/10/2026):** deploy lên Vercel (Services: web + api trong một project, region sin1) + Neon; ở production, router của Vercel thay rewrite của Next; throttle login tự viết; chốt người gọi cron dời sang M3.2 (§6.1, §6.2, §6.5, §6.6, §9, ADR 011).
 
 ## TL;DR: 6 thay đổi lớn nhất
 
@@ -380,6 +381,8 @@ flowchart LR
     CRON["Cron của host<br/>hoặc GitHub Actions"] -->|"POST /internal/cron/tick + secret"| API
 ```
 
+Sơ đồ trên là ở local. Trên Vercel (ADR 011), router của Vercel chia `/api/*` sang service `api` và phần còn lại sang service `web`, nên rewrite của Next không chạy. Code server của web gọi API qua binding `API_URL`.
+
 ### 6.2 Stack
 
 | Lớp | Lựa chọn | Ghi chú |
@@ -397,6 +400,7 @@ flowchart LR
 | Test | Vitest 4, Supertest, Playwright | Một test runner cho cả repo. Vite 8 tự xử lý decorator metadata của Nest nên không cần plugin SWC |
 | Repo | pnpm workspaces, oxlint (type-aware), Prettier | Không dùng Turborepo. oxlint và Prettier mỗi công cụ một config ở gốc; Prettier có sẵn trong template Nest 12 nên giữ lại và áp cho code cả repo (không áp cho docs nội bộ) |
 | Runtime | Node 24 LTS, TypeScript 6.0 (pin cố định), pnpm 12 | TypeScript 7 chỉ còn `tsc` native, không có JS API mà Next.js và Nest CLI cần. Các thư viện khác lấy bản ổn định mới nhất lúc bắt đầu |
+| Host | Vercel Hobby, Services (web + api trong một project, region `sin1`) + Neon Postgres Free (Singapore, qua Vercel Marketplace) | Chọn ở M0.4 (§6.6, ADR 011). Không dùng được gói Nest dạng CommonJS (vd `@nestjs/throttler`), vì trên Vercel code CJS không `require()` được ESM của Nest 12 |
 
 ### 6.3 Cấu trúc repo
 
@@ -448,24 +452,31 @@ joinpath/
   - Thông báo READY theo ngày (`available_on = today` và prerequisite đã xong).
   - Purge sandbox hết hạn (cascade trong DB + xóa prefix `orgs/{orgId}/`), dọn session và invitation hết hạn.
 - Nút "+1 ngày" trong sandbox gọi đúng hàm tick của org đó, ngay lập tức.
-- Ai gọi cron (tính năng cron của host hay GitHub Actions `schedule`) sẽ chốt ở M0.
+- Ai gọi cron sẽ chốt ở M3.2. Vercel Hobby chỉ cho cron chạy mỗi ngày một lần, nên tick hàng giờ nhiều khả năng dùng GitHub Actions `schedule`.
 
-### 6.6 Triển khai (chọn host ở M0)
+### 6.6 Triển khai (đã chọn A ở M0.4)
 
 Các ràng buộc thiết kế để chạy được trên cả serverless lẫn container:
 
 | Ràng buộc | Lý do |
 |---|---|
-| Web và API cùng origin (rewrite `/api/*`) | Cookie first-party; không cần CORS |
+| Web và API cùng origin (rewrite `/api/*`: local dùng rewrite của Next, production dùng router của Vercel) | Cookie first-party; không cần CORS |
 | Upload tối đa 4 MB, đi qua API | Vừa giới hạn body của serverless |
 | Việc định kỳ là HTTP endpoint idempotent | Bất kỳ scheduler nào cũng gọi được |
-| Không giữ state trong RAM của process | Chịu được nhiều instance và cold start |
+| Không giữ state trong RAM của process (trừ throttle login, §9) | Chịu được nhiều instance và cold start |
 | IP thật lấy từ `x-forwarded-for` (bật trust proxy) | Rate limit vẫn đúng khi request đi qua proxy |
 
 | Phương án | Ưu | Nhược |
 |---|---|---|
 | A. Serverless (vd Vercel chạy cả Next.js lẫn NestJS) + Postgres managed + storage S3-compatible | Free tier đủ cho demo, ít phải vận hành | Cold start của NestJS: cần đo ngay ở M0 |
 | B. Container host (vd Railway, Render, Fly) chạy API (+ web) + Postgres | Mô hình process chạy lâu, quen thuộc | Thường tốn phí; free tier hay "ngủ", recruiter mở link phải chờ |
+
+**Đã chọn A (M0.4, ADR 011):** Vercel Hobby (Services) + Neon Free, cả hai ở Singapore. Số đo nằm trong ADR 011:
+- Request đầu tiên sau 8 giờ không có traffic mất khoảng 2,5 s.
+- Khi DB đang ngủ, login chậm thêm khoảng 0,9 s.
+- Khi đã warm, request mất 0,2–0,7 s.
+
+Deploy production bằng cách push lên `main`; migration chạy trong bước build. Seed production bằng workflow chạy tay `seed.yml`.
 
 Chạy local: `docker compose up` (Postgres; từ M2 có thêm MinIO), sau đó `pnpm dev`.
 
@@ -580,7 +591,7 @@ Lỗi luôn trả về dạng `{ code, message, details? }`:
 - **Session:** token ngẫu nhiên 32 byte, đặt trong cookie `HttpOnly; Secure; SameSite=Lax`. **Không** đặt thuộc tính `Domain`: nếu đặt, cookie sẽ gắn với host của API, và cách sửa F4 hỏng mà không báo lỗi gì. DB chỉ lưu SHA-256 của token, nhờ vậy logout hoặc hủy onboarding là thu hồi được ngay. Không dùng JWT.
 - **CSRF:** `SameSite=Lax`, đồng thời từ chối request thay đổi dữ liệu nếu header `Origin` khác origin của app.
 - **File:** kiểm tra magic bytes (`%PDF`, `\x89PNG`, `FF D8 FF`) bằng một hàm khoảng 10 dòng, không tin `Content-Type` hay đuôi file. Object key có dạng `orgs/{orgId}/tasks/{taskId}/{uuid}`. Signed URL sống tối đa 5 phút, kèm `Content-Disposition: attachment`. Không log signed URL hay token.
-- **Rate limit:** throttler cho login và nhận invitation. Riêng tạo sandbox thì đếm theo IP hash lưu trong DB, vì trên serverless có nhiều instance nên đếm trong RAM không đáng tin.
+- **Rate limit:** login và nhận invitation dùng guard tự viết (`ThrottleGuard`, 10 lần/phút/IP, đếm trong RAM của từng instance). Không dùng `@nestjs/throttler` vì gói này là CommonJS (ADR 011). Riêng tạo sandbox thì đếm theo IP hash lưu trong DB, vì trên serverless có nhiều instance nên đếm trong RAM không đáng tin.
 - **Khác:** `helmet` cho API; log kèm request id, không bao giờ log password hay token; banner trong demo ghi rõ "Dữ liệu giả, đừng upload giấy tờ thật".
 
 ---
@@ -747,6 +758,7 @@ Mỗi mốc được chia thành các session ngắn, mỗi session một lát c
   - 008 Upload qua API, tối đa 4 MB.
   - 009 Token UI và motion lấy từ beUI; ba chỗ lệch: `--primary-strong`, lớp hover 5% cho nav và dòng danh sách, active nav dùng tint primary.
   - 010 Icon lấy từ reicon; control dùng component beUI có sẵn, chỉ tự dựng phần beUI không có (§10.1).
+  - 011 Deploy lên Vercel Services: web + api trong một project; ở production, router của Vercel thay rewrite của Next; Neon cùng region.
 - **Video 2–3 phút** đi theo golden path, dành cho người không bấm vào demo.
 
 ---

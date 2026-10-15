@@ -12,7 +12,8 @@ export function setupApp<T extends NestExpressApplication>(
   app: T,
   trustProxyHops = env.TRUST_PROXY_HOPS,
 ): T {
-  // The web app rewrites /api/* to the API unchanged (PLAN §8).
+  // /api/* reaches the API unchanged: Next rewrites it locally, Vercel routes it in
+  // production (PLAN §8, ADR 011).
   app.setGlobalPrefix('api');
   // req.ip, which the login throttle counts (BR-P06), becomes the address that many
   // hops back in X-Forwarded-For. Never `true`: clients could then forge it.
