@@ -548,7 +548,7 @@ GET  /onboardings           GET /onboardings/:id         # theo phạm vi (§9);
                                               # /:id kèm today và task (availability, overdue tính theo today(org)); POST, PATCH, activate trả đúng shape này
 POST /onboardings                             {employeeId, templateId, startDate}
 PATCH /onboardings/:id                        {employeeId?, templateId?, startDate?}   # chỉ khi DRAFT; ít nhất 1 field
-GET  /onboardings/:id/activation-preview      # chỉ DRAFT; {onboarding, today, tasks: PlannedTask[], people: [{id, fullName}]}
+GET  /onboardings/:id/activation-preview      # chỉ DRAFT, template chưa archive (không thì 409); {onboarding, today, tasks: PlannedTask[], people: [{id, fullName}]}
 POST /onboardings/:id/activate                {templateVersionId, assignees?: {[taskKey]: employeeId}}   # key không có trong template bị bỏ qua
 POST /onboardings/:id/reschedule              {startDate}
 POST /onboardings/:id/cancel                  {reason}
