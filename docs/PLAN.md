@@ -1,4 +1,4 @@
-# Joinpath — Kế hoạch triển khai v0.13
+# Joinpath — Kế hoạch triển khai v0.14
 
 > **Joinpath**: Employee Onboarding & Workflow Management Platform, dự án portfolio Full-stack.
 > Bản này tinh chỉnh SRS v0.4 trong thread ChatGPT "Thiết kế dự án onboarding" (14/10/2026).
@@ -11,6 +11,7 @@
 > **v0.11 (15/10/2026):** `validateTemplate` trả mỗi vấn đề một lỗi, gắn với các task liên quan; BR-T04 thêm điều kiện title không trùng; BR-T07 tính cả prerequisite gián tiếp; thứ tự task trong phase là thứ tự trong mảng, snapshot vào cột mới `tasks.position` (§4.2, §5, §7).
 > **v0.12 (15/10/2026):** overdue không bao giờ đi cùng LOCKED_BY_DATE (§4.4); override lúc activate không áp dụng cho task `NEW_HIRE` và không giao task cho chính nhân viên mới; activation kiểm BR-R01 (§4.7); `GET /employees` lọc theo `active`, `role` tùy chọn (§8).
 > **v0.13 (15/10/2026):** partial unique index khai báo ngay trong Prisma schema (preview `partialIndexes`), CHECK vẫn viết SQL tay (§6.2); `POST /templates` tạo kèm DRAFT v1 rỗng; archive không đảo ngược; mọi route template chỉ dành cho HR, kể cả GET (§8).
+> **v0.14 (15/10/2026):** bỏ `tasks.completed_by`, vì chỉ assignee complete được task nên cột này luôn trùng `assignee_employee_id` (§7); body của `POST` và `PATCH /onboardings`, draft hiện bản published mới nhất (§8); người không phải HR không thấy onboarding DRAFT, còn ai có task trong một onboarding thì xem được onboarding đó (§9).
 
 ## TL;DR: 6 thay đổi lớn nhất
 
@@ -510,7 +511,7 @@ Mọi bảng nghiệp vụ đều có `organization_id` và `created_at`. Không
 | `templates` | name, description, archived_at? | |
 | `template_versions` | template_id, version, status (`DRAFT`/`PUBLISHED`), definition jsonb, published_at? | unique(template_id, version); partial unique(template_id) WHERE status = 'DRAFT' |
 | `onboardings` | employee_id, template_id, template_version_id?, status, start_date, activated_at?, completed_at?, canceled_at?, cancel_reason?, version | partial unique(employee_id) WHERE status IN ('DRAFT','ACTIVE') |
-| `tasks` | onboarding_id, definition_key, phase_key, phase_name, phase_order, position (thứ tự trong template), title, description, type, assignee_employee_id, reviews_task_id?, available_on, due_on, due_overridden, status, started_at?, completed_at?, completed_by? | unique(onboarding_id, definition_key); CHECK(available_on ≤ due_on) |
+| `tasks` | onboarding_id, definition_key, phase_key, phase_name, phase_order, position (thứ tự trong template), title, description, type, assignee_employee_id, reviews_task_id?, available_on, due_on, due_overridden, status, started_at?, completed_at? | unique(onboarding_id, definition_key); CHECK(available_on ≤ due_on) |
 | `task_dependencies` | task_id, depends_on_task_id | PK(cả hai cột); CHECK(task_id ≠ depends_on_task_id) |
 | `document_files` | task_id, submission_id?, storage_key, file_name, mime_type, size_bytes, uploaded_by | |
 | `document_submissions` | task_id, revision, submitted_by, submitted_at | unique(task_id, revision) |
@@ -542,7 +543,9 @@ GET|PUT  /template-versions/:id               # PUT nguyên definition, chỉ kh
 POST /template-versions/:id/publish
 
 # Onboardings
-GET|POST /onboardings       GET /onboardings/:id         PATCH /onboardings/:id  # PATCH chỉ khi DRAFT
+GET  /onboardings           GET /onboardings/:id         # theo phạm vi (§9); draft hiện bản published mới nhất, tức bản activate sẽ dùng
+POST /onboardings                             {employeeId, templateId, startDate}
+PATCH /onboardings/:id                        {employeeId?, templateId?, startDate?}   # chỉ khi DRAFT; ít nhất 1 field
 GET  /onboardings/:id/activation-preview
 POST /onboardings/:id/activate                {templateVersionId, assignees: {[taskKey]: employeeId}}
 POST /onboardings/:id/reschedule              {startDate}
@@ -597,10 +600,14 @@ Lỗi luôn trả về dạng `{ code, message, details? }`:
 | Tạo, activate, đổi ngày, hủy onboarding | ✓ | — | — | — |
 | Reassign, chỉnh deadline | ✓ | — | — | — |
 | Làm task, approve/reject | khi được giao | khi được giao | khi được giao | khi được giao (không approve) |
-| Xem onboarding | mọi onboarding trong org | của direct reports | các onboarding mình có task | của mình |
+| Xem onboarding (DRAFT: chỉ HR) | mọi onboarding trong org | của direct reports | các onboarding mình có task | của mình |
 | Xem tài liệu | ✓ | chỉ khi là approver | chỉ khi là approver | của mình |
 | Mock inbox | ✓ | trong sandbox | trong sandbox | trong sandbox |
 
+- **Xem onboarding:**
+  - Người không phải HR không thấy DRAFT: draft là chỗ HR chuẩn bị, chưa có task hay lời mời.
+  - Ai có task trong một onboarding thì xem được onboarding đó, bất kể vai (không riêng IT), vì cần thấy bối cảnh của task.
+  - Hàm thuần `visibleOnboardings` trong `onboarding.policy.ts` lọc mọi lệnh đọc; ngoài phạm vi thì 404 (BR-P02).
 - **Mật khẩu:** dùng Argon2id qua `crypto.argon2` có sẵn của Node (đã kiểm tra là có trên Node 24.21; vì API này còn mới, nếu runtime của host cũ hơn thì dùng `crypto.scrypt`). Không cần thư viện native.
 - **Session:** token ngẫu nhiên 32 byte, đặt trong cookie `HttpOnly; Secure; SameSite=Lax`. **Không** đặt thuộc tính `Domain`: nếu đặt, cookie sẽ gắn với host của API, và cách sửa F4 hỏng mà không báo lỗi gì. DB chỉ lưu SHA-256 của token, nhờ vậy logout hoặc hủy onboarding là thu hồi được ngay. Không dùng JWT.
 - **CSRF:** `SameSite=Lax`, đồng thời từ chối request thay đổi dữ liệu nếu header `Origin` khác origin của app.

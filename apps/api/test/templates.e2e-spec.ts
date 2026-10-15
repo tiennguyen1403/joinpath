@@ -1,22 +1,23 @@
-import { randomBytes } from 'node:crypto';
 import type { INestApplication } from '@nestjs/common';
 import {
-  apiErrorSchema,
   type TaskDef,
   type TemplateDefinition,
   templateSchema,
   templateVersionSchema,
   validateTemplate,
 } from '@joinpath/core';
-import request from 'supertest';
 import type { App } from 'supertest/types.js';
-import { hashPassword } from '../src/modules/auth/password.js';
 import { seedDemoOrg } from '../src/modules/demo/seed.js';
 import { PrismaService } from '../src/prisma.js';
-import { createApp } from './app.js';
-
-const PASSWORD = 'test-password';
-const newSlug = () => `t${randomBytes(4).toString('hex')}`;
+import {
+  type Client,
+  createApp,
+  errorOf,
+  giveAccount,
+  newSlug,
+  PASSWORD,
+  signIn,
+} from './app.js';
 
 const task = (key: string, fields: Partial<TaskDef> = {}): TaskDef => ({
   key,
@@ -38,26 +39,6 @@ describe('templates', () => {
   let app: INestApplication<App>;
   let prisma: PrismaService;
   let seeded: Awaited<ReturnType<typeof seedDemoOrg>>;
-
-  // Requests signed in as one person.
-  const signedIn = (cookie: string) => {
-    const server = () => request(app.getHttpServer());
-    return {
-      get: (path: string) => server().get(`/api${path}`).set('Cookie', cookie),
-      post: (path: string, body: object = {}) =>
-        server().post(`/api${path}`).set('Cookie', cookie).send(body),
-      put: (path: string, body: object) =>
-        server().put(`/api${path}`).set('Cookie', cookie).send(body),
-    };
-  };
-  const signIn = async (email: string) => {
-    const res = await request(app.getHttpServer())
-      .post('/api/auth/login')
-      .send({ email, password: PASSWORD })
-      .expect(204);
-    return signedIn(res.get('Set-Cookie')![0].split(';')[0]);
-  };
-  type Client = ReturnType<typeof signedIn>;
   let hr: Client;
   let others: Record<'IT' | 'manager' | 'new hire', Client>;
 
@@ -79,30 +60,17 @@ describe('templates', () => {
     await hr.put(`/template-versions/${versionId}`, definition).expect(200);
     return { templateId: template.id, versionId };
   };
-  const errorOf = (res: { body: unknown }) => apiErrorSchema.parse(res.body);
 
   beforeAll(async () => {
     app = await createApp();
     prisma = app.get(PrismaService);
     seeded = await seedDemoOrg(prisma, { slug: newSlug(), password: PASSWORD });
-    // New hires have no account until their invitation (M2): give An Vo one directly.
-    const anVo = await prisma.employee.findFirstOrThrow({
-      where: { organizationId: seeded.organization.id, fullName: 'An Vo' },
-    });
-    await prisma.user.create({
-      data: {
-        organizationId: anVo.organizationId,
-        employeeId: anVo.id,
-        email: anVo.email,
-        role: 'MEMBER',
-        passwordHash: await hashPassword(PASSWORD),
-      },
-    });
-    hr = await signIn(seeded.emails.hr);
+    const anVo = await giveAccount(prisma, seeded.organization.id, 'An Vo');
+    hr = await signIn(app, seeded.emails.hr);
     others = {
-      IT: await signIn(seeded.emails.it),
-      manager: await signIn(seeded.emails.manager),
-      'new hire': await signIn(anVo.email),
+      IT: await signIn(app, seeded.emails.it),
+      manager: await signIn(app, seeded.emails.manager),
+      'new hire': await signIn(app, anVo.email),
     };
   });
 

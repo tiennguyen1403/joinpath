@@ -1,9 +1,16 @@
+import { z } from 'zod';
 import { addDays, type IsoDate } from './dates.js';
-import type { Role } from './index.js';
+import { employeeSchema, type Role } from './org.js';
 import type { AssigneeRule, TaskDef, TemplateDefinition } from './template.js';
 
 export type TaskStatus = 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELED';
-export type OnboardingStatus = 'DRAFT' | 'ACTIVE' | 'COMPLETED' | 'CANCELED';
+export const onboardingStatusSchema = z.enum([
+  'DRAFT',
+  'ACTIVE',
+  'COMPLETED',
+  'CANCELED',
+]);
+export type OnboardingStatus = z.infer<typeof onboardingStatusSchema>;
 // Worked out when read, never stored (PLAN §4.4).
 export type Availability =
   | 'COMPLETED'
@@ -180,3 +187,32 @@ export function planActivation(input: ActivationInput): PlannedTask[] {
   }
   return planned;
 }
+
+// Onboarding API (PLAN §8). Only HR creates or edits one, and only while it is a draft.
+export const createOnboardingSchema = z.object({
+  employeeId: z.uuid(),
+  templateId: z.uuid(),
+  startDate: z.iso.date(),
+});
+export type CreateOnboarding = z.infer<typeof createOnboardingSchema>;
+
+export const updateOnboardingSchema = createOnboardingSchema
+  .partial()
+  .refine(
+    (patch) => Object.values(patch).some((value) => value !== undefined),
+    'Nothing to change',
+  );
+export type UpdateOnboarding = z.infer<typeof updateOnboardingSchema>;
+
+export const onboardingSchema = z.object({
+  id: z.uuid(),
+  status: onboardingStatusSchema,
+  startDate: z.iso.date(),
+  activatedAt: z.iso.datetime().nullable(),
+  employee: employeeSchema.omit({ user: true }),
+  template: z.object({ id: z.uuid(), name: z.string() }),
+  // The version the tasks came from. A draft has none yet, so it shows the one activating
+  // now would use: the newest published (BR-A03).
+  templateVersion: z.object({ id: z.uuid(), version: z.int() }),
+});
+export type Onboarding = z.infer<typeof onboardingSchema>;

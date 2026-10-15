@@ -6,15 +6,18 @@ export type AuditAction =
   | 'template.created'
   | 'template.version_created'
   | 'template.published'
-  | 'template.archived';
+  | 'template.archived'
+  | 'onboarding.created';
 
 export function recordAudit(
   tx: Prisma.TransactionClient,
   { userId, organizationId }: AuthContext,
   event: {
     action: AuditAction;
-    entityType: 'template' | 'template_version';
+    entityType: 'template' | 'template_version' | 'onboarding';
     entityId: string;
+    // Puts the event on that onboarding's timeline.
+    onboardingId?: string;
     data?: Prisma.InputJsonObject;
   },
 ) {

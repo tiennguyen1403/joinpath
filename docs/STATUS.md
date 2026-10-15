@@ -2,10 +2,10 @@
 
 > File này được nạp vào mọi session qua `CLAUDE.md`. Giữ ngắn: chỉ trạng thái hiện tại. Lịch sử chi tiết nằm trong `docs/sessions/`.
 
-**Cập nhật:** 2026-10-15 · session 007 (M1.3 · API template)
-**Mốc hiện tại:** M1 · Workflow engine, xong M1.1–M1.3 (`core`: `validateTemplate`, tính ngày, availability, `planActivation`; API template). M0 · Walking skeleton đã xong (xem bảng): CI trên GitHub Actions, demo public tại https://joinpath.vercel.app.
+**Cập nhật:** 2026-10-15 · session 008 (M1.4a · API draft onboarding)
+**Mốc hiện tại:** M1 · Workflow engine, xong M1.1–M1.4a (`core`; API template; API draft onboarding). M0 · Walking skeleton đã xong (xem bảng): CI trên GitHub Actions, demo public tại https://joinpath.vercel.app.
 
-**Session kế tiếp:** **M1.4 · API onboarding** (xem bảng). Handoff mới nhất: `docs/sessions/007-M1.3-template-api.md`; dữ liệu đọc từ canvas nằm ở handoff 005.
+**Session kế tiếp:** **M1.4b · Preview và activate** (xem bảng). Handoff mới nhất: `docs/sessions/008-M1.4a-draft-onboarding.md`; dữ liệu đọc từ canvas nằm ở handoff 005 và 008.
 
 ## Quy ước session
 
@@ -21,15 +21,16 @@ Trạng thái: ✅ xong · ▶ kế tiếp · ⏳ chưa làm. Mốc M2–M5 mớ
 | ID | Nội dung | Xong khi | TT |
 |---|---|---|---|
 | S0 | Kế hoạch (PLAN v0.9), thiết kế 15 bảng, bộ khung handoff | Có PLAN, canvas, CLAUDE.md, STATUS, template | ✅ |
-| M0.1 | Khung repo: pnpm workspace (web Next.js 16, api NestJS 12, `core`), TS 6.0, oxlint, Postgres 18 qua Docker | Build, test, lint, typecheck xanh; web và api chạy, cả hai import được `core` | ✅ |
+| M0.1 | Khung repo: pnpm workspace (web, api, `core`), TS 6.0, oxlint, Postgres 18 qua Docker | Build, test, lint, typecheck xanh; web và api chạy, cả hai import được `core` | ✅ |
 | M0.2 | Prisma (5 bảng), seed nhân sự org `acme`, login / logout / me bằng cookie session, Origin check, throttle, helmet | Test Supertest với Postgres thật pass | ✅ |
 | M0.3 | Web shell: Tailwind 4 + token beUI, component beUI, reicon, trang login, layout theo vai trò | Đăng nhập qua UI ở local, sidebar đúng vai trò, khớp canvas | ✅ |
 | M0.4 | GitHub + CI, deploy Vercel Services + Neon (ADR 011), migrate + seed production, `trust proxy`, log kèm request id | URL public đăng nhập được; CI xanh trên `main` | ✅ |
-| M1.1 | `core`: Zod schema template + `validateTemplate` (T01–T03, T12 là rule của API) | Unit test BR-T04…T11 pass | ✅ |
-| M1.2 | `core`: `today`, `addDays`, availability + overdue, `planActivation` (resolve + override assignee, BR-R01, BR-A06) | Unit test BR-A04, A06, A08, E01, E06, R01… pass | ✅ |
-| M1.3 | API template: 3 bảng (partial unique một DRAFT), seed Engineering v1 + v2 và General, 8 endpoint chỉ HR, audit | Integration test AT-01…AT-04, AT-06 (phần publish), BR-T02 pass | ✅ |
-| **M1.4** | API onboarding: bảng `onboardings`, `tasks` (có `position`), `task_dependencies`; `GET /employees` (lọc active, role tùy chọn) + `GET /departments`; tạo và sửa draft, xem theo phạm vi (§9), activation preview, activate | AT-05, AT-06 (phần activate), AT-07…AT-09, AT-11, BR-T12 pass | ▶ |
-| M1.5 | API task: `start`/`complete` checklist (khóa theo onboarding, §6.4), BR-E01, onboarding tự COMPLETED, `GET /tasks/mine`, `today(org)`, `POST /demo/clock/advance` (chỉ sandbox, chỉ tiến; chưa có tick) | AT-12…AT-14, AT-23, AT-31 (phần đồng hồ) pass | ⏳ |
+| M1.1 | `core`: Zod schema template + `validateTemplate` | Unit test BR-T04…T11 pass | ✅ |
+| M1.2 | `core`: `today`, `addDays`, availability + overdue, `planActivation` | Unit test BR-A04, A06, A08, E01, E06, R01… pass | ✅ |
+| M1.3 | API template (8 endpoint chỉ HR), seed Engineering v1 + v2 và General, audit | AT-01…AT-04, AT-06 (phần publish), BR-T02 pass | ✅ |
+| M1.4a | API draft onboarding: 3 bảng, `GET /employees`, `GET /departments`, tạo và sửa draft, xem theo phạm vi | AT-11, BR-T12 (phần tạo), BR-P01, P02 pass | ✅ |
+| **M1.4b** | API onboarding: `today(org)`, activation preview, activate; task trong `GET /onboardings/:id`; xem onboarding qua task được giao (mọi vai) | AT-05, AT-06 (phần activate), AT-07…AT-09, BR-T12 (phần activate) pass | ▶ |
+| M1.5 | API task: `start`/`complete` checklist (khóa theo onboarding, §6.4), BR-E01, onboarding tự COMPLETED, `GET /tasks/mine`, `POST /demo/clock/advance` (chỉ sandbox, chỉ tiến; chưa có tick) | AT-12…AT-14, AT-23, AT-31 (phần đồng hồ) pass | ⏳ |
 | M1.6 | Web: TanStack Query, danh sách onboarding, wizard (nhân viên → template + ngày → preview + chọn, override assignee → activate; canvas chưa có override: làm bản trước/sau) | Activate template seed qua UI; khớp màn NewOnboarding | ⏳ |
 | M1.7 | Web: onboarding detail (task theo phase, badge availability) + My Tasks | IT và Manager complete checklist qua UI; khóa theo ngày/dependency đúng; onboarding tự COMPLETED | ⏳ |
 | M1.8 | Employees: API tạo, sửa (email lowercase khi ghi, vì unique của `users.email` phân biệt hoa thường) + màn danh sách và form | Integration test employees pass; HR tạo, sửa nhân viên qua UI | ⏳ |
@@ -59,7 +60,7 @@ Trạng thái: ✅ xong · ▶ kế tiếp · ⏳ chưa làm. Mốc M2–M5 mớ
 - Preview deployment: origin khác `APP_ORIGIN` nên mọi request ghi bị 403, và preview dùng chung DB với production. Chốt khi bắt đầu dùng PR: tắt preview, hoặc cho phép origin của preview và dùng Neon branch.
 - Swagger `/api/docs` (PLAN §8) chưa thuộc session nào; khi thêm phải chỉnh CSP của `helmet`. Gắn vào session nào?
 - `image-viewer` (PLAN §10.1) không có trên registry beUI: chọn thay thế ở M2.4 (ứng viên `morphing-lightbox`).
-- BR-R01 ở mức template: activation đã chặn R01 (M1.2, `SAME_AS_UPLOADER`). Còn mở: có thêm rule template để báo sớm khi DOCUMENT và APPROVAL của nó cùng giao `DIRECT_MANAGER` (lúc nào cũng sai) không? Chốt ở M1.4.
+- BR-R01 ở mức template: M1.4a chốt không thêm rule chặn publish. Còn mở cho M4.1: editor có gợi ý (không chặn) khi DOCUMENT và APPROVAL của nó cùng giao `DIRECT_MANAGER` không?
 - Nút "Discard draft" (canvas, editor) cần xóa DRAFT, trái PLAN §7 (không xóa bản ghi nghiệp vụ) và §8 (không có endpoint): chốt ở M4.1.
 
 ## Chạy dự án
@@ -97,7 +98,7 @@ Web đọc `API_URL` (`apps/web/.env.example`). Thêm component beUI: `cd apps/w
 - Windows 11, PowerShell 5.1 + Git Bash; Node v24.21.0, pnpm 12.11.2 (global), Docker 29.5.3. Git 2.41 (`core.autocrlf=true` ở mức system → repo dùng `.gitattributes` `eol=lf`).
 - Postgres 16 cài sẵn trên Windows chiếm port 5432, nên Postgres của dự án (Docker) chạy ở 5433.
 - oxlint không in gì khi chạy trong Claude Code mà không có lỗi; thêm `--format=default` để thấy tổng kết.
-- Prisma 7.10 (pin; npm `latest` là 8.0 RC, bỏ qua banner update): không tự đọc `.env` (config dùng `process.loadEnvFile()`); `migrate dev` không tự `generate` hay seed; `migrate reset` bị Prisma chặn khi chạy từ AI agent, phải hỏi user. Docs: đọc trang `/v7/`, trang không ghi version đã là Prisma 8. Partial unique (preview `partialIndexes`): đừng `findUnique` theo riêng cột đó.
+- Prisma 7.10 (pin; npm `latest` là 8.0 RC, bỏ qua banner update): không tự đọc `.env` (config dùng `process.loadEnvFile()`); `migrate dev` không tự `generate` hay seed; `migrate reset` bị Prisma chặn khi chạy từ AI agent, phải hỏi user. Docs: đọc trang `/v7/`, trang không ghi version đã là Prisma 8. Partial unique (preview `partialIndexes`): đừng `findUnique` theo riêng cột đó; điều kiện `IN` viết `raw(...)` đúng chữ Postgres lưu (`= ANY (ARRAY[...])`), không thì `migrate diff` báo drift.
 - psql 16 trên Windows: option phải đứng trước connection string.
 - Node trên Windows bỏ qua biến `TZ`. Muốn thử code ngày với timezone có DST thì đặt `TZ` rồi chạy trên Linux (container hoặc CI).
 - Kiểm tra UI bằng Playwright CLI (headed), không dùng Claude in Chrome (Chrome của extension ở máy khác). `open` không tự trả về trong Bash tool: ghi output ra file (`> .playwright-cli/cmd.log 2>&1`); `--filename` tính từ thư mục hiện tại.

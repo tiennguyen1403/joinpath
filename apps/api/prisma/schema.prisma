@@ -31,6 +31,9 @@ model Organization {
   users            User[]
   templates        Template[]
   templateVersions TemplateVersion[]
+  onboardings      Onboarding[]
+  tasks            Task[]
+  taskDependencies TaskDependency[]
   auditEvents      AuditEvent[]
 
   @@map("organizations")
@@ -59,11 +62,13 @@ model Employee {
   managerId      String?  @map("manager_id") @db.Uuid
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  department   Department?  @relation(fields: [departmentId], references: [id], onDelete: Cascade)
-  manager      Employee?    @relation("Reports", fields: [managerId], references: [id], onDelete: Cascade)
-  reports      Employee[]   @relation("Reports")
-  user         User?
+  organization  Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  department    Department?  @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  manager       Employee?    @relation("Reports", fields: [managerId], references: [id], onDelete: Cascade)
+  reports       Employee[]   @relation("Reports")
+  user          User?
+  onboardings   Onboarding[]
+  assignedTasks Task[]
 
   @@unique([organizationId, email])
   @@map("employees")
@@ -127,6 +132,7 @@ model Template {
 
   organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   versions     TemplateVersion[]
+  onboardings  Onboarding[]
 
   @@map("templates")
 }
@@ -151,6 +157,7 @@ model TemplateVersion {
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   template     Template     @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  onboardings  Onboarding[]
 
   @@unique([templateId, version])
   // BR-T02: at most one draft per template. The client offers templateId alone as a
@@ -159,7 +166,122 @@ model TemplateVersion {
   @@map("template_versions")
 }
 
-/// Append-only (PLAN §7): the audit trail and, from M1.4, the onboarding timeline.
+enum OnboardingStatus {
+  DRAFT
+  ACTIVE
+  COMPLETED
+  CANCELED
+
+  @@map("onboarding_status")
+}
+
+/// One employee's onboarding (PLAN §4.3). Its tasks exist from activation on.
+model Onboarding {
+  id                String           @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  organizationId    String           @map("organization_id") @db.Uuid
+  employeeId        String           @map("employee_id") @db.Uuid
+  templateId        String           @map("template_id") @db.Uuid
+  /// The version activation copied the tasks from (BR-A03); null while a draft.
+  templateVersionId String?          @map("template_version_id") @db.Uuid
+  status            OnboardingStatus @default(DRAFT)
+  startDate         DateTime         @map("start_date") @db.Date
+  activatedAt       DateTime?        @map("activated_at") @db.Timestamptz(3)
+  completedAt       DateTime?        @map("completed_at") @db.Timestamptz(3)
+  canceledAt        DateTime?        @map("canceled_at") @db.Timestamptz(3)
+  cancelReason      String?          @map("cancel_reason")
+  /// Every command on its tasks bumps this first, which locks the row (PLAN §6.4).
+  version           Int              @default(0)
+  createdAt         DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  employee        Employee         @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  template        Template         @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  templateVersion TemplateVersion? @relation(fields: [templateVersionId], references: [id], onDelete: Cascade)
+  tasks           Task[]
+  auditEvents     AuditEvent[]
+
+  // BR-A01: one open onboarding per employee. As with template drafts, the client offers
+  // employeeId alone as a findUnique key, but it is unique among open onboardings only.
+  // The predicate is spelled as Postgres stores `status IN ('DRAFT', 'ACTIVE')`; any other
+  // spelling makes migrate diff see drift.
+  @@unique([employeeId], map: "onboardings_one_open", where: raw("status = ANY (ARRAY['DRAFT'::onboarding_status, 'ACTIVE'::onboarding_status])"))
+  @@map("onboardings")
+}
+
+enum TaskType {
+  CHECKLIST
+  DOCUMENT
+  APPROVAL
+
+  @@map("task_type")
+}
+
+enum TaskStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  CANCELED
+
+  @@map("task_status")
+}
+
+/// A template task copied on activation, so later template changes never reach it (BR-A08).
+/// Availability is worked out when read (PLAN §4.4). The migration adds
+/// CHECK (available_on <= due_on).
+model Task {
+  id                 String     @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  organizationId     String     @map("organization_id") @db.Uuid
+  onboardingId       String     @map("onboarding_id") @db.Uuid
+  definitionKey      String     @map("definition_key")
+  phaseKey           String     @map("phase_key")
+  phaseName          String     @map("phase_name")
+  phaseOrder         Int        @map("phase_order")
+  /// Index in the template's task list, which orders the tasks within a phase.
+  position           Int
+  title              String
+  description        String?
+  type               TaskType
+  assigneeEmployeeId String     @map("assignee_employee_id") @db.Uuid
+  /// APPROVAL only: the DOCUMENT it reviews.
+  reviewsTaskId      String?    @map("reviews_task_id") @db.Uuid
+  availableOn        DateTime   @map("available_on") @db.Date
+  dueOn              DateTime   @map("due_on") @db.Date
+  /// HR set the due date by hand (BR-S03).
+  dueOverridden      Boolean    @default(false) @map("due_overridden")
+  status             TaskStatus @default(PENDING)
+  startedAt          DateTime?  @map("started_at") @db.Timestamptz(3)
+  completedAt        DateTime?  @map("completed_at") @db.Timestamptz(3)
+  createdAt          DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  onboarding   Onboarding       @relation(fields: [onboardingId], references: [id], onDelete: Cascade)
+  assignee     Employee         @relation(fields: [assigneeEmployeeId], references: [id], onDelete: Cascade)
+  reviews      Task?            @relation("Reviews", fields: [reviewsTaskId], references: [id], onDelete: Cascade)
+  reviewedBy   Task[]           @relation("Reviews")
+  dependsOn    TaskDependency[] @relation("Dependent")
+  dependents   TaskDependency[] @relation("Prerequisite")
+
+  @@unique([onboardingId, definitionKey])
+  @@map("tasks")
+}
+
+/// The task waits for depends_on_task (ALL, BR-E02). The migration adds
+/// CHECK (task_id <> depends_on_task_id).
+model TaskDependency {
+  organizationId  String   @map("organization_id") @db.Uuid
+  taskId          String   @map("task_id") @db.Uuid
+  dependsOnTaskId String   @map("depends_on_task_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  task         Task         @relation("Dependent", fields: [taskId], references: [id], onDelete: Cascade)
+  dependsOn    Task         @relation("Prerequisite", fields: [dependsOnTaskId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, dependsOnTaskId])
+  @@map("task_dependencies")
+}
+
+/// Append-only (PLAN §7): the audit trail and the onboarding timeline.
 model AuditEvent {
   id             String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
   organizationId String   @map("organization_id") @db.Uuid
@@ -168,11 +290,15 @@ model AuditEvent {
   action         String
   entityType     String   @map("entity_type")
   entityId       String   @map("entity_id") @db.Uuid
+  /// Puts the event on this onboarding's timeline.
+  onboardingId   String?  @map("onboarding_id") @db.Uuid
   data           Json     @default("{}")
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   actor        User?        @relation(fields: [actorUserId], references: [id], onDelete: Cascade)
+  onboarding   Onboarding?  @relation(fields: [onboardingId], references: [id], onDelete: Cascade)
 
+  @@index([onboardingId])
   @@map("audit_events")
 }

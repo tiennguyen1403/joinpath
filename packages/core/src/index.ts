@@ -1,7 +1,9 @@
 import { z } from 'zod';
+import { roleSchema } from './org.js';
 
 export * from './dates.js';
 export * from './onboarding.js';
+export * from './org.js';
 export * from './template.js';
 
 export const APP_NAME = 'Joinpath';
@@ -32,9 +34,6 @@ export const apiErrorSchema = z.object({
   details: z.unknown().optional(),
 });
 export type ApiError = z.infer<typeof apiErrorSchema>;
-
-export const roleSchema = z.enum(['HR', 'IT', 'MEMBER']);
-export type Role = z.infer<typeof roleSchema>;
 
 export const loginSchema = z.object({
   email: z.string().trim().toLowerCase().pipe(z.email()),
