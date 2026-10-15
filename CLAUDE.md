@@ -20,6 +20,7 @@ Dự án chạy qua nhiều session ngắn; mỗi session là một dòng trong 
 2. Viết `docs/sessions/NNN-<ID>-<slug>.md` theo `docs/sessions/TEMPLATE.md`.
 3. Cập nhật `docs/STATUS.md` (dòng "Cập nhật", mốc, session kế tiếp, cột TT, quyết định còn mở, lệnh chạy dự án).
 4. Commit local, đã được user cho phép sẵn: `git add -A`, message `<ID>: <tóm tắt>`. **Không push.**
+5. Session có bảng canvas được duyệt: chép các bảng đó vào canvas chính thành một hàng mới "N · <tên> (approved in <ID>)", chỉnh cho khớp bản đã build, không chép phương án bị loại. Đã được user cho phép sẵn (15/10/2026), không hỏi lại. Ghi version của canvas vào handoff bằng một commit nhỏ.
 
 ## Luật cứng
 
