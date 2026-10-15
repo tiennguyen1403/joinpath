@@ -2,10 +2,10 @@
 
 > File này được nạp vào mọi session qua `CLAUDE.md`. Giữ ngắn: chỉ trạng thái hiện tại. Lịch sử chi tiết nằm trong `docs/sessions/`.
 
-**Cập nhật:** 2026-10-15 · session 014 (M1.8 · Employees)
-**Mốc hiện tại:** M1 · Workflow engine, xong M1.1–M1.8 (xem bảng). M0 · Walking skeleton đã xong: CI trên GitHub Actions, demo public tại https://joinpath.vercel.app.
+**Cập nhật:** 2026-10-15 · session 015 (M1.9 · Templates + chốt M1)
+**Mốc hiện tại:** M2 · Tài liệu và duyệt, chưa bắt đầu. M1 · Workflow engine đã xong: tiêu chí PLAN §13 đạt trên production (trừ onboarding tự COMPLETED, chờ task của nhân viên mới ở M2). M0 · Walking skeleton đã xong: CI trên GitHub Actions, demo public tại https://joinpath.vercel.app.
 
-**Session kế tiếp:** **M1.9 · Templates + chốt M1** (xem bảng). Canvas chưa có màn danh sách Templates: vẽ và cho user duyệt trước khi code; hỏi trước khi push và deploy. Handoff mới nhất: `docs/sessions/014-M1.8-employees.md`; dữ liệu đọc từ canvas nằm ở handoff 005, 008 và 009.
+**Session kế tiếp:** **M2.1 · Invitation + mock inbox** (xem bảng). Session đầu của M2: chi tiết hóa lại các session M2 (kèm đề xuất chỉnh ước lượng roadmap, PLAN §13) cho user duyệt trước khi code. Handoff mới nhất: `docs/sessions/015-M1.9-templates-m1-close.md`; dữ liệu đọc từ canvas nằm ở handoff 005, 008 và 009.
 
 ## Quy ước session
 
@@ -33,8 +33,8 @@ Trạng thái: ✅ xong · ▶ kế tiếp · ⏳ chưa làm. Mốc M2–M5 mớ
 | M1.6b | Web: wizard 3 bước, chọn và override assignee, activate; header + toast; `today` của org trong `/auth/me` | Activate template seed qua UI; khớp màn NewOnboarding | ✅ |
 | M1.7 | Web: onboarding detail (task theo phase, badge availability) + My Tasks | IT và Manager complete checklist qua UI; khóa theo ngày/dependency đúng; onboarding tự COMPLETED | ✅ |
 | M1.8 | Employees: API tạo, sửa (email lowercase khi ghi), thêm và đổi tên phòng ban + màn danh sách và form | Integration test employees pass; HR tạo, sửa nhân viên qua UI | ✅ |
-| **M1.9** | Templates: danh sách + lịch sử version (chỉ xem); chốt tiêu chí M1; push + deploy (hỏi user) | Tiêu chí M1 (PLAN §13) đạt trên production, trừ "onboarding tự COMPLETED" (task của nhân viên mới chờ M2; M1.7 đã kiểm ở local); nhóm test T, A, E pass (trừ A07, E04 thuộc M2) | ▶ |
-| M2.1 | Invitation + mock inbox + nhận lời mời + resend; phần invitation của AT-10 | | ⏳ |
+| M1.9 | Templates: danh sách, mỗi template kèm các version (chỉ xem); chốt tiêu chí M1; push + deploy | Tiêu chí M1 (PLAN §13) đạt trên production, trừ "onboarding tự COMPLETED" (task của nhân viên mới chờ M2; M1.7 đã kiểm ở local); nhóm test T, A, E pass (trừ A07, E04 thuộc M2) | ✅ |
+| **M2.1** | Invitation + mock inbox + nhận lời mời + resend; phần invitation của AT-10 | | ▶ |
 | M2.2 | MinIO (compose + CI), upload (magic bytes, 4 MB), signed download, need-to-know | | ⏳ |
 | M2.3 | Submit revision, approve / reject / rework | Nhóm test R pass | ⏳ |
 | M2.4 | Web: portal nhân viên mới, upload, drawer review | | ⏳ |
