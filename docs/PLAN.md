@@ -1,4 +1,4 @@
-# Joinpath — Kế hoạch triển khai v0.11
+# Joinpath — Kế hoạch triển khai v0.12
 
 > **Joinpath**: Employee Onboarding & Workflow Management Platform, dự án portfolio Full-stack.
 > Bản này tinh chỉnh SRS v0.4 trong thread ChatGPT "Thiết kế dự án onboarding" (14/10/2026).
@@ -9,6 +9,7 @@
 > **v0.9 (14/10/2026):** hover của nav và dòng danh sách dùng chung một lớp phủ 5% (8% khi nhấn); active nav dùng tint primary (§6.2, ADR 009).
 > **v0.10 (15/10/2026):** deploy lên Vercel (Services: web + api trong một project, region sin1) + Neon; ở production, router của Vercel thay rewrite của Next; throttle login tự viết; chốt người gọi cron dời sang M3.2 (§6.1, §6.2, §6.5, §6.6, §9, ADR 011).
 > **v0.11 (15/10/2026):** `validateTemplate` trả mỗi vấn đề một lỗi, gắn với các task liên quan; BR-T04 thêm điều kiện title không trùng; BR-T07 tính cả prerequisite gián tiếp; thứ tự task trong phase là thứ tự trong mảng, snapshot vào cột mới `tasks.position` (§4.2, §5, §7).
+> **v0.12 (15/10/2026):** overdue không bao giờ đi cùng LOCKED_BY_DATE (§4.4); override lúc activate không áp dụng cho task `NEW_HIRE` và không giao task cho chính nhân viên mới; activation kiểm BR-R01 (§4.7).
 
 ## TL;DR: 6 thay đổi lớn nhất
 
@@ -233,7 +234,7 @@ if (onboarding.status !== 'ACTIVE')                            return 'INACTIVE'
 if (task.status === 'PENDING' && today < task.availableOn)     return 'LOCKED_BY_DATE';
 if (prereqs.some(p => p.status !== 'COMPLETED'))               return 'BLOCKED';
 return 'READY';
-// isOverdue = chưa terminal && today > task.dueOn   (có thể đi cùng LOCKED_BY_DATE hoặc BLOCKED)
+// isOverdue = chưa terminal && today > task.dueOn   (có thể đi cùng BLOCKED; không bao giờ đi cùng LOCKED_BY_DATE, vì available_on ≤ due_on)
 ```
 
 Task đang IN_PROGRESS không bao giờ quay về LOCKED_BY_DATE (BR-S01). APPROVAL không có bước `start`: approve thì chuyển PENDING → COMPLETED; reject thì vẫn ở PENDING và thành BLOCKED, vì task nguồn đã bị mở lại.
@@ -262,7 +263,12 @@ Mỗi bước là một transaction. Revision, file và quyết định cũ khô
 | `NEW_HIRE` | Employee của onboarding đó (không cần account) | — |
 | `DIRECT_MANAGER` | `employee.manager_id`; manager phải có user đang ACTIVE | Chặn: "chưa gán manager" |
 | `ROLE: HR / IT` | User đang ACTIVE có role đó: 1 người thì tự chọn, nhiều người thì HR bắt buộc chọn | 0 người thì chặn |
-| Override | HR đổi assignee của task (trừ task `NEW_HIRE`) sang nhân viên khác có user ACTIVE | — |
+| Override | HR đổi assignee của task (trừ task `NEW_HIRE`) sang nhân viên khác có user ACTIVE, kể cả task mà rule không tìm ra ai | — |
+
+- Task không phải của nhân viên mới thì không bao giờ giao cho chính nhân viên mới, kể cả khi người đó đã có user với role phù hợp: rule bỏ qua họ, override cũng không chọn được.
+- HR chọn người (khi role có nhiều người) và override qua cùng một map `assignees` trong body của activate.
+- Activation kiểm luôn BR-R01: approver phải khác assignee của DOCUMENT mà nó duyệt. Vi phạm thì chặn giống như khi thiếu assignee.
+- `planActivation` trong `core` trả về từng task kèm ứng viên mà rule tìm ra, người được giao, và lý do chặn nếu có (`NO_CANDIDATE`, `PICK_NEEDED`, `PICK_INVALID`, `SAME_AS_UPLOADER`). Preview và activate dùng chung hàm này.
 
 Assignee được chụp lại (snapshot) tại thời điểm activate. Việc đổi manager hay phòng ban về sau sẽ không tự lan vào task; nếu cần, HR reassign thủ công.
 

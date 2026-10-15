@@ -2,10 +2,10 @@
 
 > File này được nạp vào mọi session qua `CLAUDE.md`. Giữ ngắn: chỉ trạng thái hiện tại. Lịch sử chi tiết nằm trong `docs/sessions/`.
 
-**Cập nhật:** 2026-10-15 · session 005 (M1.1 · schema template + `validateTemplate`)
-**Mốc hiện tại:** M1 · Workflow engine, xong M1.1 (schema template + `validateTemplate` trong `core`). M0 · Walking skeleton đã xong (xem bảng): CI trên GitHub Actions, demo public tại https://joinpath.vercel.app.
+**Cập nhật:** 2026-10-15 · session 006 (M1.2 · ngày, availability, activation plan trong `core`)
+**Mốc hiện tại:** M1 · Workflow engine, xong M1.1–M1.2 (`core`: `validateTemplate`, tính ngày, availability, `planActivation`). M0 · Walking skeleton đã xong (xem bảng): CI trên GitHub Actions, demo public tại https://joinpath.vercel.app.
 
-**Session kế tiếp:** **M1.2 · `core`: tính ngày, availability, resolve assignee, activation plan** (xem bảng). Handoff mới nhất: `docs/sessions/005-M1.1-template-validation.md` (có dữ liệu đọc từ canvas).
+**Session kế tiếp:** **M1.3 · API template** (xem bảng). Handoff mới nhất: `docs/sessions/006-M1.2-activation-plan.md`; dữ liệu đọc từ canvas nằm ở handoff 005.
 
 ## Quy ước session
 
@@ -26,11 +26,11 @@ Trạng thái: ✅ xong · ▶ kế tiếp · ⏳ chưa làm. Mốc M2–M5 mớ
 | M0.3 | Web shell: Tailwind 4 + token beUI, component beUI, reicon, trang login, layout theo vai trò | Đăng nhập qua UI ở local, sidebar đúng vai trò, khớp canvas | ✅ |
 | M0.4 | GitHub + CI, deploy Vercel Services + Neon (ADR 011), migrate + seed production, `trust proxy`, log kèm request id | URL public đăng nhập được; CI xanh trên `main` | ✅ |
 | M1.1 | `core`: Zod schema template + `validateTemplate`. T01–T03, T12 là rule của API, test ở M1.3, M1.4 | Unit test BR-T04…T11 pass | ✅ |
-| **M1.2** | `core`: tính ngày (`today` theo timezone + offset, cộng ngày trên `DATE`), availability + overdue (§4.4), resolve assignee (§4.7), activation plan (ngày, phase, `position`, dependency gồm cả `reviews`, cảnh báo overdue BR-A06) | Unit test pass, tên chứa BR (A04, A06, E01, E06…) | ▶ |
-| M1.3 | API template: bảng `templates`, `template_versions`, `audit_events`; seed "Engineering Onboarding" v1 + v2 theo canvas và "General Onboarding"; list, get, tạo, tạo version mới, `PUT` JSON (trả lỗi validate), publish, archive; ghi audit | Integration test AT-01…AT-04, AT-06 (phần publish), BR-T02 pass | ⏳ |
+| M1.2 | `core`: `today`, `addDays`, availability + overdue, `planActivation` (resolve + override assignee, BR-R01, BR-A06) | Unit test BR-A04, A06, A08, E01, E06, R01… pass | ✅ |
+| **M1.3** | API template: bảng `templates`, `template_versions`, `audit_events`; seed "Engineering Onboarding" v1 + v2 theo canvas và "General Onboarding"; list, get, tạo, tạo version mới, `PUT` JSON (trả lỗi validate), publish, archive; ghi audit | Integration test AT-01…AT-04, AT-06 (phần publish), BR-T02 pass | ▶ |
 | M1.4 | API onboarding: bảng `onboardings`, `tasks` (có `position`), `task_dependencies`; `GET /employees` (lọc role, active) + `GET /departments`; tạo và sửa draft, xem theo phạm vi (§9), activation preview, activate | AT-05, AT-06 (phần activate), AT-07…AT-09, AT-11, BR-T12 pass | ⏳ |
 | M1.5 | API task: `start`/`complete` checklist (khóa theo onboarding, §6.4), BR-E01, onboarding tự COMPLETED, `GET /tasks/mine`, `today(org)`, `POST /demo/clock/advance` (chỉ sandbox, chỉ tiến; chưa có tick) | AT-12…AT-14, AT-23, AT-31 (phần đồng hồ) pass | ⏳ |
-| M1.6 | Web: TanStack Query, danh sách onboarding, wizard (nhân viên → template + ngày → preview + chọn assignee → activate) | Activate template seed qua UI; khớp màn NewOnboarding | ⏳ |
+| M1.6 | Web: TanStack Query, danh sách onboarding, wizard (nhân viên → template + ngày → preview + chọn, override assignee → activate; canvas chưa có override: làm bản trước/sau) | Activate template seed qua UI; khớp màn NewOnboarding | ⏳ |
 | M1.7 | Web: onboarding detail (task theo phase, badge availability) + My Tasks | IT và Manager complete checklist qua UI; khóa theo ngày/dependency đúng; onboarding tự COMPLETED | ⏳ |
 | M1.8 | Employees: API tạo, sửa (email lowercase khi ghi, vì unique của `users.email` phân biệt hoa thường) + màn danh sách và form | Integration test employees pass; HR tạo, sửa nhân viên qua UI | ⏳ |
 | M1.9 | Templates: danh sách + lịch sử version (chỉ xem); chốt tiêu chí M1; push + deploy (hỏi user) | Tiêu chí M1 (PLAN §13) đạt trên production; nhóm test T, A, E pass (trừ A07, E04 thuộc M2) | ⏳ |
@@ -59,7 +59,7 @@ Trạng thái: ✅ xong · ▶ kế tiếp · ⏳ chưa làm. Mốc M2–M5 mớ
 - Preview deployment: origin khác `APP_ORIGIN` nên mọi request ghi bị 403, và preview dùng chung DB với production. Chốt khi bắt đầu dùng PR: tắt preview, hoặc cho phép origin của preview và dùng Neon branch.
 - Swagger `/api/docs` (PLAN §8) chưa thuộc session nào; khi thêm phải chỉnh CSP của `helmet`. Gắn vào session nào?
 - `image-viewer` (PLAN §10.1) không có trên registry beUI: chọn thay thế ở M2.4 (ứng viên `morphing-lightbox`).
-- BR-R01 ở mức template: DOCUMENT và APPROVAL của nó cùng giao `DIRECT_MANAGER` thì không bao giờ activate được. Chốt ở M1.4: activation báo lỗi theo R01, hay thêm rule template.
+- BR-R01 ở mức template: activation đã chặn R01 (M1.2, `SAME_AS_UPLOADER`). Còn mở: có thêm rule template để báo sớm khi DOCUMENT và APPROVAL của nó cùng giao `DIRECT_MANAGER` (lúc nào cũng sai) không? Chốt ở M1.4.
 
 ## Chạy dự án
 
@@ -99,6 +99,7 @@ Web đọc `API_URL` (mặc định `http://localhost:3001`, xem `apps/web/.env.
 - oxlint không in gì khi chạy trong Claude Code mà không có lỗi; thêm `--format=default` để thấy tổng kết.
 - Prisma 7.10 (pin; npm `latest` là 8.0 RC, bỏ qua banner update): không tự đọc `.env` (config dùng `process.loadEnvFile()`); `migrate dev` không tự `generate` hay seed; `migrate reset` bị Prisma chặn khi chạy từ AI agent, phải hỏi user. Docs: đọc trang `/v7/`, trang không ghi version đã là Prisma 8.
 - psql 16 trên Windows: option phải đứng trước connection string.
+- Node trên Windows bỏ qua biến `TZ`. Muốn thử code ngày với timezone có DST thì đặt `TZ` rồi chạy trên Linux (container hoặc CI).
 - Kiểm tra UI bằng Playwright CLI (headed), không dùng Claude in Chrome: Chrome của extension nằm ở máy khác. Lệnh `open` không tự trả về trong Bash tool, nên ghi output ra file (`> .playwright-cli/cmd.log 2>&1`); `--filename` tính từ thư mục hiện tại.
 - Sửa `packages/core` khi `pnpm dev` đang chạy: web có thể giữ bản core cũ, nên build core rồi restart `pnpm dev`.
 - Vercel CLI 62.2.0 cài global, đã đăng nhập. Hook đầu session báo "not installed" là sai.
