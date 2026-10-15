@@ -11,14 +11,24 @@ export type AuditAction =
   | 'onboarding.activated'
   | 'onboarding.completed'
   | 'task.started'
-  | 'task.completed';
+  | 'task.completed'
+  | 'employee.created'
+  | 'employee.updated'
+  | 'department.created'
+  | 'department.renamed';
 
 export function recordAudit(
   tx: Prisma.TransactionClient,
   { userId, organizationId }: AuthContext,
   event: {
     action: AuditAction;
-    entityType: 'template' | 'template_version' | 'onboarding' | 'task';
+    entityType:
+      | 'template'
+      | 'template_version'
+      | 'onboarding'
+      | 'task'
+      | 'employee'
+      | 'department';
     entityId: string;
     // Puts the event on that onboarding's timeline.
     onboardingId?: string;

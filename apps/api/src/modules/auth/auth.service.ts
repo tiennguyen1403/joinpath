@@ -1,5 +1,5 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
-import { type Login, type Me, today } from '@joinpath/core';
+import { type Login, type Me, sandboxEmailDomain, today } from '@joinpath/core';
 import { PrismaService } from '../../prisma.js';
 import { hashPassword, verifyPassword } from './password.js';
 import {
@@ -58,16 +58,19 @@ export class AuthService {
             name: true,
             timezone: true,
             clockOffsetDays: true,
+            slug: true,
+            isSandbox: true,
           },
         },
       },
     });
-    const { clockOffsetDays, ...org } = organization;
+    const { clockOffsetDays, slug, isSandbox, ...org } = organization;
     return {
       ...user,
       organization: {
         ...org,
         today: today(org.timezone, clockOffsetDays, new Date()),
+        emailDomain: isSandbox ? sandboxEmailDomain(slug) : null,
       },
     };
   }

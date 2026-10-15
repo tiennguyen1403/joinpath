@@ -1,6 +1,6 @@
 # Joinpath · hướng dẫn cho Claude Code
 
-Joinpath là nền tảng onboarding nhân viên, dự án portfolio full-stack. Kế hoạch: `docs/PLAN.md`. Thiết kế: canvas "Joinpath Screens" https://claude.ai/artifact/Xr3pRZbd14D78pqUignjWV (đọc bằng Artifact tool, action `read`). Trạng thái hiện tại được nhúng ở cuối file này.
+Joinpath là nền tảng onboarding nhân viên, dự án portfolio full-stack. Kế hoạch: `docs/PLAN.md`. Thiết kế: canvas "Joinpath Screens" https://claude.ai/artifact/Xr3pRZbd14D78pqUignjWV (đọc bằng Artifact tool, action `read`). Trạng thái hiện tại và các bẫy của môi trường dev được nhúng ở cuối file này.
 
 ## Quy trình session
 
@@ -35,3 +35,4 @@ Dự án chạy qua nhiều session ngắn; mỗi session là một dòng trong 
 - Test: tên test chứa ID của BR hoặc kịch bản (vd `T05`, `AT-12`); integration chạy với Postgres thật (PLAN §12).
 
 @docs/STATUS.md
+@docs/ENVIRONMENT.md

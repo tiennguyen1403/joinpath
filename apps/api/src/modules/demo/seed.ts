@@ -1,3 +1,4 @@
+import { sandboxEmailDomain } from '@joinpath/core';
 import type { PrismaClient } from '../../generated/prisma/client.js';
 import { hashPassword } from '../auth/password.js';
 import { seedTemplates } from './templates.js';
@@ -13,7 +14,7 @@ export async function seedDemoOrg(
 ) {
   const passwordHash = await hashPassword(password);
   const email = (fullName: string) =>
-    `${fullName.toLowerCase().replace(' ', '.')}@${slug}.joinpath.demo`;
+    `${fullName.toLowerCase().replace(' ', '.')}@${sandboxEmailDomain(slug)}`;
 
   return db.$transaction(async (tx) => {
     const org = await tx.organization.create({

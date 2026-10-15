@@ -59,6 +59,8 @@ export const meSchema = z.object({
     timezone: z.string(),
     // Its business date (PLAN §4.6), the demo clock's offset included.
     today: z.iso.date(),
+    // What follows the @ in every address of a sandbox (BR-D04); null outside one.
+    emailDomain: z.string().nullable(),
   }),
 });
 export type Me = z.infer<typeof meSchema>;
