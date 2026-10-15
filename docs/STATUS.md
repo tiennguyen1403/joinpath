@@ -2,10 +2,10 @@
 
 > File này được nạp vào mọi session qua `CLAUDE.md`. Giữ ngắn: chỉ trạng thái hiện tại. Lịch sử chi tiết nằm trong `docs/sessions/`.
 
-**Cập nhật:** 2026-10-15 · session 008 (M1.4a · API draft onboarding)
-**Mốc hiện tại:** M1 · Workflow engine, xong M1.1–M1.4a (`core`; API template; API draft onboarding). M0 · Walking skeleton đã xong (xem bảng): CI trên GitHub Actions, demo public tại https://joinpath.vercel.app.
+**Cập nhật:** 2026-10-15 · session 009 (M1.4b · Preview và activate)
+**Mốc hiện tại:** M1 · Workflow engine, xong M1.1–M1.4b (`core`; API template; API onboarding tới activate). M0 · Walking skeleton đã xong (xem bảng): CI trên GitHub Actions, demo public tại https://joinpath.vercel.app.
 
-**Session kế tiếp:** **M1.4b · Preview và activate** (xem bảng). Handoff mới nhất: `docs/sessions/008-M1.4a-draft-onboarding.md`; dữ liệu đọc từ canvas nằm ở handoff 005 và 008.
+**Session kế tiếp:** **M1.5 · API task** (xem bảng). Handoff mới nhất: `docs/sessions/009-M1.4b-activation.md`; dữ liệu đọc từ canvas nằm ở handoff 005, 008 và 009.
 
 ## Quy ước session
 
@@ -29,8 +29,8 @@ Trạng thái: ✅ xong · ▶ kế tiếp · ⏳ chưa làm. Mốc M2–M5 mớ
 | M1.2 | `core`: `today`, `addDays`, availability + overdue, `planActivation` | Unit test BR-A04, A06, A08, E01, E06, R01… pass | ✅ |
 | M1.3 | API template (8 endpoint chỉ HR), seed Engineering v1 + v2 và General, audit | AT-01…AT-04, AT-06 (phần publish), BR-T02 pass | ✅ |
 | M1.4a | API draft onboarding: 3 bảng, `GET /employees`, `GET /departments`, tạo và sửa draft, xem theo phạm vi | AT-11, BR-T12 (phần tạo), BR-P01, P02 pass | ✅ |
-| **M1.4b** | API onboarding: `today(org)`, activation preview, activate; task trong `GET /onboardings/:id`; xem onboarding qua task được giao (mọi vai) | AT-05, AT-06 (phần activate), AT-07…AT-09, BR-T12 (phần activate) pass | ▶ |
-| M1.5 | API task: `start`/`complete` checklist (khóa theo onboarding, §6.4), BR-E01, onboarding tự COMPLETED, `GET /tasks/mine`, `POST /demo/clock/advance` (chỉ sandbox, chỉ tiến; chưa có tick) | AT-12…AT-14, AT-23, AT-31 (phần đồng hồ) pass | ⏳ |
+| M1.4b | API onboarding: `today(org)`, activation preview, activate; task trong `GET /onboardings/:id`; xem onboarding qua task được giao (mọi vai) | AT-05, AT-06 (phần activate), AT-07…AT-10 (A10 phần activate), BR-T12 pass | ✅ |
+| **M1.5** | API task: `start`/`complete` checklist (khóa theo onboarding, §6.4), BR-E01, onboarding tự COMPLETED, `GET /tasks/mine`, `POST /demo/clock/advance` (chỉ sandbox, chỉ tiến; chưa có tick) | AT-12…AT-14, AT-23, AT-31 (phần đồng hồ) pass | ▶ |
 | M1.6 | Web: TanStack Query, danh sách onboarding, wizard (nhân viên → template + ngày → preview + chọn, override assignee → activate; canvas chưa có override: làm bản trước/sau) | Activate template seed qua UI; khớp màn NewOnboarding | ⏳ |
 | M1.7 | Web: onboarding detail (task theo phase, badge availability) + My Tasks | IT và Manager complete checklist qua UI; khóa theo ngày/dependency đúng; onboarding tự COMPLETED | ⏳ |
 | M1.8 | Employees: API tạo, sửa (email lowercase khi ghi, vì unique của `users.email` phân biệt hoa thường) + màn danh sách và form | Integration test employees pass; HR tạo, sửa nhân viên qua UI | ⏳ |

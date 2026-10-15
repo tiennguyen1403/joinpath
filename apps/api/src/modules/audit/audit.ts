@@ -7,7 +7,8 @@ export type AuditAction =
   | 'template.version_created'
   | 'template.published'
   | 'template.archived'
-  | 'onboarding.created';
+  | 'onboarding.created'
+  | 'onboarding.activated';
 
 export function recordAudit(
   tx: Prisma.TransactionClient,

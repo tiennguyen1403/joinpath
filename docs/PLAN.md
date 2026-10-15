@@ -1,4 +1,4 @@
-# Joinpath — Kế hoạch triển khai v0.14
+# Joinpath — Kế hoạch triển khai v0.15
 
 > **Joinpath**: Employee Onboarding & Workflow Management Platform, dự án portfolio Full-stack.
 > Bản này tinh chỉnh SRS v0.4 trong thread ChatGPT "Thiết kế dự án onboarding" (14/10/2026).
@@ -12,6 +12,7 @@
 > **v0.12 (15/10/2026):** overdue không bao giờ đi cùng LOCKED_BY_DATE (§4.4); override lúc activate không áp dụng cho task `NEW_HIRE` và không giao task cho chính nhân viên mới; activation kiểm BR-R01 (§4.7); `GET /employees` lọc theo `active`, `role` tùy chọn (§8).
 > **v0.13 (15/10/2026):** partial unique index khai báo ngay trong Prisma schema (preview `partialIndexes`), CHECK vẫn viết SQL tay (§6.2); `POST /templates` tạo kèm DRAFT v1 rỗng; archive không đảo ngược; mọi route template chỉ dành cho HR, kể cả GET (§8).
 > **v0.14 (15/10/2026):** bỏ `tasks.completed_by`, vì chỉ assignee complete được task nên cột này luôn trùng `assignee_employee_id` (§7); body của `POST` và `PATCH /onboardings`, draft hiện bản published mới nhất (§8); người không phải HR không thấy onboarding DRAFT, còn ai có task trong một onboarding thì xem được onboarding đó (§9).
+> **v0.15 (15/10/2026):** preview là `GET` không nhận lựa chọn của HR; wizard giữ lựa chọn và gửi một lần trong body của activate, `assignees` tùy chọn (§4.7); shape của preview, activate trả chi tiết onboarding kèm task, `details` của 422 (§8).
 
 ## TL;DR: 6 thay đổi lớn nhất
 
@@ -268,7 +269,7 @@ Mỗi bước là một transaction. Revision, file và quyết định cũ khô
 | Override | HR đổi assignee của task (trừ task `NEW_HIRE`) sang nhân viên khác có user ACTIVE, kể cả task mà rule không tìm ra ai | — |
 
 - Task không phải của nhân viên mới thì không bao giờ giao cho chính nhân viên mới, kể cả khi người đó đã có user với role phù hợp: rule bỏ qua họ, override cũng không chọn được.
-- HR chọn người (khi role có nhiều người) và override qua cùng một map `assignees` trong body của activate.
+- HR chọn người (khi role có nhiều người) và override qua cùng một map `assignees` trong body của activate. Preview không nhận lựa chọn: wizard giữ lựa chọn ở client, activate là bước kiểm cuối (422 kèm từng task còn lỗi).
 - Activation kiểm luôn BR-R01: approver phải khác assignee của DOCUMENT mà nó duyệt. Vi phạm thì chặn giống như khi thiếu assignee.
 - `planActivation` trong `core` trả về từng task kèm ứng viên mà rule tìm ra, người được giao, và lý do chặn nếu có (`NO_CANDIDATE`, `PICK_NEEDED`, `PICK_INVALID`, `SAME_AS_UPLOADER`). Preview và activate dùng chung hàm này.
 
@@ -544,10 +545,11 @@ POST /template-versions/:id/publish
 
 # Onboardings
 GET  /onboardings           GET /onboardings/:id         # theo phạm vi (§9); draft hiện bản published mới nhất, tức bản activate sẽ dùng
+                                              # /:id kèm today và task (availability, overdue tính theo today(org)); POST, PATCH, activate trả đúng shape này
 POST /onboardings                             {employeeId, templateId, startDate}
 PATCH /onboardings/:id                        {employeeId?, templateId?, startDate?}   # chỉ khi DRAFT; ít nhất 1 field
-GET  /onboardings/:id/activation-preview
-POST /onboardings/:id/activate                {templateVersionId, assignees: {[taskKey]: employeeId}}
+GET  /onboardings/:id/activation-preview      # chỉ DRAFT; {onboarding, today, tasks: PlannedTask[], people: [{id, fullName}]}
+POST /onboardings/:id/activate                {templateVersionId, assignees?: {[taskKey]: employeeId}}   # key không có trong template bị bỏ qua
 POST /onboardings/:id/reschedule              {startDate}
 POST /onboardings/:id/cancel                  {reason}
 POST /onboardings/:id/resend-invitation
@@ -585,7 +587,7 @@ Lỗi luôn trả về dạng `{ code, message, details? }`:
 | `TASK_NOT_ELIGIBLE` | 409 | Chưa tới ngày, hoặc còn prerequisite chưa xong |
 | `STALE_SUBMISSION` | 409 | Quyết định trên một revision không còn là bản mới nhất |
 | `TEMPLATE_VERSION_CHANGED` | 409 | Version khác với bản đã preview |
-| `ASSIGNEE_UNRESOLVED` | 422 | Activation thiếu assignee (kèm danh sách task) |
+| `ASSIGNEE_UNRESOLVED` | 422 | Activation thiếu assignee (`details: [{ taskKey, problem }]`) |
 | `INVITATION_INVALID` | 410 | Token đã dùng, hết hạn, hoặc đã bị thay bằng token mới |
 | `RATE_LIMITED` | 429 | Vượt rate limit (BR-P06) |
 | `INTERNAL` | 500 | Lỗi không lường trước; chi tiết chỉ ghi vào log |

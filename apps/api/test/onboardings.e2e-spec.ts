@@ -1,12 +1,16 @@
 import { randomUUID } from 'node:crypto';
 import type { INestApplication } from '@nestjs/common';
 import {
+  activationPreviewSchema,
+  addDays,
   type Onboarding,
+  onboardingDetailSchema,
   onboardingSchema,
   type Template,
   type TemplateDefinition,
   templateSchema,
   templateVersionSchema,
+  today,
 } from '@joinpath/core';
 import type { App } from 'supertest/types.js';
 import { seedDemoOrg } from '../src/modules/demo/seed.js';
@@ -47,15 +51,20 @@ describe('onboardings', () => {
   let engineering: Template;
   let general: Template;
   let hr: Client;
-  // An Vo and Bao Ho, both new hires with an account.
-  let others: Record<'IT' | 'manager' | 'An' | 'Bao', Client>;
+  // IT is Duc Tran, IT2 Huy Le. An Vo and Bao Ho are new hires with an account.
+  let others: Record<'IT' | 'IT2' | 'manager' | 'An' | 'Bao', Client>;
   let anVo: { id: string };
   let baoHo: { id: string };
+  // HR's picks for the two IT tasks of Engineering Onboarding, which two people could take.
+  let itPicks: Record<string, string>;
 
-  // Someone new who reports to the seed's manager and has no account, so tests never
-  // trip over each other's open onboardings (BR-A01).
+  // The org's business date, `offset` days on.
+  const day = (offset: number) =>
+    addDays(today(seeded.organization.timezone, 0, new Date()), offset);
+  // Someone new with no account, who reports to the seed's manager unless told otherwise, so
+  // tests never trip over each other's open onboardings (BR-A01).
   let hires = 0;
-  const newHire = async () => {
+  const newHire = async (manager: string | null = managerId) => {
     hires += 1;
     const employee = await prisma.employee.create({
       data: {
@@ -63,7 +72,7 @@ describe('onboardings', () => {
         fullName: `Hire ${hires}`,
         email: `hire.${hires}@${seeded.organization.slug}.joinpath.demo`,
         jobTitle: 'Engineer',
-        managerId,
+        managerId: manager,
       },
     });
     return employee.id;
@@ -78,7 +87,7 @@ describe('onboardings', () => {
       (await create({ employeeId, templateId, startDate }).expect(201)).body,
     );
   const read = async (client: Client, id: string) =>
-    onboardingSchema.parse(
+    onboardingDetailSchema.parse(
       (await client.get(`/onboardings/${id}`).expect(200)).body,
     );
   const listed = async (client: Client) =>
@@ -86,17 +95,22 @@ describe('onboardings', () => {
       .array()
       .parse((await client.get('/onboardings').expect(200)).body)
       .map((onboarding) => onboarding.id);
-  // Activation comes in M1.4b. Until then a test moves the row itself, pinning the version
-  // the draft shows, as activation will.
-  const markActive = ({ id, templateVersion }: Onboarding) =>
-    prisma.onboarding.update({
-      where: { id },
-      data: {
-        status: 'ACTIVE',
-        activatedAt: new Date(),
-        templateVersionId: templateVersion.id,
-      },
-    });
+  const preview = async (id: string) =>
+    activationPreviewSchema.parse(
+      (await hr.get(`/onboardings/${id}/activation-preview`).expect(200)).body,
+    );
+  // As the wizard does: the version the preview shows, and the IT picks, which a template
+  // without those tasks ignores.
+  const activate = async ({ id }: { id: string }) => {
+    const { onboarding } = await preview(id);
+    const res = await hr
+      .post(`/onboardings/${id}/activate`, {
+        templateVersionId: onboarding.templateVersion.id,
+        assignees: itPicks,
+      })
+      .expect(200);
+    return onboardingDetailSchema.parse(res.body);
+  };
   // A new template with one published version.
   let templates = 0;
   const publishedTemplate = async () => {
@@ -111,17 +125,17 @@ describe('onboardings', () => {
     await hr.post(`/template-versions/${versions[0].id}/publish`).expect(200);
     return id;
   };
+  const employeeOf = async (email: string) =>
+    (await prisma.user.findUniqueOrThrow({ where: { email } })).employeeId;
 
   beforeAll(async () => {
     app = await createApp();
     prisma = app.get(PrismaService);
     seeded = await seedDemoOrg(prisma, { slug: newSlug(), password: PASSWORD });
     organizationId = seeded.organization.id;
-    managerId = (
-      await prisma.user.findUniqueOrThrow({
-        where: { email: seeded.emails.manager },
-      })
-    ).employeeId;
+    managerId = await employeeOf(seeded.emails.manager);
+    const duc = await employeeOf(seeded.emails.it);
+    itPicks = { 'prepare-laptop': duc, 'create-accounts': duc };
     const an = await giveAccount(prisma, organizationId, 'An Vo');
     const bao = await giveAccount(prisma, organizationId, 'Bao Ho');
     anVo = an;
@@ -129,6 +143,7 @@ describe('onboardings', () => {
     hr = await signIn(app, seeded.emails.hr);
     others = {
       IT: await signIn(app, seeded.emails.it),
+      IT2: await signIn(app, seeded.emails.it2),
       manager: await signIn(app, seeded.emails.manager),
       An: await signIn(app, an.email),
       Bao: await signIn(app, bao.email),
@@ -171,6 +186,11 @@ describe('onboardings', () => {
       template: { id: engineering.id, name: 'Engineering Onboarding' },
       // Activating now would copy v2, the newest published (BR-A03).
       templateVersion: { id: engineering.versions[0].id, version: 2 },
+    });
+    // Nothing else exists until activation.
+    expect(onboardingDetailSchema.parse(res.body)).toMatchObject({
+      today: day(0),
+      tasks: [],
     });
     expect(
       (await hr.get(`/onboardings/${onboarding.id}`).expect(200)).body,
@@ -215,7 +235,7 @@ describe('onboardings', () => {
       message: 'Employee already has an open onboarding',
     };
     expect(errorOf(await create(again).expect(409))).toEqual(refusal);
-    await markActive(first);
+    await activate(first);
     expect(errorOf(await create(again).expect(409))).toEqual(refusal);
     // Canceling comes in M3.1. CANCELED and COMPLETED are closed: the index covers
     // DRAFT and ACTIVE only.
@@ -253,26 +273,40 @@ describe('onboardings', () => {
     ).rejects.toMatchObject({ code: 'P2002' });
   });
 
-  it('BR-A03 a draft shows the newest published version; an active onboarding keeps its own', async () => {
+  it('AT-05 BR-A03 BR-A08 a newly published version changes what a draft would get, never a running onboarding', async () => {
     const templateId = await publishedTemplate();
     const draft = await draftFor(await newHire(), templateId);
-    const active = await draftFor(await newHire(), templateId);
-    await markActive(active);
+    const active = await activate(await draftFor(await newHire(), templateId));
     expect(draft.templateVersion.version).toBe(1);
 
     const res = await hr.post(`/templates/${templateId}/versions`).expect(201);
     const v2 = templateVersionSchema.parse(res.body);
     // An unpublished v2 is not what activation would use.
     expect((await read(hr, draft.id)).templateVersion.version).toBe(1);
+    const [welcome] = definition.tasks;
+    await hr
+      .put(`/template-versions/${v2.id}`, {
+        ...definition,
+        tasks: [{ ...welcome, title: 'Welcome aboard', dueOffsetDays: 2 }],
+      })
+      .expect(200);
     await hr.post(`/template-versions/${v2.id}/publish`).expect(200);
     expect((await read(hr, draft.id)).templateVersion).toEqual({
       id: v2.id,
       version: 2,
     });
-    expect((await read(hr, active.id)).templateVersion.version).toBe(1);
+    expect((await preview(draft.id)).tasks).toMatchObject([
+      { title: 'Welcome aboard' },
+    ]);
+    // The running onboarding keeps its version, and its tasks as activation made them.
+    expect(await read(hr, active.id)).toEqual(active);
+    expect(active).toMatchObject({
+      templateVersion: { version: 1 },
+      tasks: [{ title: 'Welcome', dueOn: active.startDate }],
+    });
   });
 
-  it('BR-T12 an archived template takes no new onboarding; a draft that has it can still change', async () => {
+  it('BR-T12 an archived template takes no new onboarding and activates no draft; a draft that has it can still change', async () => {
     const templateId = await publishedTemplate();
     const draft = await draftFor(await newHire(), templateId);
     const another = await draftFor(await newHire());
@@ -283,24 +317,32 @@ describe('onboardings', () => {
       templateId,
       startDate: '2026-11-02',
     }).expect(409);
-    expect(errorOf(res)).toEqual({
-      code: 'INVALID_STATE',
-      message: 'Template is archived',
-    });
+    const archived = { code: 'INVALID_STATE', message: 'Template is archived' };
+    expect(errorOf(res)).toEqual(archived);
     const moved = await hr
       .patch(`/onboardings/${another.id}`, { templateId })
       .expect(409);
-    expect(errorOf(moved).message).toBe('Template is archived');
+    expect(errorOf(moved)).toEqual(archived);
+    const previewed = await hr
+      .get(`/onboardings/${draft.id}/activation-preview`)
+      .expect(409);
+    expect(errorOf(previewed)).toEqual(archived);
+    const activated = await hr
+      .post(`/onboardings/${draft.id}/activate`, {
+        templateVersionId: draft.templateVersion.id,
+      })
+      .expect(409);
+    expect(errorOf(activated)).toEqual(archived);
+    expect((await read(hr, draft.id)).status).toBe('DRAFT');
 
-    // HR can still edit the draft and give it another template (activating it with the
-    // archived one is refused, M1.4b).
+    // HR can still edit the draft and give it another template, which activates.
     await hr
       .patch(`/onboardings/${draft.id}`, { startDate: '2026-11-16' })
       .expect(200);
     await hr
       .patch(`/onboardings/${draft.id}`, { templateId: general.id })
       .expect(200);
-    expect((await read(hr, draft.id)).template.id).toBe(general.id);
+    expect((await activate(draft)).template.id).toBe(general.id);
   });
 
   it('FR-07 a template without a published version takes no onboarding', async () => {
@@ -374,13 +416,395 @@ describe('onboardings', () => {
       .patch(`/onboardings/${randomUUID()}`, { startDate: '2026-11-09' })
       .expect(404);
 
-    await markActive(draft);
+    await activate(draft);
     const res = await hr.patch(path, { startDate: '2026-11-09' }).expect(409);
     expect(errorOf(res)).toEqual({
       code: 'INVALID_STATE',
       message: 'Only a draft can change',
     });
     expect((await read(hr, draft.id)).startDate).toBe(draft.startDate);
+  });
+
+  it('FR-26 BR-A06 the preview plans every task: its dates, whom the rules found, and what HR must pick', async () => {
+    const hire = await newHire();
+    const draft = await draftFor(hire, engineering.id, '2026-11-02');
+    const plan = await preview(draft.id);
+    expect(plan.onboarding).toEqual(draft);
+    expect(plan.today).toBe(day(0));
+    // In template order, dated from the start date.
+    expect(
+      plan.tasks.map(({ key, availableOn, dueOn }) => [
+        key,
+        availableOn,
+        dueOn,
+      ]),
+    ).toEqual([
+      ['upload-id', '2026-10-19', '2026-10-28'],
+      ['review-id', '2026-10-19', '2026-10-30'],
+      ['sign-handbook', '2026-10-19', '2026-10-30'],
+      ['prepare-laptop', '2026-10-26', '2026-10-30'],
+      ['create-accounts', '2026-10-28', '2026-10-30'],
+      ['assign-buddy', '2026-10-26', '2026-10-29'],
+      ['welcome-meeting', '2026-11-02', '2026-11-02'],
+      ['set-up-dev-env', '2026-11-02', '2026-11-04'],
+      ['security-training', '2026-11-02', '2026-11-06'],
+      ['ship-first-pr', '2026-11-03', '2026-11-06'],
+      ['week-one-check-in', '2026-11-06', '2026-11-06'],
+    ]);
+    // Whom each rule found, by name. Only the two IT tasks wait for HR.
+    const name = (id: string) =>
+      plan.people.find((person) => person.id === id)!.fullName;
+    const owners = Object.fromEntries(
+      plan.tasks.map((task) => [
+        task.key,
+        [
+          task.assigneeId && name(task.assigneeId),
+          task.candidates.map(name).sort(),
+          task.problem,
+        ],
+      ]),
+    );
+    const hireName = name(hire);
+    expect(owners).toMatchObject({
+      'upload-id': [hireName, [hireName], undefined],
+      'review-id': ['Lan Pham', ['Lan Pham'], undefined],
+      'prepare-laptop': [null, ['Duc Tran', 'Huy Le'], 'PICK_NEEDED'],
+      'create-accounts': [null, ['Duc Tran', 'Huy Le'], 'PICK_NEEDED'],
+      'assign-buddy': ['Minh Nguyen', ['Minh Nguyen'], undefined],
+    });
+    expect(
+      plan.tasks.filter((task) => task.problem).map((task) => task.key),
+    ).toEqual(['prepare-laptop', 'create-accounts']);
+    expect(plan.people.map((person) => person.fullName).sort()).toEqual(
+      ['Duc Tran', 'Huy Le', 'Lan Pham', 'Minh Nguyen', hireName].sort(),
+    );
+    expect(
+      plan.tasks.find((task) => task.key === 'set-up-dev-env'),
+    ).toMatchObject({ dependsOn: ['prepare-laptop', 'create-accounts'] });
+    expect(plan.tasks.find((task) => task.key === 'review-id')).toMatchObject({
+      reviews: 'upload-id',
+      dependsOn: ['upload-id'],
+    });
+
+    // A start date already past still activates; the preview flags what is overdue.
+    const late = await draftFor(await newHire(), engineering.id, day(-3));
+    const overdue = (await preview(late.id)).tasks
+      .filter((task) => task.overdue)
+      .map((task) => task.key);
+    expect(overdue).toEqual([
+      'upload-id',
+      'review-id',
+      'sign-handbook',
+      'prepare-laptop',
+      'create-accounts',
+      'assign-buddy',
+      'welcome-meeting',
+      'set-up-dev-env',
+    ]);
+    const activated = await activate(late);
+    expect(activated.tasks.filter((task) => task.overdue)).toHaveLength(8);
+  });
+
+  it("AT-10 BR-A04 BR-A05 activation creates the planned tasks and dependencies, the new hire's though they have no account; it is audited", async () => {
+    const hire = await newHire();
+    const draft = await draftFor(hire, engineering.id, day(30));
+    const plan = await preview(draft.id);
+    const templateVersionId = plan.onboarding.templateVersion.id;
+    const res = await hr
+      .post(`/onboardings/${draft.id}/activate`, {
+        templateVersionId,
+        assignees: itPicks,
+      })
+      .expect(200);
+    const active = onboardingDetailSchema.parse(res.body);
+    expect(active).toMatchObject({
+      status: 'ACTIVE',
+      activatedAt: expect.any(String),
+      templateVersion: { id: templateVersionId, version: 2 },
+      today: day(0),
+    });
+    expect((await hr.get(`/onboardings/${draft.id}`).expect(200)).body).toEqual(
+      res.body,
+    );
+
+    // Each task is the one planned. A title is unique within a template (BR-T04).
+    const idOf = (key: string) => {
+      const { title } = plan.tasks.find((task) => task.key === key)!;
+      return active.tasks.find((task) => task.title === title)!.id;
+    };
+    const nameOf = (id: string) =>
+      plan.people.find((person) => person.id === id)!.fullName;
+    expect(active.tasks).toEqual(
+      plan.tasks.map((planned) => {
+        const assignee = planned.assigneeId ?? itPicks[planned.key];
+        return {
+          id: idOf(planned.key),
+          phaseKey: planned.phaseKey,
+          phaseName: planned.phaseName,
+          phaseOrder: planned.phaseOrder,
+          position: planned.position,
+          title: planned.title,
+          description: planned.description ?? null,
+          type: planned.type,
+          assignee: { id: assignee, fullName: nameOf(assignee) },
+          reviewsTaskId: planned.reviews ? idOf(planned.reviews) : null,
+          dependsOn: planned.dependsOn.map(idOf),
+          availableOn: planned.availableOn,
+          dueOn: planned.dueOn,
+          status: 'PENDING',
+          startedAt: null,
+          completedAt: null,
+          // A month ahead, nothing has opened yet.
+          availability: 'LOCKED_BY_DATE',
+          overdue: false,
+        };
+      }),
+    );
+    // The new hire takes their tasks without an account; the invitation comes in M2.1.
+    expect(await prisma.user.count({ where: { employeeId: hire } })).toBe(0);
+    expect(
+      active.tasks.filter((task) => task.assignee.id === hire),
+    ).toHaveLength(5);
+
+    const hrUser = await prisma.user.findUniqueOrThrow({
+      where: { email: seeded.emails.hr },
+    });
+    expect(
+      await prisma.auditEvent.findMany({
+        where: { onboardingId: draft.id, action: 'onboarding.activated' },
+      }),
+    ).toEqual([
+      expect.objectContaining({
+        actorUserId: hrUser.id,
+        entityType: 'onboarding',
+        entityId: draft.id,
+        data: { templateVersionId, assignees: itPicks },
+      }),
+    ]);
+  });
+
+  it('AT-07 BR-A04 activation needs an owner for every task: a 422 names the tasks, and nothing is created', async () => {
+    const unresolved = async (draft: Onboarding, assignees: object) => {
+      const { onboarding } = await preview(draft.id);
+      const res = await hr
+        .post(`/onboardings/${draft.id}/activate`, {
+          templateVersionId: onboarding.templateVersion.id,
+          assignees,
+        })
+        .expect(422);
+      expect((await read(hr, draft.id)).status).toBe('DRAFT');
+      expect(
+        await prisma.task.count({ where: { onboardingId: draft.id } }),
+      ).toBe(0);
+      return errorOf(res);
+    };
+
+    // Two people have the IT role and HR picked one task's owner only: the new hire,
+    // who takes no work but their own.
+    const hire = await newHire();
+    const draft = await draftFor(hire);
+    expect(await unresolved(draft, { 'prepare-laptop': hire })).toEqual({
+      code: 'ASSIGNEE_UNRESOLVED',
+      message: 'Fix the owner of 2 tasks to activate',
+      details: [
+        { taskKey: 'prepare-laptop', problem: 'PICK_INVALID' },
+        { taskKey: 'create-accounts', problem: 'PICK_NEEDED' },
+      ],
+    });
+    // The new hire has no manager.
+    const managerless = await draftFor(await newHire(null));
+    expect((await unresolved(managerless, itPicks)).details).toEqual([
+      { taskKey: 'assign-buddy', problem: 'NO_CANDIDATE' },
+      { taskKey: 'welcome-meeting', problem: 'NO_CANDIDATE' },
+      { taskKey: 'week-one-check-in', problem: 'NO_CANDIDATE' },
+    ]);
+    // Nobody has an active IT account.
+    const itUsers = { organizationId, role: 'IT' as const };
+    await prisma.user.updateMany({
+      where: itUsers,
+      data: { status: 'DISABLED' },
+    });
+    try {
+      expect((await unresolved(draft, {})).details).toEqual([
+        { taskKey: 'prepare-laptop', problem: 'NO_CANDIDATE' },
+        { taskKey: 'create-accounts', problem: 'NO_CANDIDATE' },
+      ]);
+    } finally {
+      await prisma.user.updateMany({
+        where: itUsers,
+        data: { status: 'ACTIVE' },
+      });
+    }
+    // The refusals left nothing behind: with an owner for each task, it activates.
+    expect((await activate(draft)).tasks).toHaveLength(11);
+  });
+
+  it('AT-08 BR-A05 two activations at once create one set of tasks', async () => {
+    const draft = await draftFor(await newHire());
+    const { onboarding } = await preview(draft.id);
+    const activation = () =>
+      hr.post(`/onboardings/${draft.id}/activate`, {
+        templateVersionId: onboarding.templateVersion.id,
+        assignees: itPicks,
+      });
+    const responses = await Promise.all([activation(), activation()]);
+    expect(responses.map((res) => res.status).sort((a, b) => a - b)).toEqual([
+      200, 409,
+    ]);
+    const loser = responses.find((res) => res.status === 409)!;
+    expect(errorOf(loser)).toEqual({
+      code: 'INVALID_STATE',
+      message: 'Only a draft can be activated',
+    });
+    expect(await prisma.task.count({ where: { onboardingId: draft.id } })).toBe(
+      11,
+    );
+    expect(
+      await prisma.auditEvent.count({
+        where: { onboardingId: draft.id, action: 'onboarding.activated' },
+      }),
+    ).toBe(1);
+  });
+
+  it('BR-A05 a PATCH racing activation: the tasks follow whichever start date was committed', async () => {
+    const draft = await draftFor(await newHire(), engineering.id, day(30));
+    const { onboarding } = await preview(draft.id);
+    const [patched, activated] = await Promise.all([
+      hr.patch(`/onboardings/${draft.id}`, { startDate: day(40) }),
+      hr.post(`/onboardings/${draft.id}/activate`, {
+        templateVersionId: onboarding.templateVersion.id,
+        assignees: itPicks,
+      }),
+    ]);
+    expect(activated.status).toBe(200);
+    // The PATCH either landed before activation locked the draft, or found it active.
+    expect([200, 409]).toContain(patched.status);
+    const active = await read(hr, draft.id);
+    expect(active.startDate).toBe(patched.status === 200 ? day(40) : day(30));
+    // The welcome meeting opens on the start date itself.
+    const welcome = active.tasks.find(
+      (task) => task.title === 'Welcome meeting',
+    );
+    expect(welcome?.availableOn).toBe(active.startDate);
+  });
+
+  it('AT-09 BR-A03 activating the version the preview showed, once a newer one is published, is a 409', async () => {
+    const templateId = await publishedTemplate();
+    const draft = await draftFor(await newHire(), templateId);
+    const shown = (await preview(draft.id)).onboarding.templateVersion;
+    const res = await hr.post(`/templates/${templateId}/versions`).expect(201);
+    const v2 = templateVersionSchema.parse(res.body);
+    await hr.post(`/template-versions/${v2.id}/publish`).expect(200);
+
+    const refused = await hr
+      .post(`/onboardings/${draft.id}/activate`, {
+        templateVersionId: shown.id,
+      })
+      .expect(409);
+    expect(errorOf(refused)).toEqual({
+      code: 'TEMPLATE_VERSION_CHANGED',
+      message: 'The template has a newer version: preview again',
+    });
+    expect((await read(hr, draft.id)).status).toBe('DRAFT');
+    expect(await prisma.task.count({ where: { onboardingId: draft.id } })).toBe(
+      0,
+    );
+    // Previewed again, the draft shows v2 and activates with it.
+    expect((await activate(draft)).templateVersion).toEqual({
+      id: v2.id,
+      version: 2,
+    });
+  });
+
+  it('FR-26 preview and activate refuse a bad body, an unknown onboarding, and one already activated', async () => {
+    const draft = await draftFor(await newHire());
+    const { onboarding } = await preview(draft.id);
+    const templateVersionId = onboarding.templateVersion.id;
+    const path = `/onboardings/${draft.id}/activate`;
+    for (const body of [
+      {},
+      { templateVersionId: 'v2' },
+      { templateVersionId, assignees: { 'prepare-laptop': 'Duc Tran' } },
+    ]) {
+      const res = await hr.post(path, body).expect(400);
+      expect(errorOf(res).code).toBe('VALIDATION_FAILED');
+    }
+    await hr.get(`/onboardings/${randomUUID()}/activation-preview`).expect(404);
+    // Picks are optional: the body is valid, the onboarding unknown.
+    await hr
+      .post(`/onboardings/${randomUUID()}/activate`, { templateVersionId })
+      .expect(404);
+
+    await activate(draft);
+    const previewed = await hr
+      .get(`/onboardings/${draft.id}/activation-preview`)
+      .expect(409);
+    expect(errorOf(previewed)).toEqual({
+      code: 'INVALID_STATE',
+      message: 'Only a draft can be activated',
+    });
+    await hr.post(path, { templateVersionId, assignees: itPicks }).expect(409);
+  });
+
+  it("§4.6 BR-E06 tasks open on the org's business date, in its time zone and by its demo clock; overdue can go with BLOCKED", async () => {
+    // Twenty days ahead, so the first tasks open in six days (14 before the start).
+    const active = await activate(
+      await draftFor(await newHire(), engineering.id, day(20)),
+    );
+    const on = async (clockOffsetDays: number) => {
+      await prisma.organization.update({
+        where: { id: organizationId },
+        data: { clockOffsetDays },
+      });
+      const detail = await read(hr, active.id);
+      return {
+        today: detail.today,
+        ...Object.fromEntries(
+          detail.tasks.map((task) => [
+            task.title,
+            [task.availability, task.overdue],
+          ]),
+        ),
+      };
+    };
+    try {
+      expect(active.today).toBe(day(0));
+      expect(new Set(active.tasks.map((task) => task.availability))).toEqual(
+        new Set(['LOCKED_BY_DATE']),
+      );
+      expect(await on(6)).toMatchObject({
+        today: day(6),
+        'Upload ID documents': ['READY', false],
+        'Review ID documents': ['BLOCKED', false],
+        'Sign the employee handbook': ['READY', false],
+        'Prepare laptop': ['LOCKED_BY_DATE', false],
+      });
+      // Past both due dates (start − 5 and start − 3), the review is overdue while it still
+      // waits for the upload.
+      expect(await on(18)).toMatchObject({
+        today: day(18),
+        'Upload ID documents': ['READY', true],
+        'Review ID documents': ['BLOCKED', true],
+        'Prepare laptop': ['READY', true],
+        'Welcome meeting': ['LOCKED_BY_DATE', false],
+      });
+      // The date is the org's own. These two zones are 25 hours apart, so at any hour at
+      // least one of them is on another date than UTC.
+      for (const timezone of ['Pacific/Kiritimati', 'Pacific/Pago_Pago']) {
+        await prisma.organization.update({
+          where: { id: organizationId },
+          data: { timezone, clockOffsetDays: 0 },
+        });
+        expect((await read(hr, active.id)).today).toBe(
+          today(timezone, 0, new Date()),
+        );
+      }
+    } finally {
+      await prisma.organization.update({
+        where: { id: organizationId },
+        data: { timezone: seeded.organization.timezone, clockOffsetDays: 0 },
+      });
+    }
   });
 
   it('BR-P01 BR-P02 the employees, templates and onboardings of another org are 404', async () => {
@@ -427,10 +851,27 @@ describe('onboardings', () => {
       await hr
         .patch(`/onboardings/${draft.id}`, { templateId: outsideTemplate.id })
         .expect(404);
+      // Someone of another org is no owner to pick.
+      const { onboarding } = await preview(draft.id);
+      const picked = await hr
+        .post(`/onboardings/${draft.id}/activate`, {
+          templateVersionId: onboarding.templateVersion.id,
+          assignees: { ...itPicks, 'prepare-laptop': outsider.id },
+        })
+        .expect(422);
+      expect(errorOf(picked).details).toEqual([
+        { taskKey: 'prepare-laptop', problem: 'PICK_INVALID' },
+      ]);
 
       await hr.get(`/onboardings/${theirs.id}`).expect(404);
       await hr
         .patch(`/onboardings/${theirs.id}`, { startDate: '2026-11-09' })
+        .expect(404);
+      await hr.get(`/onboardings/${theirs.id}/activation-preview`).expect(404);
+      await hr
+        .post(`/onboardings/${theirs.id}/activate`, {
+          templateVersionId: randomUUID(),
+        })
         .expect(404);
       expect(
         await prisma.onboarding.findUniqueOrThrow({ where: { id: theirs.id } }),
@@ -445,7 +886,7 @@ describe('onboardings', () => {
     }
   });
 
-  it("§9 BR-P02 HR sees every onboarding; others see no draft, then their own and their reports'", async () => {
+  it("§9 BR-P02 HR sees every onboarding; others see no draft, then their own, their reports', and those they have a task in", async () => {
     const an = await draftFor(anVo.id, engineering.id, '2026-11-16');
     const bao = await draftFor(baoHo.id, engineering.id, '2026-10-26');
 
@@ -467,8 +908,8 @@ describe('onboardings', () => {
       await client.get(`/onboardings/${an.id}`).expect(404);
     }
 
-    await markActive(an);
-    await markActive(bao);
+    await activate(an);
+    await activate(bao);
     expect(await listed(others.manager)).toEqual(
       expect.arrayContaining([an.id, bao.id]),
     );
@@ -477,14 +918,20 @@ describe('onboardings', () => {
     await read(others.manager, bao.id);
     await read(others.An, an.id);
     await others.An.get(`/onboardings/${bao.id}`).expect(404);
-    // IT sees an onboarding through its tasks (M1.4b); with none yet, it sees nothing.
-    expect(await listed(others.IT)).toEqual([]);
-    await others.IT.get(`/onboardings/${an.id}`).expect(404);
+    // Duc has IT tasks in both, so he sees them, with every task for context. Huy, the other
+    // IT person, has none.
+    expect(await listed(others.IT)).toEqual(
+      expect.arrayContaining([an.id, bao.id]),
+    );
+    expect((await read(others.IT, an.id)).tasks).toHaveLength(11);
+    expect(await listed(others.IT2)).toEqual([]);
+    await others.IT2.get(`/onboardings/${an.id}`).expect(404);
   });
 
-  it('§9 only HR creates or edits an onboarding', async () => {
+  it('AT-06 §9 only HR creates, edits, previews or activates an onboarding', async () => {
     const employeeId = await newHire();
     const draft = await draftFor(await newHire());
+    const { onboarding } = await preview(draft.id);
     for (const [who, client] of Object.entries(others)) {
       const created = await client.post('/onboardings', {
         employeeId,
@@ -494,13 +941,32 @@ describe('onboardings', () => {
       const edited = await client.patch(`/onboardings/${draft.id}`, {
         startDate: '2026-11-09',
       });
-      expect({ who, created: created.status, edited: edited.status }).toEqual({
+      const previewed = await client.get(
+        `/onboardings/${draft.id}/activation-preview`,
+      );
+      const activated = await client.post(`/onboardings/${draft.id}/activate`, {
+        templateVersionId: onboarding.templateVersion.id,
+        assignees: itPicks,
+      });
+      expect({
+        who,
+        created: created.status,
+        edited: edited.status,
+        previewed: previewed.status,
+        activated: activated.status,
+      }).toEqual({
         who,
         created: 403,
         edited: 403,
+        previewed: 403,
+        activated: 403,
       });
     }
     expect(await prisma.onboarding.count({ where: { employeeId } })).toBe(0);
-    expect((await read(hr, draft.id)).startDate).toBe('2026-11-02');
+    expect(await read(hr, draft.id)).toMatchObject({
+      status: 'DRAFT',
+      startDate: '2026-11-02',
+      tasks: [],
+    });
   });
 });

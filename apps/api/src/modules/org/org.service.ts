@@ -1,5 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import type { Department, Employee, Role } from '@joinpath/core';
+import {
+  type Department,
+  type Employee,
+  type IsoDate,
+  type Role,
+  today,
+} from '@joinpath/core';
 import type { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../prisma.js';
 import type { AuthContext } from '../auth/session.js';
@@ -13,6 +19,20 @@ export const personSelect = {
   department: { select: { id: true, name: true } },
   manager: { select: { id: true, fullName: true } },
 } satisfies Prisma.EmployeeSelect;
+
+/** today(org) (PLAN §4.6): the org's business date, the only "today" a workflow uses. */
+export async function orgToday(
+  db: Prisma.TransactionClient,
+  organizationId: string,
+): Promise<IsoDate> {
+  const { timezone, clockOffsetDays } = await db.organization.findUniqueOrThrow(
+    {
+      where: { id: organizationId },
+      select: { timezone: true, clockOffsetDays: true },
+    },
+  );
+  return today(timezone, clockOffsetDays, new Date());
+}
 
 @Injectable()
 export class OrgService {

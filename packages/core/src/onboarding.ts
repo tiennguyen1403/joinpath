@@ -1,9 +1,19 @@
 import { z } from 'zod';
 import { addDays, type IsoDate } from './dates.js';
 import { employeeSchema, type Role } from './org.js';
-import type { AssigneeRule, TaskDef, TemplateDefinition } from './template.js';
+import {
+  assigneeRuleSchema,
+  taskDefSchema,
+  type TemplateDefinition,
+} from './template.js';
 
-export type TaskStatus = 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELED';
+export const taskStatusSchema = z.enum([
+  'PENDING',
+  'IN_PROGRESS',
+  'COMPLETED',
+  'CANCELED',
+]);
+export type TaskStatus = z.infer<typeof taskStatusSchema>;
 export const onboardingStatusSchema = z.enum([
   'DRAFT',
   'ACTIVE',
@@ -12,13 +22,15 @@ export const onboardingStatusSchema = z.enum([
 ]);
 export type OnboardingStatus = z.infer<typeof onboardingStatusSchema>;
 // Worked out when read, never stored (PLAN §4.4).
-export type Availability =
-  | 'COMPLETED'
-  | 'CANCELED'
-  | 'INACTIVE'
-  | 'LOCKED_BY_DATE'
-  | 'BLOCKED'
-  | 'READY';
+export const availabilitySchema = z.enum([
+  'COMPLETED',
+  'CANCELED',
+  'INACTIVE',
+  'LOCKED_BY_DATE',
+  'BLOCKED',
+  'READY',
+]);
+export type Availability = z.infer<typeof availabilitySchema>;
 
 /** Whether a task can be worked on today. The checks run in this order (PLAN §4.4). */
 export function availability(
@@ -56,17 +68,19 @@ export function isOverdue(
 }
 
 // Why a task has no assignee, or can't keep the one it has. Activation needs none (BR-A04).
-export type AssigneeProblem =
+export const assigneeProblemSchema = z.enum([
   // The rule finds nobody and HR picked nobody: no manager, a manager with no active account,
   // or nobody else with the role.
-  | 'NO_CANDIDATE'
+  'NO_CANDIDATE',
   // Several people have the role and HR hasn't picked one.
-  | 'PICK_NEEDED'
+  'PICK_NEEDED',
   // HR picked someone who can't take the task: no active account, the new hire, or anyone
   // at all for a task of the new hire's own.
-  | 'PICK_INVALID'
+  'PICK_INVALID',
   // The approval would go to whoever uploads the document it reviews (BR-R01).
-  | 'SAME_AS_UPLOADER';
+  'SAME_AS_UPLOADER',
+]);
+export type AssigneeProblem = z.infer<typeof assigneeProblemSchema>;
 
 export type ActivationInput = {
   // A published version, so validateTemplate found nothing.
@@ -82,28 +96,29 @@ export type ActivationInput = {
 };
 
 // One row of `tasks` to create, keyed by template keys until the rows get ids.
-export type PlannedTask = {
-  key: string;
-  phaseKey: string;
-  phaseName: string;
-  phaseOrder: number;
-  position: number;
-  title: string;
-  description?: string;
-  type: TaskDef['type'];
+export const plannedTaskSchema = z.object({
+  key: z.string(),
+  phaseKey: z.string(),
+  phaseName: z.string(),
+  phaseOrder: z.int(),
+  position: z.int(),
+  title: z.string(),
+  description: z.string().optional(),
+  type: taskDefSchema.shape.type,
   // The template's rule, and who it finds. With these the UI tells how the owner was found.
-  assignee: AssigneeRule;
-  candidates: string[];
-  assigneeId: string | null;
-  problem?: AssigneeProblem;
-  reviews?: string;
+  assignee: assigneeRuleSchema,
+  candidates: z.array(z.uuid()),
+  assigneeId: z.uuid().nullable(),
+  problem: assigneeProblemSchema.optional(),
+  reviews: z.string().optional(),
   // Everything the task waits for: dependsOn plus the reviewed document, each once.
-  dependsOn: string[];
-  availableOn: IsoDate;
-  dueOn: IsoDate;
+  dependsOn: z.array(z.string()),
+  availableOn: z.iso.date(),
+  dueOn: z.iso.date(),
   // Already past due on activation. Allowed, but the preview warns (BR-A06).
-  overdue: boolean;
-};
+  overdue: z.boolean(),
+});
+export type PlannedTask = z.infer<typeof plannedTaskSchema>;
 
 /** The tasks an activation creates: shown by the preview, inserted by activate (PLAN §4.7). */
 export function planActivation(input: ActivationInput): PlannedTask[] {
@@ -216,3 +231,58 @@ export const onboardingSchema = z.object({
   templateVersion: z.object({ id: z.uuid(), version: z.int() }),
 });
 export type Onboarding = z.infer<typeof onboardingSchema>;
+
+const personSchema = z.object({ id: z.uuid(), fullName: z.string() });
+
+// What activating the draft now would create. HR's picks stay in the wizard until activate.
+export const activationPreviewSchema = z.object({
+  // Its templateVersion is the one to send back to activate.
+  onboarding: onboardingSchema,
+  today: z.iso.date(),
+  tasks: z.array(plannedTaskSchema),
+  // A name for every id the plan mentions, the new hire's included.
+  people: z.array(personSchema),
+});
+export type ActivationPreview = z.infer<typeof activationPreviewSchema>;
+
+export const activateOnboardingSchema = z.object({
+  // The version the preview showed; a newer one is refused (BR-A03).
+  templateVersionId: z.uuid(),
+  // HR's picks by task key (§4.7). Keys the template lacks are ignored.
+  assignees: z.record(z.string(), z.uuid()).default({}),
+});
+export type ActivateOnboarding = z.infer<typeof activateOnboardingSchema>;
+
+// A task of an activated onboarding. The status is stored; availability and overdue are
+// worked out from the org's today (PLAN §4.4).
+export const taskSchema = z.object({
+  id: z.uuid(),
+  phaseKey: z.string(),
+  phaseName: z.string(),
+  phaseOrder: z.int(),
+  position: z.int(),
+  title: z.string(),
+  description: z.string().nullable(),
+  type: taskDefSchema.shape.type,
+  assignee: personSchema,
+  // APPROVAL only: the DOCUMENT it reviews.
+  reviewsTaskId: z.uuid().nullable(),
+  // The tasks it waits for, the reviewed document included.
+  dependsOn: z.array(z.uuid()),
+  availableOn: z.iso.date(),
+  dueOn: z.iso.date(),
+  status: taskStatusSchema,
+  startedAt: z.iso.datetime().nullable(),
+  completedAt: z.iso.datetime().nullable(),
+  availability: availabilitySchema,
+  overdue: z.boolean(),
+});
+export type Task = z.infer<typeof taskSchema>;
+
+export const onboardingDetailSchema = onboardingSchema.extend({
+  // The org's business date (PLAN §4.6), which the tasks' availability comes from.
+  today: z.iso.date(),
+  // By phase, then template order. None until activation.
+  tasks: z.array(taskSchema),
+});
+export type OnboardingDetail = z.infer<typeof onboardingDetailSchema>;

@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  HttpCode,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -9,8 +10,11 @@ import {
   Req,
 } from '@nestjs/common';
 import {
+  activateOnboardingSchema,
+  type ActivationPreview,
   createOnboardingSchema,
   type Onboarding,
+  type OnboardingDetail,
   updateOnboardingSchema,
 } from '@joinpath/core';
 import type { Request } from 'express';
@@ -29,7 +33,10 @@ export class OnboardingController {
 
   @Roles('HR')
   @Post('onboardings')
-  create(@Req() req: Request, @Body() body: unknown): Promise<Onboarding> {
+  create(
+    @Req() req: Request,
+    @Body() body: unknown,
+  ): Promise<OnboardingDetail> {
     return this.onboardings.create(
       req.auth!,
       createOnboardingSchema.parse(body),
@@ -40,7 +47,7 @@ export class OnboardingController {
   get(
     @Req() req: Request,
     @Param('id', ParseUUIDPipe) id: string,
-  ): Promise<Onboarding> {
+  ): Promise<OnboardingDetail> {
     return this.onboardings.get(req.auth!, id);
   }
 
@@ -51,11 +58,35 @@ export class OnboardingController {
     @Req() req: Request,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() body: unknown,
-  ): Promise<Onboarding> {
+  ): Promise<OnboardingDetail> {
     return this.onboardings.update(
       req.auth!,
       id,
       updateOnboardingSchema.parse(body),
+    );
+  }
+
+  @Roles('HR')
+  @Get('onboardings/:id/activation-preview')
+  preview(
+    @Req() req: Request,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<ActivationPreview> {
+    return this.onboardings.preview(req.auth!, id);
+  }
+
+  @Roles('HR')
+  @Post('onboardings/:id/activate')
+  @HttpCode(200)
+  activate(
+    @Req() req: Request,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: unknown,
+  ): Promise<OnboardingDetail> {
+    return this.onboardings.activate(
+      req.auth!,
+      id,
+      activateOnboardingSchema.parse(body),
     );
   }
 }
