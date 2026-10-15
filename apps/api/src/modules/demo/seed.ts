@@ -1,9 +1,10 @@
 import type { PrismaClient } from '../../generated/prisma/client.js';
 import { hashPassword } from '../auth/password.js';
+import { seedTemplates } from './templates.js';
 
 /**
- * Creates the demo org and its people (PLAN §11). One roster for local dev, test
- * fixtures and, from M3, every sandbox. Names follow the design canvas.
+ * Creates the demo org, its people and templates (PLAN §11). One roster for local dev,
+ * test fixtures and, from M3, every sandbox. Names follow the design canvas.
  * BR-D04: emails end in @{slug}.joinpath.demo, so every org gets its own logins.
  */
 export async function seedDemoOrg(
@@ -73,6 +74,26 @@ export async function seedDemoOrg(
     await person('An Vo', 'Frontend Developer', engineering, { managerId });
     await person('Bao Ho', 'Backend Developer', engineering, { managerId });
     await person('Chi Dang', 'QA Engineer', engineering, { managerId });
+
+    const publishedAt = new Date();
+    for (const { name, description, versions } of seedTemplates) {
+      await tx.template.create({
+        data: {
+          organizationId,
+          name,
+          description,
+          versions: {
+            create: versions.map((definition, i) => ({
+              organizationId,
+              version: i + 1,
+              status: 'PUBLISHED' as const,
+              publishedAt,
+              definition,
+            })),
+          },
+        },
+      });
+    }
 
     return {
       organization: org,

@@ -6,6 +6,8 @@ generator client {
   output              = "../src/generated/prisma"
   moduleFormat        = "esm"
   importFileExtension = "js"
+  // Partial unique indexes (@@unique with `where`) in the schema instead of hand-written SQL.
+  previewFeatures     = ["partialIndexes"]
 }
 
 datasource db {
@@ -24,9 +26,12 @@ model Organization {
   createdIpHash   String?   @map("created_ip_hash")
   createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
 
-  departments Department[]
-  employees   Employee[]
-  users       User[]
+  departments      Department[]
+  employees        Employee[]
+  users            User[]
+  templates        Template[]
+  templateVersions TemplateVersion[]
+  auditEvents      AuditEvent[]
 
   @@map("organizations")
 }
@@ -93,6 +98,7 @@ model User {
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   employee     Employee     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
   sessions     Session[]
+  auditEvents  AuditEvent[]
 
   @@map("users")
 }
@@ -108,4 +114,65 @@ model Session {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("sessions")
+}
+
+model Template {
+  id             String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  name           String
+  description    String    @default("")
+  /// Archiving is final: no more versions or edits, and no new onboardings (BR-T12).
+  archivedAt     DateTime? @map("archived_at") @db.Timestamptz(3)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  versions     TemplateVersion[]
+
+  @@map("templates")
+}
+
+enum TemplateVersionStatus {
+  DRAFT
+  PUBLISHED
+
+  @@map("template_version_status")
+}
+
+model TemplateVersion {
+  id             String                @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  organizationId String                @map("organization_id") @db.Uuid
+  templateId     String                @map("template_id") @db.Uuid
+  version        Int
+  status         TemplateVersionStatus @default(DRAFT)
+  /// TemplateDefinition as templateDefinitionSchema.parse() returns it (PLAN §4.2).
+  definition     Json
+  publishedAt    DateTime?             @map("published_at") @db.Timestamptz(3)
+  createdAt      DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  template     Template     @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@unique([templateId, version])
+  // BR-T02: at most one draft per template. The client offers templateId alone as a
+  // findUnique key, but it is unique among drafts only: never look a version up by it.
+  @@unique([templateId], map: "template_versions_one_draft", where: { status: "DRAFT" })
+  @@map("template_versions")
+}
+
+/// Append-only (PLAN §7): the audit trail and, from M1.4, the onboarding timeline.
+model AuditEvent {
+  id             String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  /// Null when the system acted (seed, cron).
+  actorUserId    String?  @map("actor_user_id") @db.Uuid
+  action         String
+  entityType     String   @map("entity_type")
+  entityId       String   @map("entity_id") @db.Uuid
+  data           Json     @default("{}")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  actor        User?        @relation(fields: [actorUserId], references: [id], onDelete: Cascade)
+
+  @@map("audit_events")
 }

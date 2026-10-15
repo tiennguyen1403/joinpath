@@ -2,10 +2,10 @@
 
 > File này được nạp vào mọi session qua `CLAUDE.md`. Giữ ngắn: chỉ trạng thái hiện tại. Lịch sử chi tiết nằm trong `docs/sessions/`.
 
-**Cập nhật:** 2026-10-15 · session 006 (M1.2 · ngày, availability, activation plan trong `core`)
-**Mốc hiện tại:** M1 · Workflow engine, xong M1.1–M1.2 (`core`: `validateTemplate`, tính ngày, availability, `planActivation`). M0 · Walking skeleton đã xong (xem bảng): CI trên GitHub Actions, demo public tại https://joinpath.vercel.app.
+**Cập nhật:** 2026-10-15 · session 007 (M1.3 · API template)
+**Mốc hiện tại:** M1 · Workflow engine, xong M1.1–M1.3 (`core`: `validateTemplate`, tính ngày, availability, `planActivation`; API template). M0 · Walking skeleton đã xong (xem bảng): CI trên GitHub Actions, demo public tại https://joinpath.vercel.app.
 
-**Session kế tiếp:** **M1.3 · API template** (xem bảng). Handoff mới nhất: `docs/sessions/006-M1.2-activation-plan.md`; dữ liệu đọc từ canvas nằm ở handoff 005.
+**Session kế tiếp:** **M1.4 · API onboarding** (xem bảng). Handoff mới nhất: `docs/sessions/007-M1.3-template-api.md`; dữ liệu đọc từ canvas nằm ở handoff 005.
 
 ## Quy ước session
 
@@ -25,10 +25,10 @@ Trạng thái: ✅ xong · ▶ kế tiếp · ⏳ chưa làm. Mốc M2–M5 mớ
 | M0.2 | Prisma (5 bảng), seed nhân sự org `acme`, login / logout / me bằng cookie session, Origin check, throttle, helmet | Test Supertest với Postgres thật pass | ✅ |
 | M0.3 | Web shell: Tailwind 4 + token beUI, component beUI, reicon, trang login, layout theo vai trò | Đăng nhập qua UI ở local, sidebar đúng vai trò, khớp canvas | ✅ |
 | M0.4 | GitHub + CI, deploy Vercel Services + Neon (ADR 011), migrate + seed production, `trust proxy`, log kèm request id | URL public đăng nhập được; CI xanh trên `main` | ✅ |
-| M1.1 | `core`: Zod schema template + `validateTemplate`. T01–T03, T12 là rule của API, test ở M1.3, M1.4 | Unit test BR-T04…T11 pass | ✅ |
+| M1.1 | `core`: Zod schema template + `validateTemplate` (T01–T03, T12 là rule của API) | Unit test BR-T04…T11 pass | ✅ |
 | M1.2 | `core`: `today`, `addDays`, availability + overdue, `planActivation` (resolve + override assignee, BR-R01, BR-A06) | Unit test BR-A04, A06, A08, E01, E06, R01… pass | ✅ |
-| **M1.3** | API template: bảng `templates`, `template_versions`, `audit_events`; seed "Engineering Onboarding" v1 + v2 theo canvas và "General Onboarding"; list, get, tạo, tạo version mới, `PUT` JSON (trả lỗi validate), publish, archive; ghi audit | Integration test AT-01…AT-04, AT-06 (phần publish), BR-T02 pass | ▶ |
-| M1.4 | API onboarding: bảng `onboardings`, `tasks` (có `position`), `task_dependencies`; `GET /employees` (lọc active, role tùy chọn) + `GET /departments`; tạo và sửa draft, xem theo phạm vi (§9), activation preview, activate | AT-05, AT-06 (phần activate), AT-07…AT-09, AT-11, BR-T12 pass | ⏳ |
+| M1.3 | API template: 3 bảng (partial unique một DRAFT), seed Engineering v1 + v2 và General, 8 endpoint chỉ HR, audit | Integration test AT-01…AT-04, AT-06 (phần publish), BR-T02 pass | ✅ |
+| **M1.4** | API onboarding: bảng `onboardings`, `tasks` (có `position`), `task_dependencies`; `GET /employees` (lọc active, role tùy chọn) + `GET /departments`; tạo và sửa draft, xem theo phạm vi (§9), activation preview, activate | AT-05, AT-06 (phần activate), AT-07…AT-09, AT-11, BR-T12 pass | ▶ |
 | M1.5 | API task: `start`/`complete` checklist (khóa theo onboarding, §6.4), BR-E01, onboarding tự COMPLETED, `GET /tasks/mine`, `today(org)`, `POST /demo/clock/advance` (chỉ sandbox, chỉ tiến; chưa có tick) | AT-12…AT-14, AT-23, AT-31 (phần đồng hồ) pass | ⏳ |
 | M1.6 | Web: TanStack Query, danh sách onboarding, wizard (nhân viên → template + ngày → preview + chọn, override assignee → activate; canvas chưa có override: làm bản trước/sau) | Activate template seed qua UI; khớp màn NewOnboarding | ⏳ |
 | M1.7 | Web: onboarding detail (task theo phase, badge availability) + My Tasks | IT và Manager complete checklist qua UI; khóa theo ngày/dependency đúng; onboarding tự COMPLETED | ⏳ |
@@ -60,6 +60,7 @@ Trạng thái: ✅ xong · ▶ kế tiếp · ⏳ chưa làm. Mốc M2–M5 mớ
 - Swagger `/api/docs` (PLAN §8) chưa thuộc session nào; khi thêm phải chỉnh CSP của `helmet`. Gắn vào session nào?
 - `image-viewer` (PLAN §10.1) không có trên registry beUI: chọn thay thế ở M2.4 (ứng viên `morphing-lightbox`).
 - BR-R01 ở mức template: activation đã chặn R01 (M1.2, `SAME_AS_UPLOADER`). Còn mở: có thêm rule template để báo sớm khi DOCUMENT và APPROVAL của nó cùng giao `DIRECT_MANAGER` (lúc nào cũng sai) không? Chốt ở M1.4.
+- Nút "Discard draft" (canvas, editor) cần xóa DRAFT, trái PLAN §7 (không xóa bản ghi nghiệp vụ) và §8 (không có endpoint): chốt ở M4.1.
 
 ## Chạy dự án
 
@@ -89,21 +90,19 @@ Env trên Vercel:
 
 Secret của repo GitHub: `DATABASE_URL` (giá trị unpooled), `SEED_PASSWORD`.
 
-Web đọc `API_URL` (mặc định `http://localhost:3001`, xem `apps/web/.env.example`). Thêm component beUI: `cd apps/web && pnpm dlx shadcn@4.21.5 add https://beui.dev/r/<slug>.json`, rồi làm theo `apps/web/components/beui/README.md`.
+Web đọc `API_URL` (`apps/web/.env.example`). Thêm component beUI: `cd apps/web && pnpm dlx shadcn@4.21.5 add https://beui.dev/r/<slug>.json`, rồi làm theo `apps/web/components/beui/README.md`.
 
 ## Môi trường đã biết
 
-- Windows 11, PowerShell 5.1 + Git Bash. Git 2.41 (`core.autocrlf=true` ở mức system → repo dùng `.gitattributes` `eol=lf`).
-- Đã kiểm tra lúc đóng S0: Node v24.21.0, pnpm 12.11.2 (global), Docker 29.5.3 (engine đang chạy).
+- Windows 11, PowerShell 5.1 + Git Bash; Node v24.21.0, pnpm 12.11.2 (global), Docker 29.5.3. Git 2.41 (`core.autocrlf=true` ở mức system → repo dùng `.gitattributes` `eol=lf`).
 - Postgres 16 cài sẵn trên Windows chiếm port 5432, nên Postgres của dự án (Docker) chạy ở 5433.
 - oxlint không in gì khi chạy trong Claude Code mà không có lỗi; thêm `--format=default` để thấy tổng kết.
-- Prisma 7.10 (pin; npm `latest` là 8.0 RC, bỏ qua banner update): không tự đọc `.env` (config dùng `process.loadEnvFile()`); `migrate dev` không tự `generate` hay seed; `migrate reset` bị Prisma chặn khi chạy từ AI agent, phải hỏi user. Docs: đọc trang `/v7/`, trang không ghi version đã là Prisma 8.
+- Prisma 7.10 (pin; npm `latest` là 8.0 RC, bỏ qua banner update): không tự đọc `.env` (config dùng `process.loadEnvFile()`); `migrate dev` không tự `generate` hay seed; `migrate reset` bị Prisma chặn khi chạy từ AI agent, phải hỏi user. Docs: đọc trang `/v7/`, trang không ghi version đã là Prisma 8. Partial unique (preview `partialIndexes`): đừng `findUnique` theo riêng cột đó.
 - psql 16 trên Windows: option phải đứng trước connection string.
 - Node trên Windows bỏ qua biến `TZ`. Muốn thử code ngày với timezone có DST thì đặt `TZ` rồi chạy trên Linux (container hoặc CI).
-- Kiểm tra UI bằng Playwright CLI (headed), không dùng Claude in Chrome: Chrome của extension nằm ở máy khác. Lệnh `open` không tự trả về trong Bash tool, nên ghi output ra file (`> .playwright-cli/cmd.log 2>&1`); `--filename` tính từ thư mục hiện tại.
+- Kiểm tra UI bằng Playwright CLI (headed), không dùng Claude in Chrome (Chrome của extension ở máy khác). `open` không tự trả về trong Bash tool: ghi output ra file (`> .playwright-cli/cmd.log 2>&1`); `--filename` tính từ thư mục hiện tại.
+- Script Python sửa file repo: đọc, ghi với `newline=""` (không thì thành CRLF); in output vitest cần `PYTHONIOENCODING=utf-8`.
 - Sửa `packages/core` khi `pnpm dev` đang chạy: web có thể giữ bản core cũ, nên build core rồi restart `pnpm dev`.
-- Vercel CLI 62.2.0 cài global, đã đăng nhập. Hook đầu session báo "not installed" là sai.
-  - MCP Vercel trả 403 với team này, nên dùng CLI: `vercel api`, `vercel logs`, `vercel inspect --logs`.
-  - Không chạy `vercel deploy` từ máy, vì CLI sẽ upload cả `apps/api/.env`.
+- Vercel CLI 62.2.0 (global, đã đăng nhập; hook đầu session báo "not installed" là sai). MCP Vercel trả 403 với team này: dùng `vercel api`, `vercel logs`, `vercel inspect --logs`. Không chạy `vercel deploy` từ máy (CLI upload cả `apps/api/.env`).
 - Secret không bao giờ in ra transcript. Đặt secret qua file tạm trong scratchpad rồi xóa ngay, hoặc để user tự gõ trong terminal riêng.
 - Neon (Postgres 18.6) ngủ sau 5 phút không có truy vấn; request đầu tiên khi đó chậm thêm khoảng 0,9 s.

@@ -9,6 +9,7 @@ import {
 import type { ApiError, ErrorCode } from '@joinpath/core';
 import type { Response } from 'express';
 import { ZodError } from 'zod';
+import { Prisma } from './generated/prisma/client.js';
 
 const CODE_BY_STATUS: Record<number, ErrorCode> = {
   400: 'VALIDATION_FAILED',
@@ -40,11 +41,29 @@ function toApiError(error: unknown, requestId?: string): [number, ApiError] {
       },
     ];
   }
+  // A unique index refused the write: a rule such as one draft per template (BR-T02),
+  // or the loser of a race (PLAN §6.4).
+  if (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    error.code === 'P2002'
+  ) {
+    return [
+      409,
+      { code: 'INVALID_STATE', message: 'Conflicts with the current state' },
+    ];
+  }
   if (error instanceof HttpException) {
     const status = error.getStatus();
+    // A service may name the code and attach details:
+    // new BadRequestException({ message, details }).
+    const { code, details } = error.getResponse() as Partial<ApiError>;
     return [
       status,
-      { code: CODE_BY_STATUS[status] ?? 'INTERNAL', message: error.message },
+      {
+        code: code ?? CODE_BY_STATUS[status] ?? 'INTERNAL',
+        message: error.message,
+        ...(details !== undefined && { details }),
+      },
     ];
   }
   new Logger('HttpErrorFilter').error(`(req ${requestId}) ${inspect(error)}`);

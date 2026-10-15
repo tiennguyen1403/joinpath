@@ -61,6 +61,10 @@ declare global {
 const IS_PUBLIC = 'isPublic';
 export const Public = () => SetMetadata(IS_PUBLIC, true);
 
+const ROLES = 'roles';
+/** Limits a controller or route to these roles (PLAN §9); anyone else gets 403. */
+export const Roles = (...roles: Role[]) => SetMetadata(ROLES, roles);
+
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
 // Global guard: every route needs a live session unless it is marked @Public().
@@ -115,6 +119,14 @@ export class SessionGuard implements CanActivate {
       organizationId: user.organizationId,
       role: user.role,
     };
+
+    const roles = this.reflector.getAllAndOverride<Role[] | undefined>(ROLES, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+    if (roles && !roles.includes(user.role)) {
+      throw new ForbiddenException('Your role does not allow this');
+    }
     return true;
   }
 }

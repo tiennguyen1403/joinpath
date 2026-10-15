@@ -46,6 +46,43 @@ export const templateDefinitionSchema = z.object({
 });
 export type TemplateDefinition = z.infer<typeof templateDefinitionSchema>;
 
+// Template API (PLAN §8). The web app and the API tests parse responses with these.
+export const createTemplateSchema = z.object({
+  name: z.string().trim().min(1).max(80),
+  description: z.string().trim().max(500).default(''),
+});
+export type CreateTemplate = z.infer<typeof createTemplateSchema>;
+
+const versionStatusSchema = z.enum(['DRAFT', 'PUBLISHED']);
+
+export const templateSchema = z.object({
+  id: z.uuid(),
+  name: z.string(),
+  description: z.string(),
+  // Archiving is final: no new versions, edits or onboardings (BR-T12).
+  archivedAt: z.iso.datetime().nullable(),
+  // Newest first. At most one is a DRAFT (BR-T02).
+  versions: z.array(
+    z.object({
+      id: z.uuid(),
+      version: z.int(),
+      status: versionStatusSchema,
+      publishedAt: z.iso.datetime().nullable(),
+    }),
+  ),
+});
+export type Template = z.infer<typeof templateSchema>;
+
+export const templateVersionSchema = z.object({
+  id: z.uuid(),
+  templateId: z.uuid(),
+  version: z.int(),
+  status: versionStatusSchema,
+  publishedAt: z.iso.datetime().nullable(),
+  definition: templateDefinitionSchema,
+});
+export type TemplateVersion = z.infer<typeof templateVersionSchema>;
+
 export type TemplateIssue = {
   rule:
     'BR-T04' | 'BR-T05' | 'BR-T06' | 'BR-T07' | 'BR-T08' | 'BR-T09' | 'BR-T10';

@@ -1,4 +1,4 @@
-# Joinpath — Kế hoạch triển khai v0.12
+# Joinpath — Kế hoạch triển khai v0.13
 
 > **Joinpath**: Employee Onboarding & Workflow Management Platform, dự án portfolio Full-stack.
 > Bản này tinh chỉnh SRS v0.4 trong thread ChatGPT "Thiết kế dự án onboarding" (14/10/2026).
@@ -10,6 +10,7 @@
 > **v0.10 (15/10/2026):** deploy lên Vercel (Services: web + api trong một project, region sin1) + Neon; ở production, router của Vercel thay rewrite của Next; throttle login tự viết; chốt người gọi cron dời sang M3.2 (§6.1, §6.2, §6.5, §6.6, §9, ADR 011).
 > **v0.11 (15/10/2026):** `validateTemplate` trả mỗi vấn đề một lỗi, gắn với các task liên quan; BR-T04 thêm điều kiện title không trùng; BR-T07 tính cả prerequisite gián tiếp; thứ tự task trong phase là thứ tự trong mảng, snapshot vào cột mới `tasks.position` (§4.2, §5, §7).
 > **v0.12 (15/10/2026):** overdue không bao giờ đi cùng LOCKED_BY_DATE (§4.4); override lúc activate không áp dụng cho task `NEW_HIRE` và không giao task cho chính nhân viên mới; activation kiểm BR-R01 (§4.7); `GET /employees` lọc theo `active`, `role` tùy chọn (§8).
+> **v0.13 (15/10/2026):** partial unique index khai báo ngay trong Prisma schema (preview `partialIndexes`), CHECK vẫn viết SQL tay (§6.2); `POST /templates` tạo kèm DRAFT v1 rỗng; archive không đảo ngược; mọi route template chỉ dành cho HR, kể cả GET (§8).
 
 ## TL;DR: 6 thay đổi lớn nhất
 
@@ -406,7 +407,7 @@ Sơ đồ trên là ở local. Trên Vercel (ADR 011), router của Vercel chia 
 | Graph | React Flow + auto-layout (dagre) | Chỉ để xem, không phải builder |
 | API | NestJS 12 (ESM), REST, Swagger | Template của Nest 12 dùng ESM, Vitest và oxlint |
 | Schema và types | Zod trong `packages/core` | Dùng chung FE/BE |
-| DB | PostgreSQL 18 + Prisma 7.10 (pin cố định) | Tag `latest` của prisma CLI đang trỏ vào bản 8.0 RC, nên phải pin. Partial index và CHECK: nếu Prisma schema chưa biểu diễn được thì viết SQL tay trong migration (`migrate dev --create-only`) |
+| DB | PostgreSQL 18 + Prisma 7.10 (pin cố định) | Tag `latest` của prisma CLI đang trỏ vào bản 8.0 RC, nên phải pin. Partial unique index khai báo ngay trong schema bằng preview `partialIndexes` (`@@unique([...], where: {...})`, dùng từ M1.3). CHECK thì Prisma schema chưa biểu diễn được, nên viết SQL tay trong migration (`migrate dev --create-only`) |
 | Storage | Bucket private S3-compatible (local dùng MinIO) | |
 | Việc định kỳ | Cron gọi `POST /internal/cron/tick` | Không dùng Redis, queue hay worker |
 | Test | Vitest 4, Supertest, Playwright | Một test runner cho cả repo. Vite 8 tự xử lý decorator metadata của Nest nên không cần plugin SWC |
@@ -533,8 +534,9 @@ POST /auth/invitations/accept                 {token, password}
 GET|POST /employees         GET|PATCH /employees/:id     GET /departments
 GET  /employees?active=true&role=IT           # role tùy chọn; ô override trong wizard dùng active=true (trả employeeId, đúng thứ activate cần)
 
-# Templates (HR)
-GET|POST /templates         GET /templates/:id           POST /templates/:id/archive
+# Templates (chỉ HR, kể cả GET)
+GET|POST /templates         GET /templates/:id           # POST {name, description?}: tạo kèm DRAFT v1 rỗng
+POST /templates/:id/archive                   # không đảo ngược: sau đó không tạo version, sửa hay publish được nữa
 POST /templates/:id/versions                  # DRAFT mới, copy từ bản published mới nhất
 GET|PUT  /template-versions/:id               # PUT nguyên definition, chỉ khi DRAFT; trả về lỗi validate
 POST /template-versions/:id/publish
