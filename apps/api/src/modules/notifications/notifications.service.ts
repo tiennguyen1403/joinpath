@@ -32,6 +32,7 @@ export class NotificationsService {
         body: true,
         link: true,
         linkLabel: true,
+        footer: true,
         createdAt: true,
       },
     });

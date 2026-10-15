@@ -109,8 +109,8 @@ const STATUS_CLASS: Record<ToastStatus, string> = {
   neutral: "text-muted-foreground bg-muted/60",
   info: "text-primary bg-muted",
   loading: "text-primary bg-muted",
-  success: "text-emerald-600 bg-emerald-500/10 dark:text-emerald-400",
-  error: "text-destructive bg-destructive/10",
+  success: "text-success-strong bg-success/10",
+  error: "text-danger-strong bg-destructive/10",
 };
 
 const POSITION_CLASS: Record<ToastPosition, string> = {

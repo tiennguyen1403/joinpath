@@ -22,7 +22,7 @@ Three beUI defaults fail in an admin UI where people scan nav and lists all day:
   3. The current nav item sits on the primary tint (`bg-primary/10`, about `#E3F0FC`) with `primary-strong` text and a `primary` icon.
 - **Status text shades.** Small text on a 10% status tint uses a darker shade of the same hue (`--danger-strong`, `--violet-strong`, `--accent-strong`, and so on), so 11–12px labels pass 4.5:1.
 - **No shadows** on cards and other resting surfaces.
-- Where a beUI component hard-codes one of these colors with no prop to change it (the hover and active pills of `animated-sidebar`), the class string is edited in place. Each edit is listed in `apps/web/components/beui/README.md`.
+- Where a beUI component hard-codes one of these colors with no prop to change it (the hover and active pills of `animated-sidebar`; the success and error icon circles of `animated-toast-stack`, since session M2.1b), the class string is edited in place. Each edit is listed in `apps/web/components/beui/README.md`.
 
 ## Consequences
 

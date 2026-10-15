@@ -36,7 +36,13 @@ import {
 import { Notice } from '@/components/notice';
 import { Table, Td, Th, THead, Tr } from '@/components/table';
 import { api, ApiError } from '@/lib/api';
-import { capitalized, formatDate, formatMonthDay, inWords } from '@/lib/format';
+import {
+  capitalized,
+  firstName,
+  formatDate,
+  formatMonthDay,
+  inWords,
+} from '@/lib/format';
 import { Divider, NewHire, PRIMARY, type Step, WizardFrame } from './wizard';
 
 const countTasks = (n: number) => `${inWords(n)} ${n === 1 ? 'task' : 'tasks'}`;
@@ -185,6 +191,12 @@ export function Review({
                   `${plan.tasks.length} tasks are created for ${
                     new Set(plan.tasks.map(ownerOf).filter(Boolean)).size
                   } people, all at once`,
+                  // The new hire has no account yet (BR-A07).
+                  ...(plan.sendsInvitation
+                    ? [
+                        `${firstName(onboarding.employee.fullName)} gets an invitation email, valid for 72 hours`,
+                      ]
+                    : []),
                   opensToday(plan.tasks, today),
                   `Version ${onboarding.templateVersion.version} is locked in, even if the template changes later`,
                 ].map((line) => (

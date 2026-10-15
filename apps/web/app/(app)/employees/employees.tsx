@@ -117,12 +117,7 @@ export function Employees() {
   return (
     <>
       {page}
-      <AnimatedToastStack
-        toasts={toasts}
-        onDismiss={dismissToast}
-        fixed
-        classNames={{ iconWrap: 'bg-success/10 text-success-strong' }}
-      />
+      <AnimatedToastStack toasts={toasts} onDismiss={dismissToast} fixed />
     </>
   );
 }

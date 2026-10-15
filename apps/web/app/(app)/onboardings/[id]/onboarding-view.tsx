@@ -3,11 +3,14 @@
 import {
   type OnboardingDetail,
   onboardingDetailSchema,
+  type OnboardingInvitation,
   type Task,
   type TaskStatus,
 } from '@joinpath/core';
-import { useQuery } from '@tanstack/react-query';
-import type { ReactNode } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useRouter } from 'next/navigation';
+import { type ReactNode, useState } from 'react';
+import { Envelope } from 'reicon-react';
 import { Avatar, newHireTint } from '@/components/avatar';
 import {
   TodoList,
@@ -24,16 +27,20 @@ import {
 import { AnimatedBadge } from '@/components/beui/motion/animated-badge';
 import {
   AnimatedToastStack,
+  type ToastInput,
   useAnimatedToastStack,
 } from '@/components/beui/motion/animated-toast-stack';
+import { Button, ButtonLink } from '@/components/beui/motion/button/base';
 import { EmptyState } from '@/components/empty-state';
 import { TaskBadge, waitsFor } from '@/components/task-status';
 import { api, ApiError } from '@/lib/api';
 import {
   capitalized,
+  firstName,
   formatDate,
   formatDateIn,
   formatFromToday,
+  formatMomentIn,
   inWords,
 } from '@/lib/format';
 import { usePageCrumb } from '../../app-shell';
@@ -53,6 +60,7 @@ export function OnboardingView({
   orgName: string;
   timeZone: string;
 }) {
+  const router = useRouter();
   const { toasts, showToast, dismissToast } = useAnimatedToastStack();
   const { data, error } = useQuery({
     queryKey: ['onboarding', id],
@@ -61,20 +69,31 @@ export function OnboardingView({
   usePageCrumb(
     data && data.status !== 'DRAFT' ? data.employee.fullName : undefined,
   );
+  const seeInvitation = {
+    label: 'See the invitation',
+    onClick: () => router.push('/mock-inbox'),
+  };
 
   function activated(onboarding: OnboardingDetail) {
     const ready = onboarding.tasks.filter(
       ({ availability }) => availability === 'READY',
     ).length;
-    // The canvas also says the invitation is on its way: from M2.1.
+    const invited = onboarding.invitation !== null;
     showToast({
       status: 'success',
       title: 'Activated just now',
-      description: `${onboarding.tasks.length} tasks were created. ${
+      description: `${onboarding.tasks.length} tasks were created${
+        invited
+          ? ` and ${firstName(onboarding.employee.fullName)}'s invitation is on its way`
+          : ''
+      }. ${
         ready === 0
-          ? 'They open on their dates.'
+          ? invited
+            ? 'The tasks open on their dates.'
+            : 'They open on their dates.'
           : `${capitalized(inWords(ready))} ${ready === 1 ? 'task is' : 'tasks are'} open today.`
       }`,
+      action: invited ? seeInvitation : undefined,
     });
   }
 
@@ -92,7 +111,25 @@ export function OnboardingView({
       ) : (
         <>
           <Header onboarding={data} timeZone={timeZone} />
-          <Phases onboarding={data} timeZone={timeZone} />
+          {data.invitation ? (
+            // HR's view: the invitation beside the tasks, as the canvas lays it out.
+            <div className="flex flex-wrap items-start gap-5">
+              <div className="min-w-0 flex-[999_1_560px]">
+                <Phases onboarding={data} timeZone={timeZone} />
+              </div>
+              <div className="flex min-w-0 flex-[1_1_300px] flex-col gap-3">
+                <InvitationCard
+                  onboarding={data}
+                  invitation={data.invitation}
+                  timeZone={timeZone}
+                  showToast={showToast}
+                  seeInvitation={seeInvitation}
+                />
+              </div>
+            </div>
+          ) : (
+            <Phases onboarding={data} timeZone={timeZone} />
+          )}
         </>
       );
   } else if (
@@ -124,7 +161,11 @@ export function OnboardingView({
         toasts={toasts}
         onDismiss={dismissToast}
         fixed
-        classNames={{ iconWrap: 'bg-success/10 text-success-strong' }}
+        // beUI's muted pill matches the toast's own surface; the canvas tints it.
+        classNames={{
+          action:
+            'bg-foreground/6 hover:bg-foreground/11 active:bg-foreground/14',
+        }}
       />
     </>
   );
@@ -324,6 +365,150 @@ function TaskMeta({
       )}
       {waiting && ` · then waits for ${waitsFor(task, tasks)}`}
     </>
+  );
+}
+
+const WARNING = 'border-warning/30 bg-warning/10 text-warning-strong';
+
+/**
+ * The link the new hire sets a password through (BR-A07). HR resends it until they have an
+ * account; a resend or a change of email turns the old one off (BR-P05).
+ */
+function InvitationCard({
+  onboarding: { id, employee, status },
+  invitation: { email, sentAt, expiresAt, acceptedAt, revokedAt },
+  timeZone,
+  showToast,
+  seeInvitation,
+}: {
+  onboarding: OnboardingDetail;
+  invitation: OnboardingInvitation;
+  timeZone: string;
+  showToast: (toast: ToastInput) => void;
+  seeInvitation: { label: string; onClick: () => void };
+}) {
+  const queryClient = useQueryClient();
+  // Real moments, unlike business dates: expiry follows the real clock, read once here.
+  const [now] = useState(Date.now);
+  const resend = useMutation({
+    mutationFn: () =>
+      api(`/onboardings/${id}/resend-invitation`, onboardingDetailSchema, {
+        method: 'POST',
+        body: {},
+      }),
+    onSuccess: (onboarding) => {
+      queryClient.setQueryData(['onboarding', id], onboarding);
+      showToast({
+        status: 'success',
+        title: 'Invitation sent again',
+        description: 'The old link no longer works.',
+        action: seeInvitation,
+      });
+    },
+    onError: (error) => {
+      showToast({
+        status: 'error',
+        title: "Couldn't resend the invitation",
+        description:
+          error instanceof ApiError
+            ? error.message
+            : 'Check your connection and try again.',
+      });
+      // Accepted or changed elsewhere meanwhile: show it as it is now.
+      void queryClient.invalidateQueries({ queryKey: ['onboarding', id] });
+    },
+  });
+
+  const expired = Date.parse(expiresAt) <= now;
+  const badge = acceptedAt
+    ? {
+        label: 'Accepted',
+        status: 'success' as const,
+        className: 'border-success/30 bg-success/10 text-success-strong',
+      }
+    : revokedAt
+      ? {
+          label: 'Email changed',
+          status: 'warning' as const,
+          className: WARNING,
+        }
+      : expired
+        ? { label: 'Expired', status: 'warning' as const, className: WARNING }
+        : {
+            label: 'Not accepted yet',
+            status: 'neutral' as const,
+            className: 'bg-background',
+          };
+  const last = acceptedAt
+    ? ['Accepted', acceptedAt]
+    : revokedAt
+      ? null
+      : [expired ? 'Expired' : 'Expires', expiresAt];
+
+  return (
+    <section
+      aria-labelledby="invitation"
+      className="flex flex-col gap-3 rounded-2xl bg-card p-4.5"
+    >
+      <div className="flex items-center justify-between gap-2">
+        <h2
+          id="invitation"
+          className="text-[15px] leading-[21px] font-semibold"
+        >
+          Invitation
+        </h2>
+        <AnimatedBadge
+          status={badge.status}
+          showIcon={badge.status === 'success'}
+          className={badge.className}
+        >
+          {badge.label}
+        </AnimatedBadge>
+      </div>
+      <dl className="grid grid-cols-[auto_1fr] gap-x-3.5 gap-y-2 text-[13px] leading-5">
+        <dt className="text-muted-foreground">Sent to</dt>
+        <dd className="font-mono text-xs leading-5 wrap-anywhere">{email}</dd>
+        <dt className="text-muted-foreground">Sent</dt>
+        <dd>{formatMomentIn(sentAt, timeZone)}</dd>
+        {last && (
+          <>
+            <dt className="text-muted-foreground">{last[0]}</dt>
+            <dd>{formatMomentIn(last[1], timeZone)}</dd>
+          </>
+        )}
+      </dl>
+      {revokedAt && !acceptedAt && (
+        <p className="text-[13px] leading-5 text-muted-foreground">
+          {firstName(employee.fullName)}&apos;s email is now{' '}
+          <span className="font-mono text-xs text-foreground wrap-anywhere">
+            {employee.email}
+          </span>
+          , so this link no longer works. Resend sends a new one there.
+        </p>
+      )}
+      <div className="flex flex-wrap gap-2">
+        <ButtonLink
+          href="/mock-inbox"
+          size="sm"
+          className="bg-primary-strong hover:bg-primary-strong/90"
+        >
+          <Envelope className="size-3.5" aria-hidden />
+          Open mock inbox
+        </ButtonLink>
+        {/* An account, or an onboarding no longer running, has nothing to resend (409). */}
+        {!acceptedAt && status === 'ACTIVE' && (
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={resend.isPending}
+            onClick={() => resend.mutate()}
+            className="bg-background hover:bg-foreground/5 active:bg-foreground/8"
+          >
+            {resend.isPending ? 'Sending…' : 'Resend'}
+          </Button>
+        )}
+      </div>
+    </section>
   );
 }
 

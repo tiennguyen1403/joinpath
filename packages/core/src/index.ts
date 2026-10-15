@@ -90,6 +90,8 @@ export const mockEmailSchema = z.object({
   // The button under the text.
   link: z.url(),
   linkLabel: z.string(),
+  // Under the button, like body: the small print, its last paragraph below a rule.
+  footer: z.string(),
   sentAt: z.iso.datetime(),
 });
 export type MockEmail = z.infer<typeof mockEmailSchema>;

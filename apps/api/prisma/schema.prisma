@@ -319,6 +319,8 @@ model MockEmail {
   /// The button under the text.
   link           String
   linkLabel      String   @map("link_label")
+  /// Plain text under the button, like body: the small print.
+  footer         String   @default("")
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)

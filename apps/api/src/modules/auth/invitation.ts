@@ -1,5 +1,5 @@
 import { GoneException } from '@nestjs/common';
-import { capitalized, inWords } from '@joinpath/core';
+import { capitalized, firstName, inWords } from '@joinpath/core';
 import { env } from '../../env.js';
 import type { Prisma } from '../../generated/prisma/client.js';
 import { recordAudit } from '../audit/audit.js';
@@ -21,8 +21,6 @@ export const invalidInvitation = () =>
     code: 'INVITATION_INVALID',
     message: 'This invitation link no longer works. Ask HR for a new one.',
   });
-
-const firstName = (fullName: string) => fullName.split(' ')[0];
 
 // "Monday, October 26, 2026": a business date is a calendar day (PLAN §4.6).
 const LONG_DATE = new Intl.DateTimeFormat('en-US', {
@@ -120,6 +118,8 @@ export async function sendInvitation(
     `${from} has set up your onboarding. You start on ${LONG_DATE.format(startDate)}, as ${employee.jobTitle}${team}.`,
     titles.length > 0 &&
       `${capitalized(inWords(titles.length))} ${titles.length === 1 ? 'task is' : 'tasks are'} waiting for you before your first day: ${new Intl.ListFormat('en-US').format(titles)}.`,
+  ];
+  const footer = [
     `This link works once and expires on ${formatMoment(expiresAt, organization.timezone)}. If it runs out, ask ${firstName(sender.fullName)} to send a new one.`,
     `You're receiving this because ${organization.name} added you as a new hire in Joinpath.`,
   ];
@@ -132,6 +132,7 @@ export async function sendInvitation(
       body: body.filter(Boolean).join('\n\n'),
       link: `${env.APP_ORIGIN}/invite#${token}`,
       linkLabel: 'Accept invitation',
+      footer: footer.join('\n\n'),
     },
   });
   await recordAudit(tx, auth, {

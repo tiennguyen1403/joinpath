@@ -23,14 +23,41 @@ export const formatDateLong = (date: IsoDate) =>
 export const formatMonthDay = (date: IsoDate) =>
   UTC_MONTH_DAY.format(atMidnight(date));
 
-/** The calendar day of a real timestamp, where the company is. */
-export const formatDateIn = (timestamp: string, timeZone: string) =>
-  new Intl.DateTimeFormat('en-US', { ...DAY, timeZone }).format(
+const zoned = (
+  timestamp: string,
+  timeZone: string,
+  options: Intl.DateTimeFormatOptions,
+) =>
+  new Intl.DateTimeFormat('en-US', { ...options, timeZone }).format(
     new Date(timestamp),
   );
+const CLOCK: Intl.DateTimeFormatOptions = {
+  hour: '2-digit',
+  minute: '2-digit',
+  hourCycle: 'h23',
+};
+
+/** The calendar day of a real timestamp, where the company is. */
+export const formatDateIn = (timestamp: string, timeZone: string) =>
+  zoned(timestamp, timeZone, DAY);
+
+/**
+ * "Wed, Oct 14, 09:41": a real moment, where the company is. Never "Today": a sandbox's
+ * business date may be ahead of the real one (PLAN §4.6).
+ */
+export const formatMomentIn = (timestamp: string, timeZone: string) =>
+  zoned(timestamp, timeZone, { ...DAY, ...CLOCK });
+
+/** "Oct 14, 09:41". */
+export const formatShortMomentIn = (timestamp: string, timeZone: string) =>
+  zoned(timestamp, timeZone, { month: 'short', day: 'numeric', ...CLOCK });
+
+/** "09:41". */
+export const formatTimeIn = (timestamp: string, timeZone: string) =>
+  zoned(timestamp, timeZone, CLOCK);
 
 // The API words its emails the same way.
-export { capitalized, inWords } from '@joinpath/core';
+export { capitalized, firstName, inWords } from '@joinpath/core';
 
 /** "in 12 days", "today" or "3 days ago", counted from the org's today. */
 export function formatFromToday(today: IsoDate, date: IsoDate) {

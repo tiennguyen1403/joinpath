@@ -157,12 +157,16 @@ describe('invitations', () => {
       // The token after #, which browsers never send to a server.
       link: `${new URL(process.env.APP_ORIGIN!).origin}/invite#${token}`,
       linkLabel: 'Accept invitation',
+      footer: expect.any(String),
       sentAt: expect.any(String),
     });
     expect(email.body.split('\n\n')).toEqual([
       'Hi Hire, welcome aboard.',
       `Lan Pham from People Operations has set up your onboarding. You start on ${longDate}, as Engineer on the Engineering team.`,
       'Two tasks are waiting for you before your first day: Upload ID documents and Sign the employee handbook.',
+    ]);
+    // Under the button, as the design canvas has it.
+    expect(email.footer.split('\n\n')).toEqual([
       expect.stringMatching(
         /^This link works once and expires on \w{3}, \w{3} \d{1,2} at \d{2}:\d{2} \(GMT\+7\)\. If it runs out, ask Lan to send a new one\.$/,
       ),

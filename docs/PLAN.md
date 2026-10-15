@@ -1,4 +1,4 @@
-# Joinpath — Kế hoạch triển khai v0.22
+# Joinpath — Kế hoạch triển khai v0.23
 
 > **Joinpath**: Employee Onboarding & Workflow Management Platform, dự án portfolio Full-stack.
 > Bản này tinh chỉnh SRS v0.4 trong thread ChatGPT "Thiết kế dự án onboarding" (14/10/2026).
@@ -20,6 +20,7 @@
 > **v0.20 (15/10/2026):** HR thêm và đổi tên phòng ban (`POST /departments`, `PATCH /departments/:id`, không xóa), tạo và sửa hồ sơ nhân viên: email lưu chữ thường, chỉ đổi được khi người đó chưa có tài khoản; manager không được là chính họ hay người báo cáo cho họ; `GET /auth/me` kèm `organization.emailDomain` (§8); màn Employees dùng `tabs`, `input`, `select` và bảng tự dựng (§10.1).
 > **v0.21 (15/10/2026):** màn Templates chỉ xem (M1.9): bảng tự dựng, mỗi dòng liệt kê các version, mới nhất trước, và đánh dấu Current cho bản mà onboarding mới sẽ dùng; template chưa publish hoặc đã archive mang badge (§10.1).
 > **v0.22 (15/10/2026):** roadmap ước lượng lại theo số session sau M1, M2 chia thành 7 session (§13); thêm `POST /auth/invitations/lookup` để trang nhận lời mời hiện thông tin trước khi đặt mật khẩu, link mời mang token sau `#`; mật khẩu tự đặt dài 8–200 ký tự; đổi email của người mới làm lời mời đang chờ mất hiệu lực; `invitations` gắn với onboarding và ghi email lúc gửi, `mock_emails` thêm tên người nhận và nhãn nút (§5, §7, §8, §9).
+> **v0.23 (15/10/2026):** `mock_emails` thêm `footer`, phần chữ nằm dưới nút như trên canvas (§7); trang nhận lời mời dựng form từ `input`, không dùng `signup-form`, vì `signup-form` luôn có ô Name, Email sửa được và checkbox Terms; thanh độ mạnh mật khẩu là phần tự dựng (§10.1, ADR 010).
 
 ## TL;DR: 6 thay đổi lớn nhất
 
@@ -525,7 +526,7 @@ Mọi bảng nghiệp vụ đều có `organization_id` và `created_at`. Không
 | `document_submissions` | task_id, revision, submitted_by, submitted_at | unique(task_id, revision) |
 | `approval_decisions` | approval_task_id, submission_id, decision, reason?, decided_by, decided_at | unique(approval_task_id, submission_id); CHECK(decision = 'APPROVED' OR reason IS NOT NULL) |
 | `notifications` | recipient_employee_id, kind, task_id?, title, body, link, read_at?, dedupe_key? | unique(dedupe_key) |
-| `mock_emails` | to_email, to_name, subject, body (chữ thường, các đoạn cách nhau một dòng trống), link, link_label (nút dưới thân email) | Khi gắn email thật thì thêm `status`, bảng này thành outbox |
+| `mock_emails` | to_email, to_name, subject, body (chữ thường, các đoạn cách nhau một dòng trống), link, link_label (nút dưới thân email), footer (chữ dưới nút, cùng cách viết với body; đoạn cuối nằm dưới đường kẻ) | Khi gắn email thật thì thêm `status`, bảng này thành outbox |
 | `audit_events` | actor_user_id?, action, entity_type, entity_id, onboarding_id?, data jsonb | Append-only |
 
 ---
@@ -690,14 +691,14 @@ Nguyên tắc (ADR 010): có component beUI thì dùng, không tự vẽ và kh�
 | Duyệt hoặc yêu cầu sửa | `approval-card` + `drawer` | Review |
 | Xem file đã nộp | `image-viewer` | Review |
 | Upload giấy tờ | `file-upload` | New-hire portal |
-| Đặt mật khẩu | `signup-form` | Accept invitation |
+| Đặt mật khẩu | `input` (không dùng `signup-form`: bản này luôn có ô Name, Email sửa được và checkbox Terms; M2.1b) | Accept invitation |
 | Báo kết quả vừa xảy ra | `animated-toast-stack` | Sau khi activate, Landing |
 | Thao tác trên dòng task | `context-menu` | Onboarding detail |
 | Giải thích vì sao nút bị khóa | `tooltip` | Nút Publish của Template editor |
 | Danh sách onboarding, nhân viên, phòng ban, template; bảng task theo phase | tự dựng (`components/table.tsx`), không dùng `table` của beUI | Dashboard, Onboardings, New onboarding, Employees, Templates |
 | Bề mặt, thông báo, công tắc, nút | `card`, `alert`, `switch`, `button-base` | Mọi nơi |
 
-Tự dựng theo token vì beUI không có: thanh tiến độ onboarding, avatar chữ cái đầu, các bước của wizard, textarea, canvas dependency graph (React Flow). Bảng cũng tự dựng (M1.6a, ADR 010): `table` của beUI là data grid ảo hóa, khung cuộn cao cố định, mọi dòng cao bằng nhau và cần `@tanstack/react-virtual`, trong khi bảng của Joinpath ngắn và các dòng cao khác nhau.
+Tự dựng theo token vì beUI không có: thanh tiến độ onboarding, avatar chữ cái đầu, các bước của wizard, textarea, canvas dependency graph (React Flow), thanh độ mạnh mật khẩu (chép cách chấm điểm và thanh 4 nấc của `signup-form`, MIT). Bảng cũng tự dựng (M1.6a, ADR 010): `table` của beUI là data grid ảo hóa, khung cuộn cao cố định, mọi dòng cao bằng nhau và cần `@tanstack/react-virtual`, trong khi bảng của Joinpath ngắn và các dòng cao khác nhau.
 
 ---
 

@@ -17,3 +17,6 @@ const WORDS = [
 export const inWords = (n: number) => WORDS[n] ?? String(n);
 export const capitalized = (text: string) =>
   text[0].toUpperCase() + text.slice(1);
+
+// What a person is called by: "An" for An Vo.
+export const firstName = (fullName: string) => fullName.split(' ')[0];
