@@ -9,7 +9,7 @@
 > **v0.9 (14/10/2026):** hover của nav và dòng danh sách dùng chung một lớp phủ 5% (8% khi nhấn); active nav dùng tint primary (§6.2, ADR 009).
 > **v0.10 (15/10/2026):** deploy lên Vercel (Services: web + api trong một project, region sin1) + Neon; ở production, router của Vercel thay rewrite của Next; throttle login tự viết; chốt người gọi cron dời sang M3.2 (§6.1, §6.2, §6.5, §6.6, §9, ADR 011).
 > **v0.11 (15/10/2026):** `validateTemplate` trả mỗi vấn đề một lỗi, gắn với các task liên quan; BR-T04 thêm điều kiện title không trùng; BR-T07 tính cả prerequisite gián tiếp; thứ tự task trong phase là thứ tự trong mảng, snapshot vào cột mới `tasks.position` (§4.2, §5, §7).
-> **v0.12 (15/10/2026):** overdue không bao giờ đi cùng LOCKED_BY_DATE (§4.4); override lúc activate không áp dụng cho task `NEW_HIRE` và không giao task cho chính nhân viên mới; activation kiểm BR-R01 (§4.7).
+> **v0.12 (15/10/2026):** overdue không bao giờ đi cùng LOCKED_BY_DATE (§4.4); override lúc activate không áp dụng cho task `NEW_HIRE` và không giao task cho chính nhân viên mới; activation kiểm BR-R01 (§4.7); `GET /employees` lọc theo `active`, `role` tùy chọn (§8).
 
 ## TL;DR: 6 thay đổi lớn nhất
 
@@ -531,7 +531,7 @@ POST /auth/invitations/accept                 {token, password}
 
 # Tổ chức (HR)
 GET|POST /employees         GET|PATCH /employees/:id     GET /departments
-GET  /employees?role=IT&active=true           # ứng viên khi chọn assignee (trả employeeId, đúng thứ activate cần)
+GET  /employees?active=true&role=IT           # role tùy chọn; ô override trong wizard dùng active=true (trả employeeId, đúng thứ activate cần)
 
 # Templates (HR)
 GET|POST /templates         GET /templates/:id           POST /templates/:id/archive
