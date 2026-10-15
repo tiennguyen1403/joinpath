@@ -67,7 +67,7 @@ export function LoginForm() {
         return;
       }
       const me = meSchema.parse(await (await fetch('/api/auth/me')).json());
-      router.replace(homeFor(me.role));
+      router.replace(homeFor(me));
     } catch {
       setError("Couldn't reach Joinpath. Check your connection and try again.");
       setPending(false);

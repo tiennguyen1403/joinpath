@@ -12,6 +12,10 @@
 - Kiểm tra UI bằng Playwright CLI (headed), không dùng Claude in Chrome (Chrome của extension ở máy khác). `open` không tự trả về trong Bash tool: ghi output ra file (`> .playwright-cli/cmd.log 2>&1`); `--filename` tính từ thư mục hiện tại. Đăng nhập không lộ mật khẩu: storage state + `state-load` (handoff 011). Trong `snapshot`, nút có phần tử con (vd avatar `aria-hidden` + tên) hiện là `button [ref=…]` không kèm tên: tìm ref theo dòng nhãn ngay trên nó.
 - Playwright trên prod: đăng nhập như handoff 011 nhưng gọi `https://joinpath.vercel.app/api/auth/login`, header `origin` cùng host, cookie domain `joinpath.vercel.app` (handoff 015). Script đăng nhập dùng chung `apps/api/.env` cho cả local và prod. Từ máy dev, JS của prod có lúc tải rất chậm dù CDN báo HIT: chờ `find` thấy nội dung rồi mới chụp. Lệnh xem request là `requests`, không phải `network`.
 - Lời mời trong Playwright: output của `click`, `goto` (dòng `Page URL`) và file snapshot `.yml` chứa token sau `#` của link mời. Lọc trước khi in (`| sed 's/#.*//'`), lấy ref bằng `grep -o` thay cho in cả snapshot. Ở dev, StrictMode chạy effect hai lần, nên mỗi lần mở `/invite` gọi lookup 2 lần, tốn 2 trong 10 lượt/phút/IP mà login, lookup và accept dùng chung.
+- Playwright với file (M2.4a):
+  - bấm vùng thả file rồi chạy `upload <file…>` để trả lời hộp chọn file đang mở;
+  - `drop <ref> --path <đường dẫn tuyệt đối>` để thả file;
+  - ảnh `--full-page` trên Chrome headed hẹp hơn 15 px vì thanh cuộn, ảnh khung nhìn thì đủ. Kiểm tràn ngang bằng `eval` (`scrollWidth` so với `clientWidth`), không dựa vào ảnh.
 - Auto mode của Claude Code chặn thao tác ghi trên production (bấm Activate, `POST` thẳng vào API) dù kế hoạch đã có: xin user cho phép trong chat, liệt kê đúng từng thao tác; thao tác ngoài danh sách vẫn bị chặn.
 - Git Bash đổi đối số bắt đầu bằng `/` (vd `/tasks/mine`, `/entrypoint.sh`) thành đường dẫn Windows khi gọi chương trình native như `node`, `docker`: đặt `MSYS_NO_PATHCONV=1`.
 - Storage (từ M2.2): RustFS 1.0.1 trong compose, port 9000.

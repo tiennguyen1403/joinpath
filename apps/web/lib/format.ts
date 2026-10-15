@@ -10,6 +10,7 @@ const utc = (options: Intl.DateTimeFormatOptions) =>
 const UTC_DAY = utc(DAY);
 const UTC_DAY_YEAR = utc({ ...DAY, year: 'numeric' });
 const UTC_MONTH_DAY = utc({ month: 'short', day: 'numeric' });
+const UTC_DAY_IN_FULL = utc({ weekday: 'long', month: 'long', day: 'numeric' });
 const atMidnight = (date: IsoDate) => new Date(`${date}T00:00:00Z`);
 
 /** "Mon, Oct 26". A business date is a calendar day (PLAN §4.6), so no time zone moves it. */
@@ -22,6 +23,10 @@ export const formatDateLong = (date: IsoDate) =>
 /** "Oct 26". */
 export const formatMonthDay = (date: IsoDate) =>
   UTC_MONTH_DAY.format(atMidnight(date));
+
+/** "Monday, October 26". */
+export const formatDateInFull = (date: IsoDate) =>
+  UTC_DAY_IN_FULL.format(atMidnight(date));
 
 const zoned = (
   timestamp: string,

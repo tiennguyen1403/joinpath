@@ -1,11 +1,7 @@
 'use client';
 
 import type { Me } from '@joinpath/core';
-import {
-  QueryClient,
-  QueryClientProvider,
-  useQuery,
-} from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   createContext,
@@ -44,7 +40,7 @@ import {
 } from '@/components/beui/motion/breadcrumb';
 import { Button } from '@/components/beui/motion/button/base';
 import { Logo } from '@/components/logo';
-import { ApiError } from '@/lib/api';
+import { QueryProvider } from '@/components/query-provider';
 import { findNavItem, NAV, type NavItem } from '@/lib/nav';
 import { myTasksQuery } from './tasks/my-tasks';
 
@@ -85,18 +81,6 @@ export function AppShell({ me, children }: { me: Me; children: ReactNode }) {
       pathname.startsWith(`${item.href}/`),
     );
   const [crumb, setCrumb] = useState<Crumb | null>(null);
-  const [queryClient] = useState(
-    () =>
-      new QueryClient({
-        // An answer from the API stands; only a request that got none is tried again.
-        defaultOptions: {
-          queries: {
-            retry: (failures, error) =>
-              !(error instanceof ApiError) && failures < 3,
-          },
-        },
-      }),
-  );
 
   // beUI renders plain <a href> (sidebar, button links). Links within the app go through the
   // Next router instead, so the shell and its sliding active pill stay mounted between pages.
@@ -159,7 +143,7 @@ export function AppShell({ me, children }: { me: Me; children: ReactNode }) {
   );
 
   return (
-    <QueryClientProvider client={queryClient}>
+    <QueryProvider>
       <AnimatedSidebarProvider onClickCapture={followLink}>
         <AnimatedSidebar collapsible="none" ariaLabel="Main navigation">
           <AnimatedSidebarHeader className="h-16 justify-center border-b border-border px-5">
@@ -243,6 +227,6 @@ export function AppShell({ me, children }: { me: Me; children: ReactNode }) {
           </div>
         </AnimatedSidebarInset>
       </AnimatedSidebarProvider>
-    </QueryClientProvider>
+    </QueryProvider>
   );
 }

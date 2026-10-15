@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { INestApplication } from '@nestjs/common';
 import {
   activationPreviewSchema,
+  meSchema,
   type Onboarding,
   onboardingDetailSchema,
   onboardingSchema,
@@ -880,6 +881,35 @@ describe('onboardings', () => {
     expect((await read(others.IT, an.id)).tasks).toHaveLength(11);
     expect(await listed(others.IT2)).toEqual([]);
     await others.IT2.get(`/onboardings/${an.id}`).expect(404);
+  });
+
+  it("§10 BR-A01 me names the onboarding of a new hire's portal: the running one, else the last finished, never a draft", async () => {
+    const ownOf = async (client: Client) =>
+      meSchema.parse((await client.get('/auth/me').expect(200)).body)
+        .onboardingId;
+    // The staff work on onboardings; none is theirs.
+    expect(await ownOf(hr)).toBeNull();
+    expect(await ownOf(others.manager)).toBeNull();
+
+    const hire = await hireWithAccount();
+    const templateId = await publishedTemplate(checklists);
+    const first = await draftFor(hire.id, templateId, day(0));
+    expect(await ownOf(hire.client)).toBeNull();
+    const running = await activate(first);
+    expect(await ownOf(hire.client)).toBe(first.id);
+    // Its checklists are the manager's and HR's.
+    await others.manager
+      .post(`/tasks/${running.tasks[0].id}/complete`)
+      .expect(200);
+    await hr.post(`/tasks/${running.tasks[1].id}/complete`).expect(200);
+    expect((await read(hr, first.id)).status).toBe('COMPLETED');
+    expect(await ownOf(hire.client)).toBe(first.id);
+
+    // A later one takes over once it runs.
+    const second = await draftFor(hire.id, templateId, day(7));
+    expect(await ownOf(hire.client)).toBe(first.id);
+    await activate(second);
+    expect(await ownOf(hire.client)).toBe(second.id);
   });
 
   it('FR-19 BR-E06 BR-C01 the list counts tasks done and overdue and names the next one; a finished onboarding has none next', async () => {

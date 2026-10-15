@@ -106,6 +106,9 @@ export const meSchema = z.object({
     fullName: z.string(),
     jobTitle: z.string(),
   }),
+  // Their own onboarding, which their portal shows (PLAN §10): the running one, else the last
+  // finished. Null for anyone never onboarded here, and while theirs is a draft.
+  onboardingId: z.uuid().nullable(),
   organization: z.object({
     id: z.uuid(),
     name: z.string(),

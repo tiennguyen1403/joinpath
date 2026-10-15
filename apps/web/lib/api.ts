@@ -12,20 +12,23 @@ export class ApiError extends Error {
 
 /**
  * Browser only: asks the API through this origin's /api (ADR 007) and checks the answer.
- * A write sends its body as JSON.
+ * A write sends its body as JSON, or a file as multipart form data.
  */
 export async function api<T>(
   path: string,
   schema: { parse: (data: unknown) => T },
-  write?: { method: 'POST' | 'PATCH'; body: unknown },
+  write?: { method: 'POST' | 'PATCH' | 'DELETE'; body?: unknown },
 ): Promise<T> {
   const res = await fetch(
     `/api${path}`,
-    write && {
-      method: write.method,
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(write.body),
-    },
+    write &&
+      (write.body instanceof FormData
+        ? { method: write.method, body: write.body }
+        : {
+            method: write.method,
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify(write.body ?? {}),
+          }),
   );
   if (res.status === 401) {
     // The session ended: it expired, or a sign-out elsewhere revoked it.

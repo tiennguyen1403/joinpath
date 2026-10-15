@@ -380,7 +380,8 @@ function AccountForm({
       });
       if (res.ok) {
         // A full load: the cookie is the new hire's now, and nothing cached may outlive it.
-        window.location.assign('/tasks');
+        // Home is their portal.
+        window.location.assign('/');
         return;
       }
       if (res.status === 410) return onGone();

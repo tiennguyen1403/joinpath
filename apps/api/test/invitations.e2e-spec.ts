@@ -260,6 +260,8 @@ describe('invitations', () => {
       email: employee.email,
       role: 'MEMBER',
       employee: { id: employee.id, fullName: employee.fullName },
+      // Their portal shows it.
+      onboardingId: active.id,
     });
     const { tasks } = myTasksSchema.parse((await as('/tasks/mine')).body);
     expect(tasks).toHaveLength(5);

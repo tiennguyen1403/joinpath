@@ -1,4 +1,4 @@
-# Joinpath — Kế hoạch triển khai v0.25
+# Joinpath — Kế hoạch triển khai v0.26
 
 > **Joinpath**: Employee Onboarding & Workflow Management Platform, dự án portfolio Full-stack.
 > Bản này tinh chỉnh SRS v0.4 trong thread ChatGPT "Thiết kế dự án onboarding" (14/10/2026).
@@ -23,6 +23,7 @@
 > **v0.23 (15/10/2026):** `mock_emails` thêm `footer`, phần chữ nằm dưới nút như trên canvas (§7); trang nhận lời mời dựng form từ `input`, không dùng `signup-form`, vì `signup-form` luôn có ô Name, Email sửa được và checkbox Terms; thanh độ mạnh mật khẩu là phần tự dựng (§10.1, ADR 010).
 > **v0.24 (16/10/2026):** local và CI chạy RustFS thay cho MinIO: MinIO ngừng phát hành image từ 10/2025, image cũ không còn tải được (kiểm ở M2.2); client S3 là `aws4fetch`; provider cho production chốt ở M2.5 (§6.2, §6.3, §6.6, §12, §13). Upload một file mỗi request, trả chi tiết onboarding; mỗi task kèm `files`, các file chưa submit mà người xem được xem (BR-P03); `GET /files/:id/download-url` trả `{url, expiresAt}` (§8).
 > **v0.25 (16/10/2026):** reject chép các file của revision bị reject sang bản nháp của revision mới: dòng mới, dùng chung object, nên object chỉ bị xóa khi không còn dòng nào trỏ tới (§4.5, §7). Submit, approve, reject: thứ tự kiểm, mã lỗi, trả chi tiết onboarding; mỗi DOCUMENT kèm `submissions` (revision, file, quyết định) theo quyền xem file, file kèm `carriedOver` (§8, §9).
+> **v0.26 (16/10/2026):** `GET /auth/me` kèm `onboardingId`: onboarding ACTIVE của chính người đó, nếu không có thì bản COMPLETED mới nhất (§8). Có `onboardingId` thì `/`, đăng nhập và nhận lời mời đưa tới portal `/my-onboarding`, nằm ngoài app shell (§10). Portal dùng `todo-list` (sửa tại chỗ: `body` dưới dòng của task) và `file-upload` (sửa tại chỗ: `note`, `queueLabel`, thanh progress, nút Remove) (§10.1, ADR 010).
 
 ## TL;DR: 6 thay đổi lớn nhất
 
@@ -542,6 +543,7 @@ Prefix `/api` (đi qua rewrite). API thiết kế theo command chứ không cho 
 POST /auth/login            POST /auth/logout            GET /auth/me
                                               # me: user, role, employee, organization {id, name, timezone, today, emailDomain}; today là ngày nghiệp vụ (§4.6), web không tự tính được vì cần clock offset
                                               # emailDomain: phần sau @ của mọi email trong sandbox (BR-D04), null ngoài sandbox; form nhân viên chỉ cho nhập phần trước @
+                                              # onboardingId: onboarding của chính người đó mà portal hiện (§10): bản ACTIVE, nếu không có thì bản COMPLETED mới nhất; null nếu không có
 POST /auth/invitations/lookup                 {token}   # public, throttle như login: những gì trang nhận lời mời hiện trước khi đặt mật khẩu
                                               # (org, người mới, manager, start date, today, hạn của link, task của người mới); token hỏng, đã dùng, hết hạn, bị thay → 410
 POST /auth/invitations/accept                 {token, password}   # public, throttle; password 8–200 ký tự; tạo user MEMBER với email hiện tại của người mới,
@@ -676,7 +678,7 @@ Lỗi luôn trả về dạng `{ code, message, details? }`:
 | Dependency graph (template và onboarding, tô màu theo trạng thái) | HR | P1 | M4 |
 | Landing page + checklist hướng dẫn demo | Khách | P1 | M5 |
 
-Portal nhân viên mới phải dùng tốt trên điện thoại, vì người mới thường mở link mời trên mobile.
+Portal nhân viên mới phải dùng tốt trên điện thoại, vì người mới thường mở link mời trên mobile. Portal là trang `/my-onboarding`, nằm ngoài app shell (không có sidebar). Đây là trang đầu của người có `onboardingId` (§8): `/`, đăng nhập và nhận lời mời đều đưa tới đây. Task đang mở của người mới (upload, submit, Mark complete) làm ngay trong danh sách theo phase.
 
 Thiết kế chi tiết của 12 màn, cùng các bảng Foundations (token, icon), Motion và Components, nằm trên canvas "Joinpath Screens": https://claude.ai/artifact/Xr3pRZbd14D78pqUignjWV (bấm Play ở Landing để đi hết golden path).
 
@@ -699,10 +701,10 @@ Nguyên tắc (ADR 010): có component beUI thì dùng, không tự vẽ và kh�
 | Task phụ thuộc | `multi-select` | Template editor |
 | Sắp xếp task | `sortable-stack` | Template editor |
 | Loại task | `radio` | Template editor |
-| Checklist của một phase | `todo-list` (sửa tại chỗ: `meta`, ADR 010) | Onboarding detail, New-hire portal, Landing |
+| Checklist của một phase | `todo-list` (sửa tại chỗ: `meta`, `body`, ADR 010) | Onboarding detail, New-hire portal, Landing |
 | Duyệt hoặc yêu cầu sửa | `approval-card` + `drawer` | Review |
 | Xem file đã nộp | `image-viewer` | Review |
-| Upload giấy tờ | `file-upload` | New-hire portal |
+| Upload giấy tờ | `file-upload` (sửa tại chỗ: `note`, `queueLabel`, ADR 010) | New-hire portal |
 | Đặt mật khẩu | `input` (không dùng `signup-form`: bản này luôn có ô Name, Email sửa được và checkbox Terms; M2.1b) | Accept invitation |
 | Báo kết quả vừa xảy ra | `animated-toast-stack` | Sau khi activate, Landing |
 | Thao tác trên dòng task | `context-menu` | Onboarding detail |

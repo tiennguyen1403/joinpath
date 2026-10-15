@@ -35,6 +35,8 @@ export interface TodoItem {
   detail?: ReactNode;
   // Joinpath: a second line under the title.
   meta?: ReactNode;
+  // Joinpath: the item's content under its row, which is then tinted.
+  body?: ReactNode;
 }
 
 export interface TodoListProps {
@@ -338,8 +340,14 @@ export function TodoList({
                             layout: SPRING_LAYOUT,
                           }
                     }
-                    className="flex min-h-9 items-center gap-2.5 rounded-xl px-1.5 py-1"
                   >
+                    {/* Joinpath: the row in a div, so a body can follow it. */}
+                    <div
+                      className={cn(
+                        "flex min-h-9 items-center gap-2.5 rounded-xl px-1.5 py-1",
+                        item.body && "bg-muted",
+                      )}
+                    >
                     <TodoStatusIcon status={status} progress={item.progress} />
                     <span className="sr-only">{statusLabel(status)}: </span>
                     {/* Joinpath: the title and its meta line in a column. */}
@@ -382,6 +390,8 @@ export function TodoList({
                         {item.detail}
                       </span>
                     ) : null}
+                    </div>
+                    {item.body}
                   </motion.li>
                 );
               })}

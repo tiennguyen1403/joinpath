@@ -1,4 +1,4 @@
-import type { Role } from '@joinpath/core';
+import type { Me, Role } from '@joinpath/core';
 import type { ComponentType } from 'react';
 import {
   Bell,
@@ -28,7 +28,7 @@ const myOnboardings: NavItem = {
 };
 
 // The sidebar of each role, as drawn on the canvas: the org's pages, then the user's own.
-// Managers (MEMBER) see what IT sees; the new hire's portal comes with M2.4.
+// Managers (MEMBER) see what IT sees; a new hire has their portal instead.
 export const NAV: Record<Role, { org: NavItem[]; you: NavItem[] }> = {
   HR: {
     org: [
@@ -43,7 +43,11 @@ export const NAV: Record<Role, { org: NavItem[]; you: NavItem[] }> = {
   MEMBER: { org: [tasks, myOnboardings], you: [notifications] },
 };
 
-export const homeFor = (role: Role) => NAV[role].org[0].href;
+export const PORTAL = '/my-onboarding';
+
+/** Where someone lands: a new hire on their portal (PLAN §10), anyone else on their role's page. */
+export const homeFor = ({ role, onboardingId }: Me) =>
+  onboardingId ? PORTAL : NAV[role].org[0].href;
 
 export const findNavItem = (role: Role, pathname: string) =>
   [...NAV[role].org, ...NAV[role].you].find((item) => item.href === pathname);

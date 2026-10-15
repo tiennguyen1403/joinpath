@@ -100,6 +100,8 @@ describe('auth', () => {
         email,
         role,
         employee,
+        // None of the staff was onboarded here.
+        onboardingId: null,
         organization: {
           id: seeded.organization.id,
           name: 'Acme Tech',

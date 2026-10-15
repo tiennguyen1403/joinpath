@@ -10,7 +10,7 @@ export default async function MockInboxPage() {
   const me = await requireMe();
   return (
     <MockInbox
-      home={homeFor(me.role)}
+      home={homeFor(me)}
       orgName={me.organization.name}
       timeZone={me.organization.timezone}
     />

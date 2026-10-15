@@ -2,10 +2,16 @@
 
 > File này được nạp vào mọi session qua `CLAUDE.md`. Giữ ngắn: chỉ trạng thái hiện tại. Lịch sử chi tiết nằm trong `docs/sessions/`.
 
-**Cập nhật:** 2026-10-16 · session 019 (M2.3 · Submit, approve / reject / rework)
-**Mốc hiện tại:** M2 · Tài liệu và duyệt, đang làm: M2.1 xong (lời mời qua mock inbox), M2.2 xong (API upload, xóa file, signed download trên RustFS ở local), M2.3 xong (API submit, approve, reject; reject chép file sang revision mới). Cả ba chưa push. M1 · Workflow engine đã xong: tiêu chí PLAN §13 đạt trên production (trừ onboarding tự COMPLETED, chờ task của nhân viên mới ở M2). M0 · Walking skeleton đã xong: CI trên GitHub Actions, demo public tại https://joinpath.vercel.app.
+**Cập nhật:** 2026-10-16 · session 020 (M2.4a · Portal nhân viên mới)
+**Mốc hiện tại:** M2 · Tài liệu và duyệt, đang làm. Đã xong (đều chưa push):
+- M2.1: lời mời qua mock inbox.
+- M2.2: API upload, xóa file, signed download trên RustFS ở local.
+- M2.3: API submit, approve, reject; reject chép file sang revision mới.
+- M2.4a: portal `/my-onboarding`, người mới upload, submit, xem lịch sử duyệt, làm checklist; `/auth/me` kèm `onboardingId`.
 
-**Session kế tiếp:** **M2.4a · Web: portal nhân viên mới, upload, submit, lịch sử duyệt** (xem bảng). Bước đầu: đọc mục "Canvas cho M2.4" trong handoff 019 và bảng NewHirePortal trên canvas, rồi chốt cách dựng (`file-upload` của beUI). Handoff mới nhất: `docs/sessions/019-M2.3-submit-review.md`; dữ liệu đọc từ canvas nằm ở handoff 005, 008, 009, 016 và 019.
+M1 · Workflow engine đã xong: tiêu chí PLAN §13 đạt trên production (trừ onboarding tự COMPLETED, chờ task của nhân viên mới ở M2). M0 · Walking skeleton đã xong: CI trên GitHub Actions, demo public tại https://joinpath.vercel.app.
+
+**Session kế tiếp:** **M2.4b · Web: drawer review, approve / reject** (xem bảng). Bước đầu: đọc bảng ReviewTask trên canvas và mục "Canvas cho M2.4" của handoff 019, xem `drawer`, `approval-card` của beUI, rồi chốt cách xem file (`image-viewer` là quyết định mở). Handoff mới nhất: `docs/sessions/020-M2.4a-new-hire-portal.md`; dữ liệu đọc từ canvas nằm ở handoff 005, 008, 009, 016 và 019.
 
 ## Quy ước session
 
@@ -38,12 +44,12 @@ Trạng thái: ✅ xong · ▶ kế tiếp · ⏳ chưa làm. Mốc M3–M5 mớ
 | M2.1b | Web: Mock inbox, trang nhận lời mời, khung Invitation (Resend) ở detail, dòng lời mời ở wizard và toast | Qua UI: HR activate → mở email → đặt mật khẩu → An đăng nhập, thấy task của mình; sau Resend, link cũ hết hiệu lực | ✅ |
 | M2.2 | RustFS (compose + CI), upload (magic bytes, 4 MB, 5 file), xóa file chưa submit, signed download, need-to-know | AT-26, AT-27, AT-29 pass; lần upload đầu chuyển DOCUMENT sang IN_PROGRESS | ✅ |
 | M2.3 | Submit revision, approve / reject / rework | AT-15…AT-18 pass (AT-19 cần reassign, M3.1); AT-13 bỏ đoạn đánh dấu bằng Prisma | ✅ |
-| **M2.4a** | Web: portal nhân viên mới, upload, submit, lịch sử duyệt | An upload, submit qua UI ở 390 px và desktop | ▶ |
-| M2.4b | Web: drawer review (xem file), approve / reject kèm lý do; nút cho DOCUMENT, APPROVAL trong My Tasks | Qua UI: Lan reject → An nộp revision 2 → Lan approve | ⏳ |
+| M2.4a | Web: portal nhân viên mới, upload, submit, lịch sử duyệt | An upload, submit qua UI ở 390 px và desktop | ✅ |
+| **M2.4b** | Web: drawer review (xem file), approve / reject kèm lý do; nút cho DOCUMENT, APPROVAL trong My Tasks | Qua UI: Lan reject → An nộp revision 2 → Lan approve | ▶ |
 | M2.5 | Golden path ở local, rà nhóm test P, push | Golden path bước 2–9 chạy trọn ở local (đăng nhập từng vai thay cho đổi vai, tua ngày bằng API); nhóm R, P pass | ⏳ |
 | M3.1 | Đổi ngày, reassign, override deadline, hủy; phần cancel của AT-06 | | ⏳ |
-| M3.2 | Thông báo in-app + cron tick; báo approver khi có submit, báo nhân viên mới khi bị reject (kèm lý do) hay được approve (BR-N02, chốt ở M2.3) | | ⏳ |
-| M3.3 | Sandbox mỗi khách + Dynamic Island (đổi vai, ngày nghiệp vụ); phần đổi vai của AT-31 | | ⏳ |
+| M3.2 | Thông báo in-app + cron tick; báo approver khi có submit, báo nhân viên mới khi bị reject (kèm lý do) hay được approve (BR-N02, chốt ở M2.3); chuông trên header của portal | | ⏳ |
+| M3.3 | Sandbox mỗi khách + Dynamic Island (đổi vai, ngày nghiệp vụ), cả trên portal; phần đổi vai của AT-31; đường từ portal sang My tasks cho người đã xong onboarding (handoff 020) | | ⏳ |
 | M3.4 | Dashboard HR + timeline | | ⏳ |
 | M3.5 | Demo public end-to-end trên host | **Mốc an toàn** | ⏳ |
 | M4.1 | Template editor dạng form + validate tức thì bằng `core` | | ⏳ |
@@ -61,7 +67,7 @@ Trạng thái: ✅ xong · ▶ kế tiếp · ⏳ chưa làm. Mốc M3–M5 mớ
 - Người gọi cron tick (PLAN §6.5): chốt ở M3.2. Vercel Hobby chỉ cho cron chạy mỗi ngày một lần, nên nhiều khả năng dùng GitHub Actions `schedule`.
 - Preview deployment: origin khác `APP_ORIGIN` nên mọi request ghi bị 403, và preview dùng chung DB với production. Chốt khi bắt đầu dùng PR: tắt preview, hoặc cho phép origin của preview và dùng Neon branch.
 - Swagger `/api/docs` (PLAN §8) chưa thuộc session nào; khi thêm phải chỉnh CSP của `helmet`. Gắn vào session nào?
-- `image-viewer` (PLAN §10.1) không có trên registry beUI: chọn thay thế ở M2.4 (ứng viên `morphing-lightbox`).
+- `image-viewer` (PLAN §10.1) không có trên registry beUI: chọn thay thế ở M2.4b (ứng viên `morphing-lightbox`).
 - BR-R01 ở mức template: M1.4a chốt không thêm rule chặn publish. Còn mở cho M4.1: editor có gợi ý (không chặn) khi DOCUMENT và APPROVAL của nó cùng giao `DIRECT_MANAGER` không?
 - Nút "Discard draft" (canvas, editor) cần xóa DRAFT, trái PLAN §7 (không xóa bản ghi nghiệp vụ) và §8 (không có endpoint): chốt ở M4.1.
 ## Chạy dự án
@@ -74,7 +80,7 @@ pnpm build             # core/dist + client Prisma (src/generated) + dist của 
 pnpm storage:init      # lần đầu, hoặc volume RustFS mới: tạo bucket joinpath (test và upload cần nó)
 pnpm db:migrate        # prisma migrate dev (lần đầu, hoặc khi đổi schema)
 pnpm db:seed           # tạo lại org acme: lan.pham@acme.joinpath.demo (HR), duc.tran@… (IT), minh.nguyen@… (MEMBER)
-pnpm dev               # web http://localhost:3000 (đăng nhập ở /login; thư mời ở /mock-inbox) · api http://localhost:3001/api/health
+pnpm dev               # web http://localhost:3000 (đăng nhập ở /login; thư mời ở /mock-inbox; portal của người mới ở /my-onboarding) · api http://localhost:3001/api/health
 pnpm test              # cần Postgres + migration, RustFS + bucket; rồi pnpm lint · pnpm typecheck · pnpm format:check
 # Tua ngày nghiệp vụ: POST /api/demo/clock/advance {days} (1–30, org sandbox; acme là sandbox), chưa có UI (M3.3). Đưa đồng hồ local về hôm nay:
 docker compose exec -T postgres psql -U joinpath -d joinpath -c "UPDATE organizations SET clock_offset_days = 0 WHERE slug = 'acme'"

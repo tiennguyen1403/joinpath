@@ -24,7 +24,7 @@ function partOfDay(timeZone: string) {
 // HR's home. The stats, the attention and due-soon lists and the activity arrive in M3.4.
 export default async function DashboardPage() {
   const me = await requireMe();
-  if (me.role !== 'HR') redirect(homeFor(me.role));
+  if (me.role !== 'HR') redirect(homeFor(me));
   return (
     <>
       <div className="flex flex-wrap items-end justify-between gap-4">

@@ -62,13 +62,34 @@ export class AuthService {
   }
 
   async me({ userId }: AuthContext): Promise<Me> {
-    const { organization, ...user } = await this.prisma.user.findUniqueOrThrow({
+    const {
+      organization,
+      employee: {
+        onboardings: [own],
+        ...employee
+      },
+      ...user
+    } = await this.prisma.user.findUniqueOrThrow({
       where: { id: userId },
       select: {
         id: true,
         email: true,
         role: true,
-        employee: { select: { id: true, fullName: true, jobTitle: true } },
+        employee: {
+          select: {
+            id: true,
+            fullName: true,
+            jobTitle: true,
+            // One is open at most (BR-A01), and it is the latest activated: the running one,
+            // else the last finished.
+            onboardings: {
+              where: { status: { in: ['ACTIVE', 'COMPLETED'] } },
+              orderBy: { activatedAt: 'desc' },
+              take: 1,
+              select: { id: true },
+            },
+          },
+        },
         organization: {
           select: {
             id: true,
@@ -84,6 +105,8 @@ export class AuthService {
     const { clockOffsetDays, slug, isSandbox, ...org } = organization;
     return {
       ...user,
+      employee,
+      onboardingId: own?.id ?? null,
       organization: {
         ...org,
         today: today(org.timezone, clockOffsetDays, new Date()),
