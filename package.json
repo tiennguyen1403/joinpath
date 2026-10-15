@@ -11,7 +11,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "db:migrate": "pnpm --filter @joinpath/api db:migrate",
-    "db:seed": "pnpm --filter @joinpath/api db:seed"
+    "db:seed": "pnpm --filter @joinpath/api db:seed",
+    "storage:init": "pnpm --filter @joinpath/api storage:init"
   },
   "devDependencies": {
     "@playwright/cli": "0.1.22",

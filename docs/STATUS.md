@@ -2,10 +2,10 @@
 
 > File này được nạp vào mọi session qua `CLAUDE.md`. Giữ ngắn: chỉ trạng thái hiện tại. Lịch sử chi tiết nằm trong `docs/sessions/`.
 
-**Cập nhật:** 2026-10-15 · session 017 (M2.1b · Web lời mời)
-**Mốc hiện tại:** M2 · Tài liệu và duyệt, đang làm: M2.1 xong (lời mời qua mock inbox, API và web, chưa push). M1 · Workflow engine đã xong: tiêu chí PLAN §13 đạt trên production (trừ onboarding tự COMPLETED, chờ task của nhân viên mới ở M2). M0 · Walking skeleton đã xong: CI trên GitHub Actions, demo public tại https://joinpath.vercel.app.
+**Cập nhật:** 2026-10-16 · session 018 (M2.2 · Upload tài liệu)
+**Mốc hiện tại:** M2 · Tài liệu và duyệt, đang làm: M2.1 xong (lời mời qua mock inbox), M2.2 xong (API upload, xóa file, signed download trên RustFS ở local). Cả hai chưa push. M1 · Workflow engine đã xong: tiêu chí PLAN §13 đạt trên production (trừ onboarding tự COMPLETED, chờ task của nhân viên mới ở M2). M0 · Walking skeleton đã xong: CI trên GitHub Actions, demo public tại https://joinpath.vercel.app.
 
-**Session kế tiếp:** **M2.2 · Upload tài liệu** (xem bảng). Bước đầu: chốt với user storage production và thư viện S3 client (quyết định mở bên dưới), rồi thêm MinIO vào compose và CI. Handoff mới nhất: `docs/sessions/017-M2.1b-invitations-web.md`; dữ liệu đọc từ canvas nằm ở handoff 005, 008, 009 và 016.
+**Session kế tiếp:** **M2.3 · Submit revision, approve / reject / rework** (xem bảng). Bước đầu: chốt với user việc reject gửi email ngay hay chờ `notify()` của M3.2 (quyết định mở bên dưới). Handoff mới nhất: `docs/sessions/018-M2.2-document-upload.md`; dữ liệu đọc từ canvas nằm ở handoff 005, 008, 009 và 016.
 
 ## Quy ước session
 
@@ -36,8 +36,8 @@ Trạng thái: ✅ xong · ▶ kế tiếp · ⏳ chưa làm. Mốc M3–M5 mớ
 | M1.9 | Templates: danh sách, mỗi template kèm các version (chỉ xem); chốt tiêu chí M1; push + deploy | Tiêu chí M1 (PLAN §13) đạt trên production, trừ "onboarding tự COMPLETED" (task của nhân viên mới chờ M2; M1.7 đã kiểm ở local); nhóm test T, A, E pass (trừ A07, E04 thuộc M2) | ✅ |
 | M2.1a | API lời mời: bảng `invitations`, `mock_emails`; activate gửi lời mời; tra cứu và nhận lời mời, resend, `GET /mock-inbox` | AT-10 (phần invitation), AT-30, AT-32 pass; có throttle khi tra cứu và nhận lời mời | ✅ |
 | M2.1b | Web: Mock inbox, trang nhận lời mời, khung Invitation (Resend) ở detail, dòng lời mời ở wizard và toast | Qua UI: HR activate → mở email → đặt mật khẩu → An đăng nhập, thấy task của mình; sau Resend, link cũ hết hiệu lực | ✅ |
-| **M2.2** | MinIO (compose + CI), upload (magic bytes, 4 MB, 5 file), xóa file chưa submit, signed download, need-to-know | AT-26, AT-27, AT-29 pass; lần upload đầu chuyển DOCUMENT sang IN_PROGRESS | ▶ |
-| M2.3 | Submit revision, approve / reject / rework | AT-15…AT-18 pass (AT-19 cần reassign, M3.1); AT-13 bỏ đoạn đánh dấu bằng Prisma | ⏳ |
+| M2.2 | RustFS (compose + CI), upload (magic bytes, 4 MB, 5 file), xóa file chưa submit, signed download, need-to-know | AT-26, AT-27, AT-29 pass; lần upload đầu chuyển DOCUMENT sang IN_PROGRESS | ✅ |
+| **M2.3** | Submit revision, approve / reject / rework | AT-15…AT-18 pass (AT-19 cần reassign, M3.1); AT-13 bỏ đoạn đánh dấu bằng Prisma | ▶ |
 | M2.4a | Web: portal nhân viên mới, upload, submit, lịch sử duyệt | An upload, submit qua UI ở 390 px và desktop | ⏳ |
 | M2.4b | Web: drawer review (xem file), approve / reject kèm lý do; nút cho DOCUMENT, APPROVAL trong My Tasks | Qua UI: Lan reject → An nộp revision 2 → Lan approve | ⏳ |
 | M2.5 | Golden path ở local, rà nhóm test P, push | Golden path bước 2–9 chạy trọn ở local (đăng nhập từng vai thay cho đổi vai, tua ngày bằng API); nhóm R, P pass | ⏳ |
@@ -57,7 +57,7 @@ Trạng thái: ✅ xong · ▶ kế tiếp · ⏳ chưa làm. Mốc M3–M5 mớ
 
 ## Quyết định còn mở
 
-- Storage cho production (S3-compatible, chưa chọn provider) và thư viện S3 client (ngoài plan): chốt đầu M2.2. Tạo tài khoản dịch vụ ngoài thì hỏi user trước.
+- Provider storage cho production (S3-compatible; ứng viên R2, Tigris, Amazon S3 qua Vercel Marketplace, handoff 018): chốt ở M2.5, trước khi push. Tạo tài khoản dịch vụ ngoài thì hỏi user trước. **API đọc 5 biến `S3_*` lúc khởi động: push lên `main` khi Vercel chưa có đủ các biến đó thì API không boot.**
 - Reject gửi email kèm lý do vào mock inbox ngay ở M2.3, hay chờ `notify()` của M3.2 (BR-N02): chốt ở M2.3.
 - Người gọi cron tick (PLAN §6.5): chốt ở M3.2. Vercel Hobby chỉ cho cron chạy mỗi ngày một lần, nên nhiều khả năng dùng GitHub Actions `schedule`.
 - Preview deployment: origin khác `APP_ORIGIN` nên mọi request ghi bị 403, và preview dùng chung DB với production. Chốt khi bắt đầu dùng PR: tắt preview, hoặc cho phép origin của preview và dùng Neon branch.
@@ -69,13 +69,14 @@ Trạng thái: ✅ xong · ▶ kế tiếp · ⏳ chưa làm. Mốc M3–M5 mớ
 
 ```sh
 pnpm install
-docker compose up -d   # Postgres 18 ở localhost:5433, user/pass/db: joinpath
-cp apps/api/.env.example apps/api/.env   # lần đầu: DATABASE_URL, APP_ORIGIN, SEED_PASSWORD
+docker compose up -d   # Postgres 18 ở localhost:5433 (user/pass/db: joinpath), RustFS (S3) ở localhost:9000
+cp apps/api/.env.example apps/api/.env   # lần đầu: DATABASE_URL, APP_ORIGIN, SEED_PASSWORD, S3_*
 pnpm build             # core/dist + client Prisma (src/generated) + dist của api; test, typecheck, lint cần nó
+pnpm storage:init      # lần đầu, hoặc volume RustFS mới: tạo bucket joinpath (test và upload cần nó)
 pnpm db:migrate        # prisma migrate dev (lần đầu, hoặc khi đổi schema)
 pnpm db:seed           # tạo lại org acme: lan.pham@acme.joinpath.demo (HR), duc.tran@… (IT), minh.nguyen@… (MEMBER)
 pnpm dev               # web http://localhost:3000 (đăng nhập ở /login; thư mời ở /mock-inbox) · api http://localhost:3001/api/health
-pnpm test              # cần Postgres + migration; rồi pnpm lint · pnpm typecheck · pnpm format:check
+pnpm test              # cần Postgres + migration, RustFS + bucket; rồi pnpm lint · pnpm typecheck · pnpm format:check
 # Tua ngày nghiệp vụ: POST /api/demo/clock/advance {days} (1–30, org sandbox; acme là sandbox), chưa có UI (M3.3). Đưa đồng hồ local về hôm nay:
 docker compose exec -T postgres psql -U joinpath -d joinpath -c "UPDATE organizations SET clock_offset_days = 0 WHERE slug = 'acme'"
 pnpm exec playwright-cli -s=joinpath open http://localhost:3000/login   # Chrome có cửa sổ; `show` mở dashboard xem trực tiếp
@@ -92,6 +93,7 @@ vercel logs <deployment-url> --since 1h   # log runtime: mỗi request API một
 Env trên Vercel:
 - Tự đặt: `APP_ORIGIN`, `TRUST_PROXY_HOPS=1`, `ENABLE_EXPERIMENTAL_COREPACK=1`.
 - Integration Neon cấp: `DATABASE_URL`, `DATABASE_URL_UNPOOLED`.
+- **Chưa có, phải đặt trước lần push tới (M2.5):** `S3_ENDPOINT`, `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` của provider đã chọn, kèm bucket private tạo sẵn. Thiếu thì API không boot.
 
 Secret của repo GitHub: `DATABASE_URL` (giá trị unpooled), `SEED_PASSWORD`.
 

@@ -1,4 +1,4 @@
-# Joinpath — Kế hoạch triển khai v0.23
+# Joinpath — Kế hoạch triển khai v0.24
 
 > **Joinpath**: Employee Onboarding & Workflow Management Platform, dự án portfolio Full-stack.
 > Bản này tinh chỉnh SRS v0.4 trong thread ChatGPT "Thiết kế dự án onboarding" (14/10/2026).
@@ -21,6 +21,7 @@
 > **v0.21 (15/10/2026):** màn Templates chỉ xem (M1.9): bảng tự dựng, mỗi dòng liệt kê các version, mới nhất trước, và đánh dấu Current cho bản mà onboarding mới sẽ dùng; template chưa publish hoặc đã archive mang badge (§10.1).
 > **v0.22 (15/10/2026):** roadmap ước lượng lại theo số session sau M1, M2 chia thành 7 session (§13); thêm `POST /auth/invitations/lookup` để trang nhận lời mời hiện thông tin trước khi đặt mật khẩu, link mời mang token sau `#`; mật khẩu tự đặt dài 8–200 ký tự; đổi email của người mới làm lời mời đang chờ mất hiệu lực; `invitations` gắn với onboarding và ghi email lúc gửi, `mock_emails` thêm tên người nhận và nhãn nút (§5, §7, §8, §9).
 > **v0.23 (15/10/2026):** `mock_emails` thêm `footer`, phần chữ nằm dưới nút như trên canvas (§7); trang nhận lời mời dựng form từ `input`, không dùng `signup-form`, vì `signup-form` luôn có ô Name, Email sửa được và checkbox Terms; thanh độ mạnh mật khẩu là phần tự dựng (§10.1, ADR 010).
+> **v0.24 (16/10/2026):** local và CI chạy RustFS thay cho MinIO: MinIO ngừng phát hành image từ 10/2025, image cũ không còn tải được (kiểm ở M2.2); client S3 là `aws4fetch`; provider cho production chốt ở M2.5 (§6.2, §6.3, §6.6, §12, §13). Upload một file mỗi request, trả chi tiết onboarding; mỗi task kèm `files`, các file chưa submit mà người xem được xem (BR-P03); `GET /files/:id/download-url` trả `{url, expiresAt}` (§8).
 
 ## TL;DR: 6 thay đổi lớn nhất
 
@@ -418,7 +419,7 @@ Sơ đồ trên là ở local. Trên Vercel (ADR 011), router của Vercel chia 
 | API | NestJS 12 (ESM), REST, Swagger | Template của Nest 12 dùng ESM, Vitest và oxlint |
 | Schema và types | Zod trong `packages/core` | Dùng chung FE/BE |
 | DB | PostgreSQL 18 + Prisma 7.10 (pin cố định) | Tag `latest` của prisma CLI đang trỏ vào bản 8.0 RC, nên phải pin. Partial unique index khai báo ngay trong schema bằng preview `partialIndexes` (`@@unique([...], where: {...})`, dùng từ M1.3). CHECK thì Prisma schema chưa biểu diễn được, nên viết SQL tay trong migration (`migrate dev --create-only`) |
-| Storage | Bucket private S3-compatible (local dùng MinIO) | |
+| Storage | Bucket private S3-compatible: local và CI dùng RustFS 1.0.1; client `aws4fetch` 1.0.20 | MinIO ngừng phát hành image từ 10/2025 và archive repo năm 2026; image cũ không còn tải được (M2.2). `aws4fetch` (MIT, không dependency) ký request `fetch` có sẵn của Node, kể cả presigned URL. Mọi provider đều gọi bằng path-style URL qua cùng các biến env `S3_*`. Provider cho production chốt ở M2.5 |
 | Việc định kỳ | Cron gọi `POST /internal/cron/tick` | Không dùng Redis, queue hay worker |
 | Test | Vitest 4, Supertest, Playwright | Một test runner cho cả repo. Vite 8 tự xử lý decorator metadata của Nest nên không cần plugin SWC |
 | Repo | pnpm workspaces, oxlint (type-aware), Prettier | Không dùng Turborepo. oxlint và Prettier mỗi công cụ một config ở gốc; Prettier có sẵn trong template Nest 12 nên giữ lại và áp cho code cả repo (không áp cho docs nội bộ) |
@@ -446,7 +447,7 @@ joinpath/
 │   └── core/               TS thuần, không I/O: Zod schemas, mã lỗi, validateTemplate (DAG),
 │                           tính ngày, availability, activation plan, reschedule plan
 ├── docs/
-└── docker-compose.yml      Postgres cho local (thêm MinIO ở M2)
+└── docker-compose.yml      Postgres và RustFS (S3) cho local
 ```
 
 - `packages/core` là "functional core" và là phần nên khoe nhất: không phụ thuộc gì ngoài Zod, unit test phủ dày. Editor ở web gọi đúng `validateTemplate` mà API dùng khi publish.
@@ -501,7 +502,7 @@ Các ràng buộc thiết kế để chạy được trên cả serverless lẫn
 
 Deploy production bằng cách push lên `main`; migration chạy trong bước build. Seed production bằng workflow chạy tay `seed.yml`.
 
-Chạy local: `docker compose up` (Postgres; từ M2 có thêm MinIO), sau đó `pnpm dev`.
+Chạy local: `docker compose up` (Postgres và RustFS), sau đó `pnpm dev`.
 
 ---
 
@@ -581,13 +582,16 @@ GET  /tasks/mine                              # {today, tasks: [Task + onboardin
 POST /tasks/:id/start       POST /tasks/:id/complete   # chỉ CHECKLIST, chỉ assignee (mọi vai); trả chi tiết onboarding như activate
                                               # thứ tự kiểm: ngoài phạm vi 404 → không phải assignee 403 → không phải CHECKLIST 409
                                               # → khóa (§6.4), onboarding không ACTIVE 409 → sai status 409 → chưa tới ngày, prerequisite chưa xong 409 TASK_NOT_ELIGIBLE
-POST /tasks/:id/files       (multipart)       DELETE /tasks/:id/files/:fileId   # chỉ file chưa submit
+POST /tasks/:id/files       (multipart, field `file`, mỗi request 1 file)   DELETE /tasks/:id/files/:fileId   # chỉ file chưa submit
+                                              # chỉ DOCUMENT, chỉ assignee; kiểm như start/complete (404 → 403 → không phải DOCUMENT 409 → khóa → sai status 409 → TASK_NOT_ELIGIBLE)
+                                              # file (BR-P04): PDF/PNG/JPEG theo magic bytes, tối đa 4 MB, tối đa 5 file chưa submit; sai thì 400; lần upload đầu PENDING → IN_PROGRESS
+                                              # cả hai trả chi tiết onboarding (201, 200). Mỗi task kèm files: các file chưa submit mà người xem được xem (BR-P03)
 POST /tasks/:id/submit
 POST /tasks/:id/approve     {submissionId}
 POST /tasks/:id/reject      {submissionId, reason}
 POST /tasks/:id/reassign    {employeeId}
 POST /tasks/:id/due-date    {dueOn | null}     # null = reset về giá trị template
-GET  /files/:id/download-url
+GET  /files/:id/download-url                  # {url, expiresAt}: signed URL sống 5 phút, Content-Disposition attachment kèm tên file; không được xem → 404 (BR-P03)
 
 # Thông báo, dashboard
 GET /notifications          POST /notifications/:id/read  POST /notifications/read-all
@@ -731,9 +735,9 @@ Tự dựng theo token vì beUI không có: thanh tiến độ onboarding, avata
 ## 12. Kiểm thử
 
 - **Unit** cho `packages/core`: `validateTemplate` (BR-T04–T10) và schema template (BR-T11), tính ngày, availability, activation plan, reschedule plan. Không cần mock gì, vì các hàm thuần nhận `today` làm tham số.
-- **Integration** chạy với Postgres và MinIO thật (docker compose ở local, service container trong CI), gọi qua HTTP bằng Supertest. Mỗi file test tự tạo một org bằng `seedDemoOrg` với slug ngẫu nhiên, không bật `scenarios` (chỉ seed nhân sự và template, cho nhanh), và xóa org đó khi chạy xong (cascade), nên các test độc lập và chạy song song an toàn: cô lập tenant cho ta cô lập test miễn phí. Test concurrency gửi 2 request cùng lúc bằng `Promise.all` và kiểm tra đúng 1 request thành công.
+- **Integration** chạy với Postgres và RustFS thật (docker compose ở local, service container trong CI), gọi qua HTTP bằng Supertest. Mỗi file test tự tạo một org bằng `seedDemoOrg` với slug ngẫu nhiên, không bật `scenarios` (chỉ seed nhân sự và template, cho nhanh), và xóa org đó khi chạy xong (cascade), nên các test độc lập và chạy song song an toàn: cô lập tenant cho ta cô lập test miễn phí. Test concurrency gửi 2 request cùng lúc bằng `Promise.all` và kiểm tra đúng 1 request thành công.
 - **E2E (Playwright):** 1 spec cho golden path, 1 spec kiểm tra quyền xem file.
-- **CI (GitHub Actions):** lint, typecheck, unit, integration (service container cho Postgres và MinIO); Playwright chạy khi merge vào main.
+- **CI (GitHub Actions):** lint, typecheck, unit, integration (service container cho Postgres và RustFS); Playwright chạy khi merge vào main.
 - **Traceability:** tên test chứa ID của BR; README có bảng ánh xạ BR → test.
 
 | ID | Kịch bản | Kỳ vọng | BR |
@@ -779,7 +783,7 @@ Tự dựng theo token vì beUI không có: thanh tiến độ onboarding, avata
 |---|---|---|---|---|
 | **M0** Walking skeleton | 1 (2–3 ngày đầu) | 4 (thực tế) | pnpm workspace (`web`, `api`, `core`); docker compose (Postgres); Prisma: org, departments, employees, users, sessions; seed một org cố định (§11); login/logout/me; layout theo vai trò; rewrite proxy; CI; **chọn host và deploy** | Có URL public, đăng nhập được bằng user seed |
 | **M1** Workflow engine | 1–2 | 11 (thực tế) | `core`: schema + `validateTemplate` + tính ngày + availability + activation plan, unit test kỹ. API template (tạo, `PUT` JSON, publish, archive; chưa có editor, template lấy từ seed). Nhân viên (CRUD tối thiểu). Draft → preview → activate. Checklist. Business clock + endpoint tua ngày (để tự test; UI demo bar làm ở M3). Ghi audit. Wizard, Onboarding detail, My Tasks | Activate được template seed; IT và Manager làm checklist; khóa theo ngày/dependency chạy đúng; onboarding tự COMPLETED; nhóm test T, A, E pass |
-| **M2** Tài liệu và duyệt | 3 | 7 | Invitation + mock inbox + nhận lời mời + resend; thêm MinIO vào docker compose và CI; upload (magic bytes → MinIO/S3); submit revision; approve/reject/rework; signed download; need-to-know; portal nhân viên mới | Golden path (§11) chạy trọn vẹn ở local; nhóm test R, P pass |
+| **M2** Tài liệu và duyệt | 3 | 7 | Invitation + mock inbox + nhận lời mời + resend; thêm RustFS vào docker compose và CI; upload (magic bytes → S3); submit revision; approve/reject/rework; signed download; need-to-know; portal nhân viên mới | Golden path (§11) chạy trọn vẹn ở local; nhóm test R, P pass |
 | **M3** Vận hành và demo | 4 | ~7 | Đổi ngày, reassign, override deadline, hủy; thông báo in-app; cron tick; sandbox + demo bar; dashboard HR cơ bản; timeline | **Mốc an toàn:** demo public chạy được end-to-end trên host |
 | **M4** Editor và trực quan | 5 | ~5 | Template editor dạng form (phases, tasks, chọn `dependsOn`, rule, offset) + validate tức thì bằng `core` + lịch sử version; dependency graph; analytics theo phòng ban | **MVP cut line:** đủ mọi FR mức Must |
 | **M5** Hoàn thiện | 6 | 4 | Playwright golden path; rà lại ma trận quyền, cross-tenant, upload; trạng thái rỗng và lỗi; a11y; checklist hướng dẫn demo; landing page; README, ADR, sơ đồ, video demo | Sẵn sàng đưa vào portfolio |

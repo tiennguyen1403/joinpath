@@ -12,6 +12,8 @@ export type AuditAction =
   | 'onboarding.completed'
   | 'task.started'
   | 'task.completed'
+  | 'file.uploaded'
+  | 'file.deleted'
   | 'invitation.sent'
   | 'invitation.resent'
   | 'invitation.accepted'
@@ -30,6 +32,7 @@ export function recordAudit(
       | 'template_version'
       | 'onboarding'
       | 'task'
+      | 'document_file'
       | 'invitation'
       | 'employee'
       | 'department';

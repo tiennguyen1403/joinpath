@@ -505,6 +505,7 @@ describe('onboardings', () => {
           // A month ahead, nothing has opened yet.
           availability: 'LOCKED_BY_DATE',
           overdue: false,
+          files: [],
         };
       }),
     );

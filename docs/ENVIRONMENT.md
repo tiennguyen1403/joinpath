@@ -13,7 +13,12 @@
 - Playwright trên prod: đăng nhập như handoff 011 nhưng gọi `https://joinpath.vercel.app/api/auth/login`, header `origin` cùng host, cookie domain `joinpath.vercel.app` (handoff 015). Script đăng nhập dùng chung `apps/api/.env` cho cả local và prod. Từ máy dev, JS của prod có lúc tải rất chậm dù CDN báo HIT: chờ `find` thấy nội dung rồi mới chụp. Lệnh xem request là `requests`, không phải `network`.
 - Lời mời trong Playwright: output của `click`, `goto` (dòng `Page URL`) và file snapshot `.yml` chứa token sau `#` của link mời. Lọc trước khi in (`| sed 's/#.*//'`), lấy ref bằng `grep -o` thay cho in cả snapshot. Ở dev, StrictMode chạy effect hai lần, nên mỗi lần mở `/invite` gọi lookup 2 lần, tốn 2 trong 10 lượt/phút/IP mà login, lookup và accept dùng chung.
 - Auto mode của Claude Code chặn thao tác ghi trên production (bấm Activate, `POST` thẳng vào API) dù kế hoạch đã có: xin user cho phép trong chat, liệt kê đúng từng thao tác; thao tác ngoài danh sách vẫn bị chặn.
-- Git Bash đổi đối số bắt đầu bằng `/` (vd `/tasks/mine`) thành đường dẫn Windows khi gọi chương trình native như `node`: đặt `MSYS_NO_PATHCONV=1`.
+- Git Bash đổi đối số bắt đầu bằng `/` (vd `/tasks/mine`, `/entrypoint.sh`) thành đường dẫn Windows khi gọi chương trình native như `node`, `docker`: đặt `MSYS_NO_PATHCONV=1`.
+- Storage (từ M2.2): RustFS 1.0.1 trong compose, port 9000.
+  - MinIO không còn image để pull: Quay báo "no such manifest", Docker Hub từ chối. Máy còn bản cache `quay.io/minio/minio` và `quay.io/minio/mc` của 2025, không dùng nữa.
+  - RustFS đọc key từ `RUSTFS_ACCESS_KEY`, `RUSTFS_SECRET_KEY` (mặc định `rustfsadmin`). `GET /health` trả 200; trong image có `curl`. Chỉ nhận path-style URL, trừ khi đặt `RUSTFS_SERVER_DOMAINS`.
+  - Volume mới (lần đầu, hoặc sau khi xóa volume `joinpath_s3data`) chưa có bucket: chạy `pnpm storage:init` sau `pnpm build`, trước khi chạy test hay upload ở dev.
+  - Dev và test dùng chung bucket `joinpath`. Test xóa org trong DB nhưng để lại object (vài KB mỗi lần chạy) cho tới khi xóa volume hoặc có purge theo prefix (M3.3). `docker compose down -v` xóa cả volume của Postgres.
 - `seed.yml` chạy trên GitHub Actions, xa Neon: mỗi query mất vài trăm ms, nên transaction của `seedDemoOrg` để timeout 30 s. Seed xóa org `acme` trước, ngoài transaction: seed fail là prod mất org demo tới lần chạy sau.
 - Đừng `pnpm build` khi `pnpm dev` đang chạy (`nest build` xóa `dist`, api dev chết). Dừng `pnpm dev` chạy nền không tắt node của next và nest: `Stop-Process` theo command line.
 - Script Python sửa file repo: đọc, ghi với `newline=""` (không thì thành CRLF); in output vitest cần `PYTHONIOENCODING=utf-8` (`python -I` bỏ qua biến này: dùng `sys.stdout.reconfigure(encoding='utf-8')`).

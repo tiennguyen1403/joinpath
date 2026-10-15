@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { addDays, type IsoDate } from './dates.js';
+import { documentFileSchema } from './documents.js';
 import { employeeSchema, type Role } from './org.js';
 import {
   assigneeRuleSchema,
@@ -299,6 +300,9 @@ export const taskSchema = z.object({
   completedAt: z.iso.datetime().nullable(),
   availability: availabilitySchema,
   overdue: z.boolean(),
+  // DOCUMENT only: the files not yet submitted, oldest first, of those the viewer may see
+  // (BR-P03). Empty for any other task.
+  files: z.array(documentFileSchema),
 });
 export type Task = z.infer<typeof taskSchema>;
 

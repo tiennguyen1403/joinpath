@@ -17,5 +17,23 @@ services:
       timeout: 5s
       retries: 15
 
+  # S3-compatible storage for documents (PLAN §6.2). MinIO no longer publishes images.
+  # The bucket comes from `pnpm storage:init`.
+  rustfs:
+    image: rustfs/rustfs:1.0.1
+    environment:
+      RUSTFS_ACCESS_KEY: joinpath
+      RUSTFS_SECRET_KEY: joinpath-local
+    ports:
+      - '9000:9000'
+    volumes:
+      - s3data:/data
+    healthcheck:
+      test: ['CMD', 'curl', '-fs', 'http://localhost:9000/health']
+      interval: 2s
+      timeout: 5s
+      retries: 15
+
 volumes:
   pgdata:
+  s3data:

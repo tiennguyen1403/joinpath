@@ -4,6 +4,7 @@ import { AppController } from './app.controller.js';
 import { HttpErrorFilter } from './http-error.filter.js';
 import { AuthModule } from './modules/auth/auth.module.js';
 import { DemoModule } from './modules/demo/demo.module.js';
+import { DocumentsModule } from './modules/documents/documents.module.js';
 import { NotificationsModule } from './modules/notifications/notifications.module.js';
 import { OnboardingModule } from './modules/onboarding/onboarding.module.js';
 import { OrgModule } from './modules/org/org.module.js';
@@ -17,6 +18,7 @@ import { PrismaModule } from './prisma.js';
     OrgModule,
     TemplatesModule,
     OnboardingModule,
+    DocumentsModule,
     NotificationsModule,
     DemoModule,
   ],

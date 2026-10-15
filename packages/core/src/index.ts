@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { roleSchema } from './org.js';
 
 export * from './dates.js';
+export * from './documents.js';
 export * from './onboarding.js';
 export * from './org.js';
 export * from './template.js';

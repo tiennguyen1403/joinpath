@@ -56,6 +56,14 @@ export async function signIn(app: INestApplication<App>, email: string) {
       server().put(`/api${path}`).set('Cookie', cookie).send(body),
     patch: (path: string, body: object) =>
       server().patch(`/api${path}`).set('Cookie', cookie).send(body),
+    delete: (path: string) =>
+      server().delete(`/api${path}`).set('Cookie', cookie),
+    // Multipart, as a browser's file input sends it: the bytes under the field `file`.
+    upload: (path: string, bytes: Buffer, fileName: string) =>
+      server()
+        .post(`/api${path}`)
+        .set('Cookie', cookie)
+        .attach('file', bytes, fileName),
   };
 }
 export type Client = Awaited<ReturnType<typeof signIn>>;

@@ -68,6 +68,7 @@ export class TaskService {
           onboarding.status,
           task.dependsOn.map((dep) => dep.dependsOn.status),
           today,
+          auth,
         ),
         onboarding: toOnboarding(onboarding),
       })),
@@ -77,7 +78,9 @@ export class TaskService {
   /** PENDING → IN_PROGRESS. Optional: a checklist completes from either (BR-E03). */
   async start(auth: AuthContext, id: string): Promise<OnboardingDetail> {
     const onboardingId = await this.prisma.$transaction(async (tx) => {
-      const { onboardingId } = await checkTask(tx, auth, id, ['PENDING']);
+      const { onboardingId } = await checkTask(tx, auth, id, 'CHECKLIST', [
+        'PENDING',
+      ]);
       await tx.task.update({
         where: { id },
         data: { status: 'IN_PROGRESS', startedAt: new Date() },
@@ -96,7 +99,7 @@ export class TaskService {
   /** The last task completed completes its onboarding, in the same transaction (BR-C01). */
   async complete(auth: AuthContext, id: string): Promise<OnboardingDetail> {
     const onboardingId = await this.prisma.$transaction(async (tx) => {
-      const { onboardingId } = await checkTask(tx, auth, id, [
+      const { onboardingId } = await checkTask(tx, auth, id, 'CHECKLIST', [
         'PENDING',
         'IN_PROGRESS',
       ]);
@@ -134,32 +137,50 @@ export class TaskService {
   }
 }
 
-/**
- * BR-E01, checked in the order PLAN §8 gives: who may, which kind of task, then whether it
- * can move now. The task's status and prerequisites are read under the lock (PLAN §6.4).
- */
-async function checkTask(
-  tx: Prisma.TransactionClient,
+// A checklist is started and completed, a document takes files, an approval is decided
+// (PLAN §4.4): the refusal when a command meets another kind of task.
+const WRONG_KIND = {
+  CHECKLIST: 'Only a checklist task can be started or completed',
+  DOCUMENT: 'Only a document task takes files',
+};
+
+/** Who may work on the task, then whether the command fits its kind: 404, 403, 409 (PLAN §8). */
+export async function findTask(
+  db: Prisma.TransactionClient,
   auth: AuthContext,
   id: string,
-  // The statuses the command moves a task from.
-  from: TaskStatus[],
+  type: keyof typeof WRONG_KIND,
 ) {
-  const { organizationId } = auth;
-  const task = await tx.task.findFirst({
-    where: { id, organizationId, onboarding: visibleOnboardings(auth) },
+  const task = await db.task.findFirst({
+    where: {
+      id,
+      organizationId: auth.organizationId,
+      onboarding: visibleOnboardings(auth),
+    },
     select: { onboardingId: true, assigneeEmployeeId: true, type: true },
   });
   if (!task) throw new NotFoundException('Task not found');
   if (!canWorkOn(auth, task)) {
     throw new ForbiddenException('This task is assigned to someone else');
   }
-  // A document is uploaded and submitted, an approval decided (PLAN §4.4).
-  if (task.type !== 'CHECKLIST') {
-    throw new ConflictException(
-      'Only a checklist task can be started or completed',
-    );
-  }
+  if (task.type !== type) throw new ConflictException(WRONG_KIND[type]);
+  return task;
+}
+
+/**
+ * BR-E01, checked in the order PLAN §8 gives: who may, which kind of task, then whether it
+ * can move now. The task's status and prerequisites are read under the lock (PLAN §6.4).
+ */
+export async function checkTask(
+  tx: Prisma.TransactionClient,
+  auth: AuthContext,
+  id: string,
+  type: keyof typeof WRONG_KIND,
+  // The statuses the command moves a task from.
+  from: TaskStatus[],
+) {
+  const { organizationId } = auth;
+  const task = await findTask(tx, auth, id, type);
   await lockOnboarding(tx, organizationId, task.onboardingId);
   const { status, availableOn, dependsOn } = await tx.task.findUniqueOrThrow({
     where: { id },
@@ -196,5 +217,5 @@ async function checkTask(
       message: 'This task waits for other tasks to be done',
     });
   }
-  return task;
+  return { ...task, status };
 }

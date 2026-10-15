@@ -7,5 +7,7 @@ import { TaskService } from './task.service.js';
 @Module({
   controllers: [OnboardingController, TaskController],
   providers: [OnboardingService, TaskService],
+  // Document commands answer with the onboarding too.
+  exports: [OnboardingService],
 })
 export class OnboardingModule {}

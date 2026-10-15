@@ -22,9 +22,27 @@ jobs:
           --health-interval 2s
           --health-timeout 5s
           --health-retries 15
+      # S3-compatible storage, as in docker-compose.yml.
+      rustfs:
+        image: rustfs/rustfs:1.0.1
+        env:
+          RUSTFS_ACCESS_KEY: joinpath
+          RUSTFS_SECRET_KEY: joinpath-local
+        ports:
+          - 9000:9000
+        options: >-
+          --health-cmd "curl -fs http://localhost:9000/health"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 15
     env:
       DATABASE_URL: postgresql://joinpath:joinpath@localhost:5432/joinpath
       APP_ORIGIN: http://localhost:3000
+      S3_ENDPOINT: http://localhost:9000
+      S3_REGION: us-east-1
+      S3_BUCKET: joinpath
+      S3_ACCESS_KEY_ID: joinpath
+      S3_SECRET_ACCESS_KEY: joinpath-local
     steps:
       - uses: actions/checkout@v7
       # pnpm version comes from packageManager in package.json.
@@ -37,6 +55,7 @@ jobs:
       # Builds core/dist and the Prisma client, which tests, typecheck and lint need.
       - run: pnpm build
       - run: pnpm --filter @joinpath/api exec prisma migrate deploy
+      - run: pnpm storage:init
       - run: pnpm test
       - run: pnpm lint
       - run: pnpm typecheck

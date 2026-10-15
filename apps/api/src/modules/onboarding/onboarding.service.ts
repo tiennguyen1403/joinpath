@@ -9,6 +9,7 @@ import {
   type ActivationPreview,
   availability,
   type CreateOnboarding,
+  type DocumentMimeType,
   type IsoDate,
   isOverdue,
   type Onboarding,
@@ -16,7 +17,6 @@ import {
   type OnboardingStatus,
   type OnboardingSummary,
   planActivation,
-  type Role,
   type Task,
   type TaskStatus,
   type TemplateDefinition,
@@ -27,6 +27,7 @@ import { PrismaService } from '../../prisma.js';
 import { recordAudit } from '../audit/audit.js';
 import { sendInvitation } from '../auth/invitation.js';
 import type { AuthContext } from '../auth/session.js';
+import { canSeeFile } from '../documents/documents.policy.js';
 import { orgToday, personSelect } from '../org/org.service.js';
 import { visibleOnboardings } from './onboarding.policy.js';
 
@@ -77,6 +78,21 @@ export const taskSelect = {
   status: true,
   startedAt: true,
   completedAt: true,
+  // A document's files not yet submitted, which only some may see (BR-P03): its uploader, the
+  // assignee of the approval reviewing it, and HR.
+  files: {
+    where: { submissionId: null },
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    select: {
+      id: true,
+      fileName: true,
+      mimeType: true,
+      sizeBytes: true,
+      uploadedById: true,
+      createdAt: true,
+    },
+  },
+  reviewedBy: { select: { assigneeEmployeeId: true } },
 } satisfies Prisma.TaskSelect;
 
 const detailSelect = {
@@ -141,15 +157,26 @@ export function toOnboarding({
 
 // Availability and overdue are worked out on each read, from the org's today (PLAN §4.4).
 export function toTask(
-  { dependsOn, availableOn, dueOn, startedAt, completedAt, ...task }: TaskRow,
+  {
+    dependsOn,
+    availableOn,
+    dueOn,
+    startedAt,
+    completedAt,
+    files,
+    reviewedBy,
+    ...task
+  }: TaskRow,
   onboardingStatus: OnboardingStatus,
   prereqStatuses: TaskStatus[],
   today: IsoDate,
+  viewer: AuthContext,
 ): Task {
   const dates = {
     availableOn: toIsoDate(availableOn),
     dueOn: toIsoDate(dueOn),
   };
+  const approverId = reviewedBy.at(0)?.assigneeEmployeeId;
   return {
     ...task,
     ...dates,
@@ -163,13 +190,25 @@ export function toTask(
       today,
     ),
     overdue: isOverdue({ status: task.status, ...dates }, today),
+    files: files
+      .filter((file) =>
+        canSeeFile(viewer, { uploadedById: file.uploadedById, approverId }),
+      )
+      .map((file) => ({
+        id: file.id,
+        fileName: file.fileName,
+        // Only ever written from sniffMimeType (BR-P04).
+        mimeType: file.mimeType as DocumentMimeType,
+        sizeBytes: file.sizeBytes,
+        uploadedAt: file.createdAt.toISOString(),
+      })),
   };
 }
 
 function toDetail(
   { invitations, ...row }: DetailRow,
   today: IsoDate,
-  role: Role,
+  viewer: AuthContext,
 ): OnboardingDetail {
   const statusById = new Map(row.tasks.map((task) => [task.id, task.status]));
   const invitation = invitations.at(0);
@@ -182,11 +221,12 @@ function toDetail(
         row.status,
         task.dependsOn.map((dep) => statusById.get(dep.dependsOnTaskId)!),
         today,
+        viewer,
       ),
     ),
     // Only HR resends it, so only HR sees it.
     invitation:
-      role === 'HR' && invitation
+      viewer.role === 'HR' && invitation
         ? {
             email: invitation.email,
             sentAt: invitation.createdAt.toISOString(),
@@ -242,7 +282,7 @@ export class OnboardingService {
     return toDetail(
       onboarding,
       await orgToday(this.prisma, auth.organizationId),
-      auth.role,
+      auth,
     );
   }
 
