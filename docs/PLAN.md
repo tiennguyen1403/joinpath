@@ -1,4 +1,4 @@
-# Joinpath — Kế hoạch triển khai v0.10
+# Joinpath — Kế hoạch triển khai v0.11
 
 > **Joinpath**: Employee Onboarding & Workflow Management Platform, dự án portfolio Full-stack.
 > Bản này tinh chỉnh SRS v0.4 trong thread ChatGPT "Thiết kế dự án onboarding" (14/10/2026).
@@ -8,6 +8,7 @@
 > **v0.8 (14/10/2026):** icon lấy từ reicon; mọi control dùng component beUI có sẵn, chỉ tự dựng phần beUI không có; thanh demo đổi thành Dynamic Island (§6.2, §10, ADR 010).
 > **v0.9 (14/10/2026):** hover của nav và dòng danh sách dùng chung một lớp phủ 5% (8% khi nhấn); active nav dùng tint primary (§6.2, ADR 009).
 > **v0.10 (15/10/2026):** deploy lên Vercel (Services: web + api trong một project, region sin1) + Neon; ở production, router của Vercel thay rewrite của Next; throttle login tự viết; chốt người gọi cron dời sang M3.2 (§6.1, §6.2, §6.5, §6.6, §9, ADR 011).
+> **v0.11 (15/10/2026):** `validateTemplate` trả mỗi vấn đề một lỗi, gắn với các task liên quan; BR-T04 thêm điều kiện title không trùng; BR-T07 tính cả prerequisite gián tiếp; thứ tự task trong phase là thứ tự trong mảng, snapshot vào cột mới `tasks.position` (§4.2, §5, §7).
 
 ## TL;DR: 6 thay đổi lớn nhất
 
@@ -178,11 +179,16 @@ type TaskDef = {
 
 type TemplateDefinition = {
   phases: { key: string; name: string }[]; // thứ tự hiển thị = thứ tự trong mảng
-  tasks: TaskDef[];
+  tasks: TaskDef[];                         // thứ tự trong một phase = thứ tự trong mảng
 };
 ```
 
-`validateTemplate(def)` là hàm TypeScript thuần, chạy cả trong editor lẫn lúc publish. Hàm trả về danh sách lỗi theo từng task key, ứng với các rule BR-T04 đến BR-T11.
+Zod schema chỉ kiểm từng field: kiểu, độ dài, key dạng slug, offset là số nguyên. BR-T11 nằm luôn trong schema, vì `AssigneeRule` không biểu diễn được một người cụ thể.
+
+`validateTemplate(def)` là hàm TypeScript thuần, chạy cả trong editor lẫn lúc publish, và kiểm các rule BR-T04 đến BR-T10.
+- Kết quả là danh sách `{ rule, taskKeys, message }`. Mỗi vấn đề là một lỗi, gắn với mọi task liên quan; ví dụ một cycle là một lỗi, gắn với mọi task trong cycle. `taskKeys` rỗng nghĩa là lỗi ở mức cả template.
+- `message` viết tiếng Anh và gọi task bằng title, vì UI không hiện key.
+- DRAFT lưu được khi còn lỗi; publish thì phải hết lỗi (BR-T03).
 
 ### 4.3 Vòng đời onboarding
 
@@ -273,10 +279,10 @@ ID ổn định theo từng nhóm: thêm rule mới không làm đổi số củ
 | BR-T01 | Chỉ HR được tạo, sửa, publish, archive template |
 | BR-T02 | Mỗi template có tối đa 1 version DRAFT. Version PUBLISHED là bất biến; muốn sửa thì tạo DRAFT mới, copy từ bản published mới nhất |
 | BR-T03 | Chỉ publish được khi qua hết T04–T11; lỗi trả về theo từng task key |
-| BR-T04 | Có ít nhất 1 phase và 1 task; key không trùng; `phase`, `dependsOn`, `reviews` phải trỏ tới phần tử có thật; task không được tự phụ thuộc chính nó |
+| BR-T04 | Có ít nhất 1 phase và 1 task; key không trùng; title của task không trùng, không phân biệt hoa thường (UI chỉ hiện title); `phase`, `dependsOn`, `reviews` phải trỏ tới phần tử có thật; task không được tự phụ thuộc chính nó |
 | BR-T05 | Đồ thị dependency là DAG (không có cycle) |
 | BR-T06 | `availableOffsetDays ≤ dueOffsetDays` |
-| BR-T07 | `dueOffsetDays` của task phụ thuộc phải ≥ `availableOffsetDays` của mọi prerequisite (nếu không thì lịch bất khả thi) |
+| BR-T07 | `dueOffsetDays` của task phụ thuộc phải ≥ `availableOffsetDays` của mọi prerequisite, kể cả prerequisite gián tiếp trong chuỗi (nếu không thì lịch bất khả thi) |
 | BR-T08 | APPROVAL phải có `reviews` trỏ tới đúng 1 DOCUMENT; mỗi DOCUMENT có tối đa 1 APPROVAL; `reviews` ngầm là một dependency |
 | BR-T09 | DOCUMENT được review chỉ có APPROVAL của nó làm dependent trực tiếp. Task nào cần tài liệu đã duyệt thì phải phụ thuộc vào APPROVAL |
 | BR-T10 | APPROVAL không được gán cho `NEW_HIRE` |
@@ -497,7 +503,7 @@ Mọi bảng nghiệp vụ đều có `organization_id` và `created_at`. Không
 | `templates` | name, description, archived_at? | |
 | `template_versions` | template_id, version, status (`DRAFT`/`PUBLISHED`), definition jsonb, published_at? | unique(template_id, version); partial unique(template_id) WHERE status = 'DRAFT' |
 | `onboardings` | employee_id, template_id, template_version_id?, status, start_date, activated_at?, completed_at?, canceled_at?, cancel_reason?, version | partial unique(employee_id) WHERE status IN ('DRAFT','ACTIVE') |
-| `tasks` | onboarding_id, definition_key, phase_key, phase_name, phase_order, title, description, type, assignee_employee_id, reviews_task_id?, available_on, due_on, due_overridden, status, started_at?, completed_at?, completed_by? | unique(onboarding_id, definition_key); CHECK(available_on ≤ due_on) |
+| `tasks` | onboarding_id, definition_key, phase_key, phase_name, phase_order, position (thứ tự trong template), title, description, type, assignee_employee_id, reviews_task_id?, available_on, due_on, due_overridden, status, started_at?, completed_at?, completed_by? | unique(onboarding_id, definition_key); CHECK(available_on ≤ due_on) |
 | `task_dependencies` | task_id, depends_on_task_id | PK(cả hai cột); CHECK(task_id ≠ depends_on_task_id) |
 | `document_files` | task_id, submission_id?, storage_key, file_name, mime_type, size_bytes, uploaded_by | |
 | `document_submissions` | task_id, revision, submitted_by, submitted_at | unique(task_id, revision) |
@@ -679,7 +685,7 @@ Tự dựng theo token vì beUI không có: thanh tiến độ onboarding, avata
 
 ## 12. Kiểm thử
 
-- **Unit** cho `packages/core`: `validateTemplate` (mọi rule BR-T), tính ngày, availability, activation plan, reschedule plan. Không cần mock gì, vì các hàm thuần nhận `today` làm tham số.
+- **Unit** cho `packages/core`: `validateTemplate` (BR-T04–T10) và schema template (BR-T11), tính ngày, availability, activation plan, reschedule plan. Không cần mock gì, vì các hàm thuần nhận `today` làm tham số.
 - **Integration** chạy với Postgres và MinIO thật (docker compose ở local, service container trong CI), gọi qua HTTP bằng Supertest. Mỗi file test tự tạo một org bằng `seedDemoOrg` với slug ngẫu nhiên, không bật `scenarios` (chỉ seed nhân sự và template, cho nhanh), và xóa org đó khi chạy xong (cascade), nên các test độc lập và chạy song song an toàn: cô lập tenant cho ta cô lập test miễn phí. Test concurrency gửi 2 request cùng lúc bằng `Promise.all` và kiểm tra đúng 1 request thành công.
 - **E2E (Playwright):** 1 spec cho golden path, 1 spec kiểm tra quyền xem file.
 - **CI (GitHub Actions):** lint, typecheck, unit, integration (service container cho Postgres và MinIO); Playwright chạy khi merge vào main.

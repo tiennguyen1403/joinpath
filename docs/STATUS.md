@@ -2,15 +2,10 @@
 
 > File này được nạp vào mọi session qua `CLAUDE.md`. Giữ ngắn: chỉ trạng thái hiện tại. Lịch sử chi tiết nằm trong `docs/sessions/`.
 
-**Cập nhật:** 2026-10-15 · session 004 (M0.4 · CI + host + deploy)
-**Mốc hiện tại:** M1 · Workflow engine, chưa bắt đầu. M0 · Walking skeleton đã xong, gồm:
-- Khung repo, Prisma (5 bảng), seed org `acme`.
-- Auth API: cookie session, Origin check, throttle, helmet.
-- Web shell: trang login, sidebar theo vai trò.
-- CI trên GitHub Actions.
-- Demo public tại https://joinpath.vercel.app (Vercel Services + Neon, ADR 011).
+**Cập nhật:** 2026-10-15 · session 005 (M1.1 · schema template + `validateTemplate`)
+**Mốc hiện tại:** M1 · Workflow engine, xong M1.1 (schema template + `validateTemplate` trong `core`). M0 · Walking skeleton đã xong (xem bảng): CI trên GitHub Actions, demo public tại https://joinpath.vercel.app.
 
-**Session kế tiếp:** **M1.1 · `core`: schema template + `validateTemplate`** (xem bảng). Đây là session đầu của M1, nên phải chi tiết hóa lại các dòng M1.x trước khi code. Handoff mới nhất: `docs/sessions/004-M0.4-ci-host-deploy.md`.
+**Session kế tiếp:** **M1.2 · `core`: tính ngày, availability, resolve assignee, activation plan** (xem bảng). Handoff mới nhất: `docs/sessions/005-M1.1-template-validation.md` (có dữ liệu đọc từ canvas).
 
 ## Quy ước session
 
@@ -21,29 +16,32 @@
 
 ## Bảng session
 
-Trạng thái: ✅ xong · ▶ kế tiếp · ⏳ chưa làm. Mốc M1–M5 mới ở mức khung.
+Trạng thái: ✅ xong · ▶ kế tiếp · ⏳ chưa làm. Mốc M2–M5 mới ở mức khung.
 
 | ID | Nội dung | Xong khi | TT |
 |---|---|---|---|
 | S0 | Kế hoạch (PLAN v0.9), thiết kế 15 bảng, bộ khung handoff | Có PLAN, canvas, CLAUDE.md, STATUS, template | ✅ |
-| M0.1 | Khung repo: `git`, pnpm workspace (`apps/web` Next.js 16, `apps/api` NestJS 12 ESM, `packages/core` TS + Zod + Vitest), TS 6.0 pin, oxlint, `docker-compose.yml` Postgres 18, script gốc `dev/build/test/lint/typecheck` | `pnpm install`, `pnpm -r build`, `pnpm -r test`, lint, typecheck xanh; `docker compose up -d` Postgres healthy; `pnpm dev`: web :3000 hiện trang, api :3001 `/health` trả ok; cả web và api import được từ `core` | ✅ |
-| M0.2 | Data + auth API: Prisma 7.10 pin (org, departments, employees, users, sessions), migration, `seedDemoOrg` phần nhân sự cho org cố định (§11); login / logout / me bằng cookie session (ADR 007); thêm Origin check, throttle login, helmet (§9) | Test Supertest với Postgres thật pass: login đặt cookie đúng cờ, sai mật khẩu 401 chung chung, `me` đúng user/org/role, logout vô hiệu session | ✅ |
-| M0.3 | Web shell: Tailwind 4 + token beUI (kèm 3 chỗ lệch, ADR 009), component beUI qua registry, `reicon-react`, `motion` + `lib/ease.ts`, rewrite `/api/*` (kiểm tra giữ nguyên header `Origin`), trang login, layout theo vai trò (HR / IT / MEMBER) | Ở local: đăng nhập bằng user seed qua UI, thấy đúng sidebar theo vai trò, logout được; giao diện khớp bảng Login và Dashboard trên canvas | ✅ |
-| M0.4 | CI + host + deploy: GitHub repo (hỏi user), GitHub Actions (lint, typecheck, test với Postgres service), đo cold start để chọn host (§6.6), deploy, migrate + seed (`SEED_PASSWORD` là secret), `trust proxy` đúng số hop để throttle login thấy IP thật (ADR 007), log kèm request id, smoke test | **Có URL public đăng nhập được bằng user seed**; CI xanh trên `main` | ✅ |
-| **M1.1** | `core`: schema template + `validateTemplate` (DAG, mọi BR-T) | Unit test nhóm T pass | ▶ |
-| M1.2 | `core`: tính ngày, availability, activation plan | Unit test tương ứng pass | ⏳ |
-| M1.3 | API template (tạo, `PUT` JSON, publish, archive) + nhân viên CRUD tối thiểu (email lowercase khi ghi, vì unique của `users.email` phân biệt hoa thường) + audit | Integration test template pass | ⏳ |
-| M1.4 | API onboarding: draft → preview → activate, checklist, business clock + endpoint tua ngày | AT-06 → AT-14 liên quan pass | ⏳ |
-| M1.5 | Web: wizard tạo onboarding + onboarding detail | Activate template seed qua UI | ⏳ |
-| M1.6 | Web: My Tasks; chốt tiêu chí M1 | IT và Manager làm checklist; khóa theo ngày/dependency đúng; onboarding tự COMPLETED; nhóm test T, A, E pass | ⏳ |
-| M2.1 | Invitation + mock inbox + nhận lời mời + resend | | ⏳ |
+| M0.1 | Khung repo: pnpm workspace (web Next.js 16, api NestJS 12, `core`), TS 6.0, oxlint, Postgres 18 qua Docker | Build, test, lint, typecheck xanh; web và api chạy, cả hai import được `core` | ✅ |
+| M0.2 | Prisma (5 bảng), seed nhân sự org `acme`, login / logout / me bằng cookie session, Origin check, throttle, helmet | Test Supertest với Postgres thật pass | ✅ |
+| M0.3 | Web shell: Tailwind 4 + token beUI, component beUI, reicon, trang login, layout theo vai trò | Đăng nhập qua UI ở local, sidebar đúng vai trò, khớp canvas | ✅ |
+| M0.4 | GitHub + CI, deploy Vercel Services + Neon (ADR 011), migrate + seed production, `trust proxy`, log kèm request id | URL public đăng nhập được; CI xanh trên `main` | ✅ |
+| M1.1 | `core`: Zod schema template + `validateTemplate`. T01–T03, T12 là rule của API, test ở M1.3, M1.4 | Unit test BR-T04…T11 pass | ✅ |
+| **M1.2** | `core`: tính ngày (`today` theo timezone + offset, cộng ngày trên `DATE`), availability + overdue (§4.4), resolve assignee (§4.7), activation plan (ngày, phase, `position`, dependency gồm cả `reviews`, cảnh báo overdue BR-A06) | Unit test pass, tên chứa BR (A04, A06, E01, E06…) | ▶ |
+| M1.3 | API template: bảng `templates`, `template_versions`, `audit_events`; seed "Engineering Onboarding" v1 + v2 theo canvas và "General Onboarding"; list, get, tạo, tạo version mới, `PUT` JSON (trả lỗi validate), publish, archive; ghi audit | Integration test AT-01…AT-04, AT-06 (phần publish), BR-T02 pass | ⏳ |
+| M1.4 | API onboarding: bảng `onboardings`, `tasks` (có `position`), `task_dependencies`; `GET /employees` (lọc role, active) + `GET /departments`; tạo và sửa draft, xem theo phạm vi (§9), activation preview, activate | AT-05, AT-06 (phần activate), AT-07…AT-09, AT-11, BR-T12 pass | ⏳ |
+| M1.5 | API task: `start`/`complete` checklist (khóa theo onboarding, §6.4), BR-E01, onboarding tự COMPLETED, `GET /tasks/mine`, `today(org)`, `POST /demo/clock/advance` (chỉ sandbox, chỉ tiến; chưa có tick) | AT-12…AT-14, AT-23, AT-31 (phần đồng hồ) pass | ⏳ |
+| M1.6 | Web: TanStack Query, danh sách onboarding, wizard (nhân viên → template + ngày → preview + chọn assignee → activate) | Activate template seed qua UI; khớp màn NewOnboarding | ⏳ |
+| M1.7 | Web: onboarding detail (task theo phase, badge availability) + My Tasks | IT và Manager complete checklist qua UI; khóa theo ngày/dependency đúng; onboarding tự COMPLETED | ⏳ |
+| M1.8 | Employees: API tạo, sửa (email lowercase khi ghi, vì unique của `users.email` phân biệt hoa thường) + màn danh sách và form | Integration test employees pass; HR tạo, sửa nhân viên qua UI | ⏳ |
+| M1.9 | Templates: danh sách + lịch sử version (chỉ xem); chốt tiêu chí M1; push + deploy (hỏi user) | Tiêu chí M1 (PLAN §13) đạt trên production; nhóm test T, A, E pass (trừ A07, E04 thuộc M2) | ⏳ |
+| M2.1 | Invitation + mock inbox + nhận lời mời + resend; phần invitation của AT-10 | | ⏳ |
 | M2.2 | MinIO (compose + CI), upload (magic bytes, 4 MB), signed download, need-to-know | | ⏳ |
 | M2.3 | Submit revision, approve / reject / rework | Nhóm test R pass | ⏳ |
 | M2.4 | Web: portal nhân viên mới, upload, drawer review | | ⏳ |
 | M2.5 | Chạy trọn golden path ở local, nhóm test P | Golden path (§11) chạy trọn ở local | ⏳ |
-| M3.1 | Đổi ngày, reassign, override deadline, hủy | | ⏳ |
+| M3.1 | Đổi ngày, reassign, override deadline, hủy; phần cancel của AT-06 | | ⏳ |
 | M3.2 | Thông báo in-app + cron tick | | ⏳ |
-| M3.3 | Sandbox mỗi khách + Dynamic Island (đổi vai, ngày nghiệp vụ) | | ⏳ |
+| M3.3 | Sandbox mỗi khách + Dynamic Island (đổi vai, ngày nghiệp vụ); phần đổi vai của AT-31 | | ⏳ |
 | M3.4 | Dashboard HR + timeline | | ⏳ |
 | M3.5 | Demo public end-to-end trên host | **Mốc an toàn** | ⏳ |
 | M4.1 | Template editor dạng form + validate tức thì bằng `core` | | ⏳ |
@@ -61,6 +59,7 @@ Trạng thái: ✅ xong · ▶ kế tiếp · ⏳ chưa làm. Mốc M1–M5 mớ
 - Preview deployment: origin khác `APP_ORIGIN` nên mọi request ghi bị 403, và preview dùng chung DB với production. Chốt khi bắt đầu dùng PR: tắt preview, hoặc cho phép origin của preview và dùng Neon branch.
 - Swagger `/api/docs` (PLAN §8) chưa thuộc session nào; khi thêm phải chỉnh CSP của `helmet`. Gắn vào session nào?
 - `image-viewer` (PLAN §10.1) không có trên registry beUI: chọn thay thế ở M2.4 (ứng viên `morphing-lightbox`).
+- BR-R01 ở mức template: DOCUMENT và APPROVAL của nó cùng giao `DIRECT_MANAGER` thì không bao giờ activate được. Chốt ở M1.4: activation báo lỗi theo R01, hay thêm rule template.
 
 ## Chạy dự án
 
@@ -102,7 +101,6 @@ Web đọc `API_URL` (mặc định `http://localhost:3001`, xem `apps/web/.env.
 - psql 16 trên Windows: option phải đứng trước connection string.
 - Kiểm tra UI bằng Playwright CLI (headed), không dùng Claude in Chrome: Chrome của extension nằm ở máy khác. Lệnh `open` không tự trả về trong Bash tool, nên ghi output ra file (`> .playwright-cli/cmd.log 2>&1`); `--filename` tính từ thư mục hiện tại.
 - Sửa `packages/core` khi `pnpm dev` đang chạy: web có thể giữ bản core cũ, nên build core rồi restart `pnpm dev`.
-- Thiết kế: canvas "Joinpath Screens" https://claude.ai/artifact/Xr3pRZbd14D78pqUignjWV (đọc bằng Artifact tool, action `read`).
 - Vercel CLI 62.2.0 cài global, đã đăng nhập. Hook đầu session báo "not installed" là sai.
   - MCP Vercel trả 403 với team này, nên dùng CLI: `vercel api`, `vercel logs`, `vercel inspect --logs`.
   - Không chạy `vercel deploy` từ máy, vì CLI sẽ upload cả `apps/api/.env`.

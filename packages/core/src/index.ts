@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+export * from './template.js';
+
 export const APP_NAME = 'Joinpath';
 
 export const healthSchema = z.object({ status: z.literal('ok') });
