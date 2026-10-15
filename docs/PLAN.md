@@ -511,7 +511,7 @@ Mọi bảng nghiệp vụ đều có `organization_id` và `created_at`. Không
 | `templates` | name, description, archived_at? | |
 | `template_versions` | template_id, version, status (`DRAFT`/`PUBLISHED`), definition jsonb, published_at? | unique(template_id, version); partial unique(template_id) WHERE status = 'DRAFT' |
 | `onboardings` | employee_id, template_id, template_version_id?, status, start_date, activated_at?, completed_at?, canceled_at?, cancel_reason?, version | partial unique(employee_id) WHERE status IN ('DRAFT','ACTIVE') |
-| `tasks` | onboarding_id, definition_key, phase_key, phase_name, phase_order, position (thứ tự trong template), title, description, type, assignee_employee_id, reviews_task_id?, available_on, due_on, due_overridden, status, started_at?, completed_at? | unique(onboarding_id, definition_key); CHECK(available_on ≤ due_on) |
+| `tasks` | onboarding_id, definition_key, phase_key, phase_name, phase_order, position (thứ tự trong template), title, description?, type, assignee_employee_id, reviews_task_id?, available_on, due_on, due_overridden, status, started_at?, completed_at? | unique(onboarding_id, definition_key); CHECK(available_on ≤ due_on) |
 | `task_dependencies` | task_id, depends_on_task_id | PK(cả hai cột); CHECK(task_id ≠ depends_on_task_id) |
 | `document_files` | task_id, submission_id?, storage_key, file_name, mime_type, size_bytes, uploaded_by | |
 | `document_submissions` | task_id, revision, submitted_by, submitted_at | unique(task_id, revision) |
