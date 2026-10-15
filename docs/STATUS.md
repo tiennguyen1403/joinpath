@@ -2,10 +2,10 @@
 
 > File này được nạp vào mọi session qua `CLAUDE.md`. Giữ ngắn: chỉ trạng thái hiện tại. Lịch sử chi tiết nằm trong `docs/sessions/`.
 
-**Cập nhật:** 2026-10-15 · session 015 (M1.9 · Templates + chốt M1)
-**Mốc hiện tại:** M2 · Tài liệu và duyệt, chưa bắt đầu. M1 · Workflow engine đã xong: tiêu chí PLAN §13 đạt trên production (trừ onboarding tự COMPLETED, chờ task của nhân viên mới ở M2). M0 · Walking skeleton đã xong: CI trên GitHub Actions, demo public tại https://joinpath.vercel.app.
+**Cập nhật:** 2026-10-15 · session 016 (M2.1a · API lời mời và mock inbox)
+**Mốc hiện tại:** M2 · Tài liệu và duyệt, đang làm: bảng session đã chi tiết hóa (7 session); M2.1a xong (API lời mời, mock inbox, chưa push). M1 · Workflow engine đã xong: tiêu chí PLAN §13 đạt trên production (trừ onboarding tự COMPLETED, chờ task của nhân viên mới ở M2). M0 · Walking skeleton đã xong: CI trên GitHub Actions, demo public tại https://joinpath.vercel.app.
 
-**Session kế tiếp:** **M2.1 · Invitation + mock inbox** (xem bảng). Session đầu của M2: chi tiết hóa lại các session M2 (kèm đề xuất chỉnh ước lượng roadmap, PLAN §13) cho user duyệt trước khi code. Handoff mới nhất: `docs/sessions/015-M1.9-templates-m1-close.md`; dữ liệu đọc từ canvas nằm ở handoff 005, 008 và 009.
+**Session kế tiếp:** **M2.1b · Web lời mời** (xem bảng). Bước đầu: đọc lại các bảng MockInbox, AcceptInvite, khung Invitation ở OnboardingDetail; cài `signup-form`; làm bản trước/sau cho các chỗ lệch canvas (handoff 016, "Cho M2.1b") để user duyệt trước khi code. Handoff mới nhất: `docs/sessions/016-M2.1a-invitations-api.md`; dữ liệu đọc từ canvas nằm ở handoff 005, 008, 009 và 016.
 
 ## Quy ước session
 
@@ -14,7 +14,7 @@
 
 ## Bảng session
 
-Trạng thái: ✅ xong · ▶ kế tiếp · ⏳ chưa làm. Mốc M2–M5 mới ở mức khung.
+Trạng thái: ✅ xong · ▶ kế tiếp · ⏳ chưa làm. Mốc M3–M5 mới ở mức khung.
 
 | ID | Nội dung | Xong khi | TT |
 |---|---|---|---|
@@ -34,11 +34,13 @@ Trạng thái: ✅ xong · ▶ kế tiếp · ⏳ chưa làm. Mốc M2–M5 mớ
 | M1.7 | Web: onboarding detail (task theo phase, badge availability) + My Tasks | IT và Manager complete checklist qua UI; khóa theo ngày/dependency đúng; onboarding tự COMPLETED | ✅ |
 | M1.8 | Employees: API tạo, sửa (email lowercase khi ghi), thêm và đổi tên phòng ban + màn danh sách và form | Integration test employees pass; HR tạo, sửa nhân viên qua UI | ✅ |
 | M1.9 | Templates: danh sách, mỗi template kèm các version (chỉ xem); chốt tiêu chí M1; push + deploy | Tiêu chí M1 (PLAN §13) đạt trên production, trừ "onboarding tự COMPLETED" (task của nhân viên mới chờ M2; M1.7 đã kiểm ở local); nhóm test T, A, E pass (trừ A07, E04 thuộc M2) | ✅ |
-| **M2.1** | Invitation + mock inbox + nhận lời mời + resend; phần invitation của AT-10 | | ▶ |
-| M2.2 | MinIO (compose + CI), upload (magic bytes, 4 MB), signed download, need-to-know | | ⏳ |
-| M2.3 | Submit revision, approve / reject / rework | Nhóm test R pass | ⏳ |
-| M2.4 | Web: portal nhân viên mới, upload, drawer review | | ⏳ |
-| M2.5 | Chạy trọn golden path ở local, nhóm test P | Golden path (§11) chạy trọn ở local | ⏳ |
+| M2.1a | API lời mời: bảng `invitations`, `mock_emails`; activate gửi lời mời; tra cứu và nhận lời mời, resend, `GET /mock-inbox` | AT-10 (phần invitation), AT-30, AT-32 pass; có throttle khi tra cứu và nhận lời mời | ✅ |
+| **M2.1b** | Web: Mock inbox, trang nhận lời mời, khung Invitation (Resend) ở detail, dòng lời mời ở wizard và toast | Qua UI: HR activate → mở email → đặt mật khẩu → An đăng nhập, thấy task của mình; sau Resend, link cũ hết hiệu lực | ▶ |
+| M2.2 | MinIO (compose + CI), upload (magic bytes, 4 MB, 5 file), xóa file chưa submit, signed download, need-to-know | AT-26, AT-27, AT-29 pass; lần upload đầu chuyển DOCUMENT sang IN_PROGRESS | ⏳ |
+| M2.3 | Submit revision, approve / reject / rework | AT-15…AT-18 pass (AT-19 cần reassign, M3.1); AT-13 bỏ đoạn đánh dấu bằng Prisma | ⏳ |
+| M2.4a | Web: portal nhân viên mới, upload, submit, lịch sử duyệt | An upload, submit qua UI ở 390 px và desktop | ⏳ |
+| M2.4b | Web: drawer review (xem file), approve / reject kèm lý do; nút cho DOCUMENT, APPROVAL trong My Tasks | Qua UI: Lan reject → An nộp revision 2 → Lan approve | ⏳ |
+| M2.5 | Golden path ở local, rà nhóm test P, push | Golden path bước 2–9 chạy trọn ở local (đăng nhập từng vai thay cho đổi vai, tua ngày bằng API); nhóm R, P pass | ⏳ |
 | M3.1 | Đổi ngày, reassign, override deadline, hủy; phần cancel của AT-06 | | ⏳ |
 | M3.2 | Thông báo in-app + cron tick | | ⏳ |
 | M3.3 | Sandbox mỗi khách + Dynamic Island (đổi vai, ngày nghiệp vụ); phần đổi vai của AT-31 | | ⏳ |
@@ -55,6 +57,8 @@ Trạng thái: ✅ xong · ▶ kế tiếp · ⏳ chưa làm. Mốc M2–M5 mớ
 
 ## Quyết định còn mở
 
+- Storage cho production (S3-compatible, chưa chọn provider) và thư viện S3 client (ngoài plan): chốt đầu M2.2. Tạo tài khoản dịch vụ ngoài thì hỏi user trước.
+- Reject gửi email kèm lý do vào mock inbox ngay ở M2.3, hay chờ `notify()` của M3.2 (BR-N02): chốt ở M2.3.
 - Người gọi cron tick (PLAN §6.5): chốt ở M3.2. Vercel Hobby chỉ cho cron chạy mỗi ngày một lần, nên nhiều khả năng dùng GitHub Actions `schedule`.
 - Preview deployment: origin khác `APP_ORIGIN` nên mọi request ghi bị 403, và preview dùng chung DB với production. Chốt khi bắt đầu dùng PR: tắt preview, hoặc cho phép origin của preview và dùng Neon branch.
 - Swagger `/api/docs` (PLAN §8) chưa thuộc session nào; khi thêm phải chỉnh CSP của `helmet`. Gắn vào session nào?

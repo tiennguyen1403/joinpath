@@ -34,6 +34,8 @@ model Organization {
   onboardings      Onboarding[]
   tasks            Task[]
   taskDependencies TaskDependency[]
+  invitations      Invitation[]
+  mockEmails       MockEmail[]
   auditEvents      AuditEvent[]
 
   @@map("organizations")
@@ -198,6 +200,7 @@ model Onboarding {
   template        Template         @relation(fields: [templateId], references: [id], onDelete: Cascade)
   templateVersion TemplateVersion? @relation(fields: [templateVersionId], references: [id], onDelete: Cascade)
   tasks           Task[]
+  invitations     Invitation[]
   auditEvents     AuditEvent[]
 
   // BR-A01: one open onboarding per employee. As with template drafts, the client offers
@@ -279,6 +282,48 @@ model TaskDependency {
 
   @@id([taskId, dependsOnTaskId])
   @@map("task_dependencies")
+}
+
+/// Lets a new hire with no account set a password (BR-A07, BR-P05). Activation sends one, and
+/// HR's resend replaces it. The new hire is the onboarding's employee.
+model Invitation {
+  id             String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  onboardingId   String    @map("onboarding_id") @db.Uuid
+  /// The new hire's email when it was sent. Changing that email revokes it.
+  email          String
+  /// SHA-256 of the token: the token itself travels only in the email's link (PLAN §9).
+  tokenHash      String    @unique @map("token_hash")
+  expiresAt      DateTime  @map("expires_at") @db.Timestamptz(3)
+  acceptedAt     DateTime? @map("accepted_at") @db.Timestamptz(3)
+  /// By a resend, or by a change of the new hire's email.
+  revokedAt      DateTime? @map("revoked_at") @db.Timestamptz(3)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  onboarding   Onboarding   @relation(fields: [onboardingId], references: [id], onDelete: Cascade)
+
+  @@map("invitations")
+}
+
+/// What Joinpath would email. Nothing leaves the app: the mock inbox shows it all (PLAN §6.5).
+/// With real email, a status column turns this table into an outbox.
+model MockEmail {
+  id             String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  toEmail        String   @map("to_email")
+  toName         String   @map("to_name")
+  subject        String
+  /// Plain text, a blank line between paragraphs.
+  body           String
+  /// The button under the text.
+  link           String
+  linkLabel      String   @map("link_label")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("mock_emails")
 }
 
 /// Append-only (PLAN §7): the audit trail and the onboarding timeline.

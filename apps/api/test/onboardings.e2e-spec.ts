@@ -508,7 +508,8 @@ describe('onboardings', () => {
         };
       }),
     );
-    // The new hire takes their tasks without an account; the invitation comes in M2.1.
+    // The new hire takes their tasks without an account; invitations.e2e-spec.ts covers
+    // the invitation it sends them.
     expect(await prisma.user.count({ where: { employeeId: hire } })).toBe(0);
     expect(
       active.tasks.filter((task) => task.assignee.id === hire),

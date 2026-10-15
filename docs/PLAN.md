@@ -1,4 +1,4 @@
-# Joinpath — Kế hoạch triển khai v0.21
+# Joinpath — Kế hoạch triển khai v0.22
 
 > **Joinpath**: Employee Onboarding & Workflow Management Platform, dự án portfolio Full-stack.
 > Bản này tinh chỉnh SRS v0.4 trong thread ChatGPT "Thiết kế dự án onboarding" (14/10/2026).
@@ -19,6 +19,7 @@
 > **v0.19 (15/10/2026):** Onboarding detail hiện task theo phase bằng `todo-list` (sửa tại chỗ: dòng `meta` dưới tên task, mỗi khối mang tên phase), không dùng bảng tự dựng; My Tasks chia tab bằng `tabs` (§10.1, ADR 010).
 > **v0.20 (15/10/2026):** HR thêm và đổi tên phòng ban (`POST /departments`, `PATCH /departments/:id`, không xóa), tạo và sửa hồ sơ nhân viên: email lưu chữ thường, chỉ đổi được khi người đó chưa có tài khoản; manager không được là chính họ hay người báo cáo cho họ; `GET /auth/me` kèm `organization.emailDomain` (§8); màn Employees dùng `tabs`, `input`, `select` và bảng tự dựng (§10.1).
 > **v0.21 (15/10/2026):** màn Templates chỉ xem (M1.9): bảng tự dựng, mỗi dòng liệt kê các version, mới nhất trước, và đánh dấu Current cho bản mà onboarding mới sẽ dùng; template chưa publish hoặc đã archive mang badge (§10.1).
+> **v0.22 (15/10/2026):** roadmap ước lượng lại theo số session sau M1, M2 chia thành 7 session (§13); thêm `POST /auth/invitations/lookup` để trang nhận lời mời hiện thông tin trước khi đặt mật khẩu, link mời mang token sau `#`; mật khẩu tự đặt dài 8–200 ký tự; đổi email của người mới làm lời mời đang chờ mất hiệu lực; `invitations` gắn với onboarding và ghi email lúc gửi, `mock_emails` thêm tên người nhận và nhãn nút (§5, §7, §8, §9).
 
 ## TL;DR: 6 thay đổi lớn nhất
 
@@ -375,7 +376,7 @@ ID ổn định theo từng nhóm: thêm rule mới không làm đổi số củ
 | BR-P02 | Tài nguyên ngoài phạm vi của user → 404 (không làm lộ việc nó tồn tại); thấy được nhưng không có quyền thao tác → 403 |
 | BR-P03 | Người được xem tài liệu: người upload, approver của APPROVAL review tài liệu đó, và HR. Manager và IT không được xem theo mặc định |
 | BR-P04 | File chỉ nhận PDF/PNG/JPEG, xác định qua magic bytes; tối đa 4 MB/file, 5 file/submission; object key do server sinh; bucket private; tải về qua signed URL ngắn hạn |
-| BR-P05 | Invitation token: ngẫu nhiên, chỉ lưu hash, hạn 72h, dùng 1 lần; resend làm token cũ mất hiệu lực |
+| BR-P05 | Invitation token: ngẫu nhiên, chỉ lưu hash, hạn 72h, dùng 1 lần; resend, hoặc đổi email của người mới, làm token cũ mất hiệu lực |
 | BR-P06 | Có rate limit cho login, nhận invitation, tạo sandbox |
 
 **D: Demo**
@@ -514,7 +515,7 @@ Mọi bảng nghiệp vụ đều có `organization_id` và `created_at`. Không
 | `employees` | full_name, email, job_title, department_id?, manager_id? | unique(org, email) |
 | `users` | employee_id, email (định danh đăng nhập), role (`HR`/`IT`/`MEMBER`), password_hash, status (`ACTIVE`/`DISABLED`) | unique(employee_id); unique(email) trên toàn hệ thống, để form login không cần biết org (xem BR-D04) |
 | `sessions` | user_id, token_hash, expires_at | unique(token_hash) |
-| `invitations` | employee_id, token_hash, expires_at, accepted_at?, revoked_at? | unique(token_hash) |
+| `invitations` | onboarding_id (người mới là employee của onboarding), email (địa chỉ lúc gửi), token_hash, expires_at, accepted_at?, revoked_at? | unique(token_hash) |
 | `templates` | name, description, archived_at? | |
 | `template_versions` | template_id, version, status (`DRAFT`/`PUBLISHED`), definition jsonb, published_at? | unique(template_id, version); partial unique(template_id) WHERE status = 'DRAFT' |
 | `onboardings` | employee_id, template_id, template_version_id?, status, start_date, activated_at?, completed_at?, canceled_at?, cancel_reason?, version | partial unique(employee_id) WHERE status IN ('DRAFT','ACTIVE') |
@@ -524,7 +525,7 @@ Mọi bảng nghiệp vụ đều có `organization_id` và `created_at`. Không
 | `document_submissions` | task_id, revision, submitted_by, submitted_at | unique(task_id, revision) |
 | `approval_decisions` | approval_task_id, submission_id, decision, reason?, decided_by, decided_at | unique(approval_task_id, submission_id); CHECK(decision = 'APPROVED' OR reason IS NOT NULL) |
 | `notifications` | recipient_employee_id, kind, task_id?, title, body, link, read_at?, dedupe_key? | unique(dedupe_key) |
-| `mock_emails` | to_email, subject, body, link | Khi gắn email thật thì thêm `status`, bảng này thành outbox |
+| `mock_emails` | to_email, to_name, subject, body (chữ thường, các đoạn cách nhau một dòng trống), link, link_label (nút dưới thân email) | Khi gắn email thật thì thêm `status`, bảng này thành outbox |
 | `audit_events` | actor_user_id?, action, entity_type, entity_id, onboarding_id?, data jsonb | Append-only |
 
 ---
@@ -538,7 +539,11 @@ Prefix `/api` (đi qua rewrite). API thiết kế theo command chứ không cho 
 POST /auth/login            POST /auth/logout            GET /auth/me
                                               # me: user, role, employee, organization {id, name, timezone, today, emailDomain}; today là ngày nghiệp vụ (§4.6), web không tự tính được vì cần clock offset
                                               # emailDomain: phần sau @ của mọi email trong sandbox (BR-D04), null ngoài sandbox; form nhân viên chỉ cho nhập phần trước @
-POST /auth/invitations/accept                 {token, password}
+POST /auth/invitations/lookup                 {token}   # public, throttle như login: những gì trang nhận lời mời hiện trước khi đặt mật khẩu
+                                              # (org, người mới, manager, start date, today, hạn của link, task của người mới); token hỏng, đã dùng, hết hạn, bị thay → 410
+POST /auth/invitations/accept                 {token, password}   # public, throttle; password 8–200 ký tự; tạo user MEMBER với email hiện tại của người mới,
+                                              # rồi đăng nhập luôn (set cookie như login); token không còn hiệu lực → 410
+                                              # link trong email: {APP_ORIGIN}/invite#{token}. Token nằm sau #, nên không tới server và không vào log nào
 
 # Tổ chức (HR)
 GET|POST /employees         GET|PATCH /employees/:id     GET|POST /departments        PATCH /departments/:id
@@ -566,7 +571,8 @@ GET  /onboardings/:id/activation-preview      # chỉ DRAFT, template chưa arch
 POST /onboardings/:id/activate                {templateVersionId, assignees?: {[taskKey]: employeeId}}   # key không có trong template bị bỏ qua
 POST /onboardings/:id/reschedule              {startDate}
 POST /onboardings/:id/cancel                  {reason}
-POST /onboardings/:id/resend-invitation
+POST /onboardings/:id/resend-invitation      # HR; chỉ khi ACTIVE và người mới chưa có tài khoản (409); link cũ mất hiệu lực, link mới gửi tới email hiện tại
+                                              # chi tiết onboarding (mọi lệnh trả shape này) kèm invitation mới nhất, chỉ HR thấy; preview kèm sendsInvitation (BR-A07)
 GET  /onboardings/:id/activity
 
 # Tasks
@@ -585,6 +591,7 @@ GET  /files/:id/download-url
 # Thông báo, dashboard
 GET /notifications          POST /notifications/:id/read  POST /notifications/read-all
 GET /mock-inbox             GET /dashboard
+                                              # mock-inbox: mọi email của org, mới nhất trước; HR luôn xem được, vai khác chỉ trong sandbox (403)
 
 # Demo (chỉ sandbox) và internal
 POST /demo/sandboxes        POST /demo/switch-user {employeeId}   POST /demo/clock/advance {days}
@@ -627,7 +634,8 @@ Lỗi luôn trả về dạng `{ code, message, details? }`:
   - Người không phải HR không thấy DRAFT: draft là chỗ HR chuẩn bị, chưa có task hay lời mời.
   - Ai có task trong một onboarding thì xem được onboarding đó, bất kể vai (không riêng IT), vì cần thấy bối cảnh của task.
   - Hàm thuần `visibleOnboardings` trong `onboarding.policy.ts` lọc mọi lệnh đọc; ngoài phạm vi thì 404 (BR-P02).
-- **Mật khẩu:** dùng Argon2id qua `crypto.argon2` có sẵn của Node (đã kiểm tra là có trên Node 24.21; vì API này còn mới, nếu runtime của host cũ hơn thì dùng `crypto.scrypt`). Không cần thư viện native.
+- **Mật khẩu:** dùng Argon2id qua `crypto.argon2` có sẵn của Node (đã kiểm tra là có trên Node 24.21; vì API này còn mới, nếu runtime của host cũ hơn thì dùng `crypto.scrypt`). Không cần thư viện native. Mật khẩu người mới tự đặt khi nhận lời mời dài 8–200 ký tự, không bắt buộc loại ký tự; thanh độ mạnh trên UI chỉ để gợi ý.
+- **Mock inbox** đóng vai hộp thư của người nhận: link mời trong `mock_emails` chứa token thô, như một email thật nằm trong hộp thư. Bảng `invitations` chỉ lưu hash (BR-P05).
 - **Session:** token ngẫu nhiên 32 byte, đặt trong cookie `HttpOnly; Secure; SameSite=Lax`. **Không** đặt thuộc tính `Domain`: nếu đặt, cookie sẽ gắn với host của API, và cách sửa F4 hỏng mà không báo lỗi gì. DB chỉ lưu SHA-256 của token, nhờ vậy logout hoặc hủy onboarding là thu hồi được ngay. Không dùng JWT.
 - **CSRF:** `SameSite=Lax`, đồng thời từ chối request thay đổi dữ liệu nếu header `Origin` khác origin của app.
 - **File:** kiểm tra magic bytes (`%PDF`, `\x89PNG`, `FF D8 FF`) bằng một hàm khoảng 10 dòng, không tin `Content-Type` hay đuôi file. Object key có dạng `orgs/{orgId}/tasks/{taskId}/{uuid}`. Signed URL sống tối đa 5 phút, kèm `Content-Disposition: attachment`. Không log signed URL hay token.
@@ -766,19 +774,24 @@ Tự dựng theo token vì beUI không có: thanh tiến độ onboarding, avata
 
 ## 13. Roadmap
 
-| Mốc | Tuần* | Nội dung | Xong khi |
-|---|---|---|---|
-| **M0** Walking skeleton | 1 (2–3 ngày đầu) | pnpm workspace (`web`, `api`, `core`); docker compose (Postgres); Prisma: org, departments, employees, users, sessions; seed một org cố định (§11); login/logout/me; layout theo vai trò; rewrite proxy; CI; **chọn host và deploy** | Có URL public, đăng nhập được bằng user seed |
-| **M1** Workflow engine | 1–2 | `core`: schema + `validateTemplate` + tính ngày + availability + activation plan, unit test kỹ. API template (tạo, `PUT` JSON, publish, archive; chưa có editor, template lấy từ seed). Nhân viên (CRUD tối thiểu). Draft → preview → activate. Checklist. Business clock + endpoint tua ngày (để tự test; UI demo bar làm ở M3). Ghi audit. Wizard, Onboarding detail, My Tasks | Activate được template seed; IT và Manager làm checklist; khóa theo ngày/dependency chạy đúng; onboarding tự COMPLETED; nhóm test T, A, E pass |
-| **M2** Tài liệu và duyệt | 3 | Invitation + mock inbox + nhận lời mời + resend; thêm MinIO vào docker compose và CI; upload (magic bytes → MinIO/S3); submit revision; approve/reject/rework; signed download; need-to-know; portal nhân viên mới | Golden path (§11) chạy trọn vẹn ở local; nhóm test R, P pass |
-| **M3** Vận hành và demo | 4 | Đổi ngày, reassign, override deadline, hủy; thông báo in-app; cron tick; sandbox + demo bar; dashboard HR cơ bản; timeline | **Mốc an toàn:** demo public chạy được end-to-end trên host |
-| **M4** Editor và trực quan | 5 | Template editor dạng form (phases, tasks, chọn `dependsOn`, rule, offset) + validate tức thì bằng `core` + lịch sử version; dependency graph; analytics theo phòng ban | **MVP cut line:** đủ mọi FR mức Must |
-| **M5** Hoàn thiện | 6 | Playwright golden path; rà lại ma trận quyền, cross-tenant, upload; trạng thái rỗng và lỗi; a11y; checklist hướng dẫn demo; landing page; README, ADR, sơ đồ, video demo | Sẵn sàng đưa vào portfolio |
-| Dự phòng | 7 | Dành cho phần bị trễ. Nếu đúng tiến độ: launch sớm, hoặc làm các mục Could | — |
+| Mốc | Tuần* | Session** | Nội dung | Xong khi |
+|---|---|---|---|---|
+| **M0** Walking skeleton | 1 (2–3 ngày đầu) | 4 (thực tế) | pnpm workspace (`web`, `api`, `core`); docker compose (Postgres); Prisma: org, departments, employees, users, sessions; seed một org cố định (§11); login/logout/me; layout theo vai trò; rewrite proxy; CI; **chọn host và deploy** | Có URL public, đăng nhập được bằng user seed |
+| **M1** Workflow engine | 1–2 | 11 (thực tế) | `core`: schema + `validateTemplate` + tính ngày + availability + activation plan, unit test kỹ. API template (tạo, `PUT` JSON, publish, archive; chưa có editor, template lấy từ seed). Nhân viên (CRUD tối thiểu). Draft → preview → activate. Checklist. Business clock + endpoint tua ngày (để tự test; UI demo bar làm ở M3). Ghi audit. Wizard, Onboarding detail, My Tasks | Activate được template seed; IT và Manager làm checklist; khóa theo ngày/dependency chạy đúng; onboarding tự COMPLETED; nhóm test T, A, E pass |
+| **M2** Tài liệu và duyệt | 3 | 7 | Invitation + mock inbox + nhận lời mời + resend; thêm MinIO vào docker compose và CI; upload (magic bytes → MinIO/S3); submit revision; approve/reject/rework; signed download; need-to-know; portal nhân viên mới | Golden path (§11) chạy trọn vẹn ở local; nhóm test R, P pass |
+| **M3** Vận hành và demo | 4 | ~7 | Đổi ngày, reassign, override deadline, hủy; thông báo in-app; cron tick; sandbox + demo bar; dashboard HR cơ bản; timeline | **Mốc an toàn:** demo public chạy được end-to-end trên host |
+| **M4** Editor và trực quan | 5 | ~5 | Template editor dạng form (phases, tasks, chọn `dependsOn`, rule, offset) + validate tức thì bằng `core` + lịch sử version; dependency graph; analytics theo phòng ban | **MVP cut line:** đủ mọi FR mức Must |
+| **M5** Hoàn thiện | 6 | 4 | Playwright golden path; rà lại ma trận quyền, cross-tenant, upload; trạng thái rỗng và lỗi; a11y; checklist hướng dẫn demo; landing page; README, ADR, sơ đồ, video demo | Sẵn sàng đưa vào portfolio |
+| Dự phòng | 7 | — | Dành cho phần bị trễ. Nếu đúng tiến độ: launch sớm, hoặc làm các mục Could | — |
 
 Mỗi mốc được chia thành các session ngắn, mỗi session một lát cắt kiểm chứng được và kết thúc bằng handoff. Bảng session và trạng thái hiện tại nằm ở `docs/STATUS.md`; biên bản từng session nằm ở `docs/sessions/`.
 
-\* Tính theo 40 giờ/tuần (đã xác nhận). Tổng khối lượng ước tính khoảng 240 giờ, tức 6 tuần, cộng thêm 1 tuần dự phòng. Ước lượng này nên được chỉnh lại sau M1, khi đã có số liệu thực tế về tốc độ làm.
+\* Ước lượng ban đầu, tính theo 40 giờ/tuần (đã xác nhận): khoảng 240 giờ, tức 6 tuần, cộng thêm 1 tuần dự phòng. Giữ lại để đối chiếu.
+
+\*\* Ước lượng lại sau M1 (v0.22), theo số session:
+- Từ commit của S0 (22:23 ngày 14/10) tới commit cuối của M1 (22:15 ngày 15/10) có 15 session của M0 và M1, kể cả một đêm; riêng M1 khoảng 12,5 giờ.
+- Trung bình khoảng 1 giờ 08 phút mỗi session: session API 40–60 phút, session web 1 giờ 20 tới 1 giờ 30.
+- Còn khoảng 23 session (M2–M5). M2 có thêm hạ tầng mới (storage), nên không ngoại suy thẳng từ M1.
 
 **Thứ tự cắt khi bị trễ** (cắt từ đầu danh sách): analytics (FR-24) → dependency graph (FR-23; vẫn giữ dạng danh sách theo phase) → checklist hướng dẫn demo (FR-29) → landing page (FR-30) → editor dạng form (phương án cuối cùng: lùi về một ô JSON có validate).
 

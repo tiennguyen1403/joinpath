@@ -16,6 +16,7 @@ import {
   type OnboardingStatus,
   type OnboardingSummary,
   planActivation,
+  type Role,
   type Task,
   type TaskStatus,
   type TemplateDefinition,
@@ -24,6 +25,7 @@ import {
 import type { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../prisma.js';
 import { recordAudit } from '../audit/audit.js';
+import { sendInvitation } from '../auth/invitation.js';
 import type { AuthContext } from '../auth/session.js';
 import { orgToday, personSelect } from '../org/org.service.js';
 import { visibleOnboardings } from './onboarding.policy.js';
@@ -82,6 +84,17 @@ const detailSelect = {
   tasks: {
     orderBy: [{ phaseOrder: 'asc' }, { position: 'asc' }],
     select: taskSelect,
+  },
+  invitations: {
+    orderBy: { createdAt: 'desc' },
+    take: 1,
+    select: {
+      email: true,
+      createdAt: true,
+      expiresAt: true,
+      acceptedAt: true,
+      revokedAt: true,
+    },
   },
 } satisfies Prisma.OnboardingSelect;
 
@@ -153,8 +166,13 @@ export function toTask(
   };
 }
 
-function toDetail(row: DetailRow, today: IsoDate): OnboardingDetail {
+function toDetail(
+  { invitations, ...row }: DetailRow,
+  today: IsoDate,
+  role: Role,
+): OnboardingDetail {
   const statusById = new Map(row.tasks.map((task) => [task.id, task.status]));
+  const invitation = invitations.at(0);
   return {
     ...toOnboarding(row),
     today,
@@ -166,6 +184,17 @@ function toDetail(row: DetailRow, today: IsoDate): OnboardingDetail {
         today,
       ),
     ),
+    // Only HR resends it, so only HR sees it.
+    invitation:
+      role === 'HR' && invitation
+        ? {
+            email: invitation.email,
+            sentAt: invitation.createdAt.toISOString(),
+            expiresAt: invitation.expiresAt.toISOString(),
+            acceptedAt: invitation.acceptedAt?.toISOString() ?? null,
+            revokedAt: invitation.revokedAt?.toISOString() ?? null,
+          }
+        : null,
   };
 }
 
@@ -213,6 +242,7 @@ export class OnboardingService {
     return toDetail(
       onboarding,
       await orgToday(this.prisma, auth.organizationId),
+      auth.role,
     );
   }
 
@@ -337,7 +367,7 @@ export class OnboardingService {
           message: 'The template has a newer version: preview again',
         });
       }
-      const { tasks } = await planFor(
+      const { tasks, sendsInvitation } = await planFor(
         tx,
         organizationId,
         {
@@ -409,8 +439,66 @@ export class OnboardingService {
         onboardingId: id,
         data: input,
       });
+      // BR-A07: a new hire with no account sets a password through the link.
+      if (sendsInvitation) {
+        await sendInvitation(tx, auth, id, 'invitation.sent');
+      }
     });
     return this.get(auth, id);
+  }
+
+  /** A new link for a new hire who hasn't accepted yet; the old one stops working (BR-P05). */
+  async resendInvitation(
+    auth: AuthContext,
+    id: string,
+  ): Promise<OnboardingDetail> {
+    const { organizationId } = auth;
+    await this.prisma.$transaction(async (tx) => {
+      const onboarding = await tx.onboarding.findFirst({
+        where: { id, organizationId },
+        select: { status: true, employeeId: true },
+      });
+      if (!onboarding) throw new NotFoundException('Onboarding not found');
+      if (onboarding.status !== 'ACTIVE') {
+        throw new ConflictException(
+          'Only an active onboarding has an invitation to resend',
+        );
+      }
+      // So a cancel and a resend never cross (PLAN §6.4).
+      await lockOnboarding(tx, organizationId, id);
+      // Revoked first: that waits for an acceptance under way, so the count below sees the
+      // account it made.
+      await tx.invitation.updateMany({
+        where: { onboardingId: id, acceptedAt: null, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+      const accounts = await tx.user.count({
+        where: { employeeId: onboarding.employeeId },
+      });
+      if (accounts > 0) {
+        throw new ConflictException('The new hire already has an account');
+      }
+      await sendInvitation(tx, auth, id, 'invitation.resent');
+    });
+    return this.get(auth, id);
+  }
+}
+
+/**
+ * Every command on an onboarding's tasks bumps its version first (PLAN §6.4). That locks the
+ * row, so the commands on one onboarding run one at a time, and only while it is ACTIVE.
+ */
+export async function lockOnboarding(
+  tx: Prisma.TransactionClient,
+  organizationId: string,
+  id: string,
+) {
+  const { count } = await tx.onboarding.updateMany({
+    where: { id, organizationId, status: 'ACTIVE' },
+    data: { version: { increment: 1 } },
+  });
+  if (count === 0) {
+    throw new ConflictException('This onboarding is no longer active');
   }
 }
 
@@ -483,7 +571,7 @@ async function planFor(
   });
   const newHire = await db.employee.findFirstOrThrow({
     where: { id: employeeId, organizationId },
-    select: { fullName: true, managerId: true },
+    select: { fullName: true, managerId: true, user: { select: { id: true } } },
   });
   // Only people with an active account take work that isn't the new hire's own.
   const people = await db.employee.findMany({
@@ -512,5 +600,6 @@ async function planFor(
     today,
     tasks,
     people: [...named].map((id) => ({ id, fullName: names.get(id)! })),
+    sendsInvitation: !newHire.user,
   };
 }

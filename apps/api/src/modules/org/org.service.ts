@@ -121,7 +121,6 @@ export class OrgService {
           jobTitle: true,
           departmentId: true,
           managerId: true,
-          user: { select: { id: true } },
         },
       });
       if (!current) throw new NotFoundException('Employee not found');
@@ -133,11 +132,23 @@ export class OrgService {
             value !== current[field as keyof UpdateEmployee],
         ),
       ) as UpdateEmployee;
-      // Their sign-in: changing it is account management, which HR has no screen for (PLAN §3).
-      if (changes.email !== undefined && current.user) {
-        throw new ConflictException(
-          `${current.fullName} signs in with this email, so it can't be changed here`,
-        );
+      if (changes.email !== undefined) {
+        // An invitation went to the old address, so it stops working; HR resends (BR-P05).
+        // Revoked first: that waits for an acceptance under way, so the count below sees it.
+        await tx.invitation.updateMany({
+          where: {
+            onboarding: { employeeId: id },
+            acceptedAt: null,
+            revokedAt: null,
+          },
+          data: { revokedAt: new Date() },
+        });
+        // Their sign-in: changing it is account management, which HR has no screen for (PLAN §3).
+        if (await tx.user.count({ where: { employeeId: id } })) {
+          throw new ConflictException(
+            `${current.fullName} signs in with this email, so it can't be changed here`,
+          );
+        }
       }
       if (Object.keys(changes).length === 0) return;
       await checkRecord(tx, auth, { id, fullName: current.fullName }, changes);

@@ -258,6 +258,8 @@ export const activationPreviewSchema = z.object({
   tasks: z.array(plannedTaskSchema),
   // A name for every id the plan mentions, the new hire's included.
   people: z.array(personSchema),
+  // The new hire has no account yet, so activating emails them an invitation (BR-A07).
+  sendsInvitation: z.boolean(),
 });
 export type ActivationPreview = z.infer<typeof activationPreviewSchema>;
 
@@ -300,11 +302,26 @@ export const taskSchema = z.object({
 });
 export type Task = z.infer<typeof taskSchema>;
 
+// The link a new hire with no account sets their password through (BR-A07, BR-P05).
+export const onboardingInvitationSchema = z.object({
+  // Where it went: the new hire's email then.
+  email: z.email(),
+  sentAt: z.iso.datetime(),
+  expiresAt: z.iso.datetime(),
+  acceptedAt: z.iso.datetime().nullable(),
+  // A resend replaced it, or the new hire's email changed.
+  revokedAt: z.iso.datetime().nullable(),
+});
+export type OnboardingInvitation = z.infer<typeof onboardingInvitationSchema>;
+
 export const onboardingDetailSchema = onboardingSchema.extend({
   // The org's business date (PLAN §4.6), which the tasks' availability comes from.
   today: z.iso.date(),
   // By phase, then template order. None until activation.
   tasks: z.array(taskSchema),
+  // The newest invitation, for HR only, who resends it; null for anyone else, and when the
+  // new hire already had an account on activation.
+  invitation: onboardingInvitationSchema.nullable(),
 });
 export type OnboardingDetail = z.infer<typeof onboardingDetailSchema>;
 

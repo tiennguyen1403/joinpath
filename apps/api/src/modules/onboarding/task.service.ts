@@ -17,6 +17,7 @@ import type { AuthContext } from '../auth/session.js';
 import { orgToday } from '../org/org.service.js';
 import { canWorkOn, visibleOnboardings } from './onboarding.policy.js';
 import {
+  lockOnboarding,
   onboardingSelect,
   OnboardingService,
   taskSelect,
@@ -196,22 +197,4 @@ async function checkTask(
     });
   }
   return task;
-}
-
-/**
- * Every command on an onboarding's tasks bumps its version first (PLAN §6.4). That locks the
- * row, so the commands on one onboarding run one at a time, and only while it is ACTIVE.
- */
-async function lockOnboarding(
-  tx: Prisma.TransactionClient,
-  organizationId: string,
-  id: string,
-) {
-  const { count } = await tx.onboarding.updateMany({
-    where: { id, organizationId, status: 'ACTIVE' },
-    data: { version: { increment: 1 } },
-  });
-  if (count === 0) {
-    throw new ConflictException('This onboarding is no longer active');
-  }
 }

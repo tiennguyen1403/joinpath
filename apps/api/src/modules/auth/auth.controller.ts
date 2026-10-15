@@ -8,7 +8,13 @@ import {
   Res,
   UseGuards,
 } from '@nestjs/common';
-import { loginSchema, type Me } from '@joinpath/core';
+import {
+  acceptInvitationSchema,
+  type Invitation,
+  invitationTokenSchema,
+  loginSchema,
+  type Me,
+} from '@joinpath/core';
 import type { Request, Response } from 'express';
 import { AuthService } from './auth.service.js';
 import {
@@ -45,5 +51,28 @@ export class AuthController {
   @Get('me')
   me(@Req() req: Request): Promise<Me> {
     return this.auth.me(req.auth!);
+  }
+
+  // The invitation routes share the login's limit (BR-P06), which also stops token guessing.
+  @Public()
+  @UseGuards(ThrottleGuard)
+  @Post('invitations/lookup')
+  @HttpCode(200)
+  lookupInvitation(@Body() body: unknown): Promise<Invitation> {
+    return this.auth.lookupInvitation(invitationTokenSchema.parse(body));
+  }
+
+  @Public()
+  @UseGuards(ThrottleGuard)
+  @Post('invitations/accept')
+  @HttpCode(204)
+  async acceptInvitation(
+    @Body() body: unknown,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    setSessionCookie(
+      res,
+      await this.auth.acceptInvitation(acceptInvitationSchema.parse(body)),
+    );
   }
 }

@@ -5,6 +5,7 @@ export * from './dates.js';
 export * from './onboarding.js';
 export * from './org.js';
 export * from './template.js';
+export * from './text.js';
 
 export const APP_NAME = 'Joinpath';
 
@@ -43,6 +44,55 @@ export type Login = z.infer<typeof loginSchema>;
 
 // Set by the API, read by the web server to ask the API who is signed in (ADR 007).
 export const SESSION_COOKIE = '__Host-sid';
+
+// An invitation link's token, always sent in a body: the link carries it after #, which never
+// reaches a server, so no log holds it (PLAN §8).
+export const invitationTokenSchema = z.object({
+  token: z.string().min(1).max(100),
+});
+export type InvitationToken = z.infer<typeof invitationTokenSchema>;
+
+// POST /auth/invitations/accept. Length is the only rule; the strength meter only advises (PLAN §9).
+export const acceptInvitationSchema = invitationTokenSchema.extend({
+  password: z.string().min(8, 'Use at least 8 characters').max(200),
+});
+export type AcceptInvitation = z.infer<typeof acceptInvitationSchema>;
+
+// POST /auth/invitations/lookup: what the accept page shows before the password is set.
+export const invitationSchema = z.object({
+  organization: z.object({ name: z.string(), timezone: z.string() }),
+  employee: z.object({ fullName: z.string(), email: z.email() }),
+  manager: z.object({ fullName: z.string() }).nullable(),
+  startDate: z.iso.date(),
+  // The org's business date (PLAN §4.6), which tells the tasks open now.
+  today: z.iso.date(),
+  expiresAt: z.iso.datetime(),
+  // The new hire's own tasks, in the order they open.
+  tasks: z.array(
+    z.object({
+      title: z.string(),
+      description: z.string().nullable(),
+      availableOn: z.iso.date(),
+      dueOn: z.iso.date(),
+    }),
+  ),
+});
+export type Invitation = z.infer<typeof invitationSchema>;
+
+// GET /mock-inbox: an email Joinpath would have sent, newest first (PLAN §6.5).
+export const mockEmailSchema = z.object({
+  id: z.uuid(),
+  toEmail: z.email(),
+  toName: z.string(),
+  subject: z.string(),
+  // Plain text, a blank line between paragraphs.
+  body: z.string(),
+  // The button under the text.
+  link: z.url(),
+  linkLabel: z.string(),
+  sentAt: z.iso.datetime(),
+});
+export type MockEmail = z.infer<typeof mockEmailSchema>;
 
 export const meSchema = z.object({
   id: z.uuid(),

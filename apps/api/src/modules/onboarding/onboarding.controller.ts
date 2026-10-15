@@ -89,4 +89,14 @@ export class OnboardingController {
       activateOnboardingSchema.parse(body),
     );
   }
+
+  @Roles('HR')
+  @Post('onboardings/:id/resend-invitation')
+  @HttpCode(200)
+  resendInvitation(
+    @Req() req: Request,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<OnboardingDetail> {
+    return this.onboardings.resendInvitation(req.auth!, id);
+  }
 }

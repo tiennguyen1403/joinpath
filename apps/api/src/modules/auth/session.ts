@@ -23,8 +23,9 @@ const cookieOptions: CookieOptions = {
   path: '/',
 };
 
-export const newSessionToken = () => randomBytes(32).toString('base64url');
-// Only the hash is stored, so a database leak does not leak live sessions.
+// Sessions and invitation links alike.
+export const newToken = () => randomBytes(32).toString('base64url');
+// Only the hash is stored, so a database leak does not leak live sessions or links.
 export const hashToken = (token: string) =>
   createHash('sha256').update(token).digest('hex');
 
