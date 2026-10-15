@@ -23,6 +23,7 @@ import {
   newSlug,
   type Org,
   PASSWORD,
+  pdf,
   seedOrg,
 } from './app.js';
 
@@ -58,6 +59,7 @@ describe('onboardings', () => {
   let itPicks: Record<string, string>;
   let day: Org['day'];
   let newHire: Org['newHire'];
+  let hireWithAccount: Org['hireWithAccount'];
   let draftFor: Org['draftFor'];
   let activate: Org['activate'];
   let publishedTemplate: Org['publishedTemplate'];
@@ -93,6 +95,7 @@ describe('onboardings', () => {
       itPicks,
       day,
       newHire,
+      hireWithAccount,
       draftFor,
       activate,
       publishedTemplate,
@@ -506,6 +509,7 @@ describe('onboardings', () => {
           availability: 'LOCKED_BY_DATE',
           overdue: false,
           files: [],
+          submissions: [],
         };
       }),
     );
@@ -887,7 +891,8 @@ describe('onboardings', () => {
       (await rows(client)).find((row) => row.id === id)!;
 
     // Starting today: six tasks before day 1 are past due on activation (BR-A06).
-    const draft = await draftFor(await newHire(), engineering.id, day(0));
+    const hire = await hireWithAccount();
+    const draft = await draftFor(hire.id, engineering.id, day(0));
     expect(await rowOf(hr, draft.id)).toMatchObject({
       status: 'DRAFT',
       completedAt: null,
@@ -906,13 +911,14 @@ describe('onboardings', () => {
       nextTask: byTitle('Upload ID documents'),
     });
 
-    // The upload is done (its command comes in M2) and the manager assigns a buddy. Four
-    // tasks are then due three days before the start: template order puts the review first,
-    // though it was created after the other three.
-    await prisma.task.update({
-      where: { id: byTitle('Upload ID documents').id },
-      data: { status: 'COMPLETED', completedAt: new Date() },
-    });
+    // The new hire submits their ID and the manager assigns a buddy. Four tasks are then due
+    // three days before the start: template order puts the review first, though it was
+    // created after the other three.
+    const upload = byTitle('Upload ID documents').id;
+    await hire.client
+      .upload(`/tasks/${upload}/files`, pdf(), 'id.pdf')
+      .expect(201);
+    await hire.client.post(`/tasks/${upload}/submit`).expect(200);
     await others.manager
       .post(`/tasks/${byTitle('Assign an onboarding buddy').id}/complete`)
       .expect(200);

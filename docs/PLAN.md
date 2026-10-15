@@ -1,4 +1,4 @@
-# Joinpath — Kế hoạch triển khai v0.24
+# Joinpath — Kế hoạch triển khai v0.25
 
 > **Joinpath**: Employee Onboarding & Workflow Management Platform, dự án portfolio Full-stack.
 > Bản này tinh chỉnh SRS v0.4 trong thread ChatGPT "Thiết kế dự án onboarding" (14/10/2026).
@@ -22,6 +22,7 @@
 > **v0.22 (15/10/2026):** roadmap ước lượng lại theo số session sau M1, M2 chia thành 7 session (§13); thêm `POST /auth/invitations/lookup` để trang nhận lời mời hiện thông tin trước khi đặt mật khẩu, link mời mang token sau `#`; mật khẩu tự đặt dài 8–200 ký tự; đổi email của người mới làm lời mời đang chờ mất hiệu lực; `invitations` gắn với onboarding và ghi email lúc gửi, `mock_emails` thêm tên người nhận và nhãn nút (§5, §7, §8, §9).
 > **v0.23 (15/10/2026):** `mock_emails` thêm `footer`, phần chữ nằm dưới nút như trên canvas (§7); trang nhận lời mời dựng form từ `input`, không dùng `signup-form`, vì `signup-form` luôn có ô Name, Email sửa được và checkbox Terms; thanh độ mạnh mật khẩu là phần tự dựng (§10.1, ADR 010).
 > **v0.24 (16/10/2026):** local và CI chạy RustFS thay cho MinIO: MinIO ngừng phát hành image từ 10/2025, image cũ không còn tải được (kiểm ở M2.2); client S3 là `aws4fetch`; provider cho production chốt ở M2.5 (§6.2, §6.3, §6.6, §12, §13). Upload một file mỗi request, trả chi tiết onboarding; mỗi task kèm `files`, các file chưa submit mà người xem được xem (BR-P03); `GET /files/:id/download-url` trả `{url, expiresAt}` (§8).
+> **v0.25 (16/10/2026):** reject chép các file của revision bị reject sang bản nháp của revision mới: dòng mới, dùng chung object, nên object chỉ bị xóa khi không còn dòng nào trỏ tới (§4.5, §7). Submit, approve, reject: thứ tự kiểm, mã lỗi, trả chi tiết onboarding; mỗi DOCUMENT kèm `submissions` (revision, file, quyết định) theo quyền xem file, file kèm `carriedOver` (§8, §9).
 
 ## TL;DR: 6 thay đổi lớn nhất
 
@@ -256,9 +257,9 @@ Task đang IN_PROGRESS không bao giờ quay về LOCKED_BY_DATE (BR-S01). APPRO
 1. Nhân viên mới upload file: DOCUMENT chuyển sang IN_PROGRESS; file chưa thuộc submission nào.
 2. **Submit:** tạo `document_submissions` với revision n+1, gắn các file vào → DOCUMENT COMPLETED → APPROVAL thành READY → báo cho approver.
 3. **Approve `{submissionId}`:** `submissionId` phải là revision mới nhất → lưu quyết định → APPROVAL COMPLETED → báo các task vừa READY → kiểm tra onboarding đã hoàn thành chưa.
-4. **Reject `{submissionId, reason}`:** lưu quyết định → DOCUMENT chuyển COMPLETED → IN_PROGRESS → APPROVAL vẫn PENDING (đang BLOCKED) → báo nhân viên mới kèm lý do → quay lại bước 1 với revision mới.
+4. **Reject `{submissionId, reason}`:** lưu quyết định → DOCUMENT chuyển COMPLETED → IN_PROGRESS, các file của revision bị reject được chép sang bản nháp (dòng mới, dùng chung object trong bucket) → APPROVAL vẫn PENDING (đang BLOCKED) → báo nhân viên mới kèm lý do → quay lại bước 1: người mới bỏ hoặc thêm file, rồi submit revision mới.
 
-Mỗi bước là một transaction. Revision, file và quyết định cũ không bao giờ bị sửa hay xóa.
+Mỗi bước là một transaction. Revision, file và quyết định cũ không bao giờ bị sửa hay xóa. Xóa một file đã chép sang chỉ xóa dòng của nó: object vẫn giữ, vì revision cũ còn trỏ tới.
 
 ### 4.6 Ngày tháng và business clock
 
@@ -523,7 +524,7 @@ Mọi bảng nghiệp vụ đều có `organization_id` và `created_at`. Không
 | `onboardings` | employee_id, template_id, template_version_id?, status, start_date, activated_at?, completed_at?, canceled_at?, cancel_reason?, version | partial unique(employee_id) WHERE status IN ('DRAFT','ACTIVE') |
 | `tasks` | onboarding_id, definition_key, phase_key, phase_name, phase_order, position (thứ tự trong template), title, description?, type, assignee_employee_id, reviews_task_id?, available_on, due_on, due_overridden, status, started_at?, completed_at? | unique(onboarding_id, definition_key); CHECK(available_on ≤ due_on) |
 | `task_dependencies` | task_id, depends_on_task_id | PK(cả hai cột); CHECK(task_id ≠ depends_on_task_id) |
-| `document_files` | task_id, submission_id?, storage_key, file_name, mime_type, size_bytes, uploaded_by | |
+| `document_files` | task_id, submission_id?, storage_key, file_name, mime_type, size_bytes, uploaded_by | Reject chép file của revision sang bản nháp: dòng mới, cùng storage_key, uploaded_by và created_at; object chỉ bị xóa khi không còn dòng nào trỏ tới |
 | `document_submissions` | task_id, revision, submitted_by, submitted_at | unique(task_id, revision) |
 | `approval_decisions` | approval_task_id, submission_id, decision, reason?, decided_by, decided_at | unique(approval_task_id, submission_id); CHECK(decision = 'APPROVED' OR reason IS NOT NULL) |
 | `notifications` | recipient_employee_id, kind, task_id?, title, body, link, read_at?, dedupe_key? | unique(dedupe_key) |
@@ -586,9 +587,16 @@ POST /tasks/:id/files       (multipart, field `file`, mỗi request 1 file)   DE
                                               # chỉ DOCUMENT, chỉ assignee; kiểm như start/complete (404 → 403 → không phải DOCUMENT 409 → khóa → sai status 409 → TASK_NOT_ELIGIBLE)
                                               # file (BR-P04): PDF/PNG/JPEG theo magic bytes, tối đa 4 MB, tối đa 5 file chưa submit; sai thì 400; lần upload đầu PENDING → IN_PROGRESS
                                               # cả hai trả chi tiết onboarding (201, 200). Mỗi task kèm files: các file chưa submit mà người xem được xem (BR-P03)
-POST /tasks/:id/submit
+POST /tasks/:id/submit                        # chỉ DOCUMENT, chỉ assignee; kiểm như upload; không có file chưa submit nào → 409
+                                              # mọi file chưa submit thành revision n+1 → DOCUMENT COMPLETED; DOCUMENT không có APPROVAL có thể là task cuối (BR-C01)
 POST /tasks/:id/approve     {submissionId}
-POST /tasks/:id/reject      {submissionId, reason}
+POST /tasks/:id/reject      {submissionId, reason}   # reason 1–1000 ký tự sau khi trim, thiếu → 400 (BR-R04)
+                                              # chỉ APPROVAL, chỉ assignee: 404 → 403 → không phải APPROVAL 409 → khóa → đã approve 409
+                                              # → chưa tới ngày, hoặc DOCUMENT đang rework 409 TASK_NOT_ELIGIBLE → submission không thuộc DOCUMENT được duyệt 404
+                                              # → không phải revision mới nhất 409 STALE_SUBMISSION. Approve: APPROVAL COMPLETED, có thể là task cuối (BR-C01)
+                                              # reject: DOCUMENT về IN_PROGRESS, bản nháp chép từ revision đó (§4.5). Submit, approve, reject trả chi tiết onboarding (200)
+                                              # mỗi DOCUMENT kèm submissions: các revision, mới nhất trước, kèm file và quyết định, chỉ cho người được xem file (BR-P03),
+                                              # người khác nhận mảng rỗng; file kèm carriedOver: chép từ revision trước, không upload lại
 POST /tasks/:id/reassign    {employeeId}
 POST /tasks/:id/due-date    {dueOn | null}     # null = reset về giá trị template
 GET  /files/:id/download-url                  # {url, expiresAt}: signed URL sống 5 phút, Content-Disposition attachment kèm tên file; không được xem → 404 (BR-P03)
@@ -632,7 +640,7 @@ Lỗi luôn trả về dạng `{ code, message, details? }`:
 | Reassign, chỉnh deadline | ✓ | — | — | — |
 | Làm task, approve/reject | khi được giao | khi được giao | khi được giao | khi được giao (không approve) |
 | Xem onboarding (DRAFT: chỉ HR) | mọi onboarding trong org | của direct reports | các onboarding mình có task | của mình |
-| Xem tài liệu | ✓ | chỉ khi là approver | chỉ khi là approver | của mình |
+| Xem tài liệu, kể cả revision và quyết định | ✓ | chỉ khi là approver | chỉ khi là approver | của mình |
 | Mock inbox | ✓ | trong sandbox | trong sandbox | trong sandbox |
 
 - **Xem onboarding:**

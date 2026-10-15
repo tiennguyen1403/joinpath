@@ -16,7 +16,11 @@ import { PrismaService } from '../../prisma.js';
 import { recordAudit } from '../audit/audit.js';
 import type { AuthContext } from '../auth/session.js';
 import { OnboardingService } from '../onboarding/onboarding.service.js';
-import { checkTask, findTask } from '../onboarding/task.service.js';
+import {
+  checkTask,
+  completeIfLast,
+  findTask,
+} from '../onboarding/task.service.js';
 import { canSeeFile } from './documents.policy.js';
 import { deleteObject, putObject, signedDownloadUrl } from './storage.js';
 
@@ -26,8 +30,8 @@ export type Upload = { originalname: string; buffer: Buffer<ArrayBuffer> };
 // A download link lives 5 minutes (PLAN §9).
 const LINK_SECONDS = 5 * 60;
 
-// The files of a DOCUMENT task (PLAN §4.5). Only its assignee adds or removes them, like any
-// work on a task (BR-E01); fewer people may read them than see the onboarding (BR-P03).
+// The files of a DOCUMENT task (PLAN §4.5). Only its assignee adds, removes or submits them,
+// like any work on a task (BR-E01); fewer people may read them than see the onboarding (BR-P03).
 @Injectable()
 export class DocumentsService {
   private readonly logger = new Logger(DocumentsService.name);
@@ -115,7 +119,7 @@ export class DocumentsService {
     taskId: string,
     fileId: string,
   ): Promise<OnboardingDetail> {
-    const { onboardingId, storageKey } = await this.prisma.$transaction(
+    const { onboardingId, unused } = await this.prisma.$transaction(
       async (tx) => {
         const task = await checkTask(tx, auth, taskId, 'DOCUMENT', [
           'PENDING',
@@ -138,10 +142,70 @@ export class DocumentsService {
           onboardingId: task.onboardingId,
           data: { taskId, fileName: file.fileName },
         });
-        return { onboardingId: task.onboardingId, storageKey: file.storageKey };
+        // A file carried over from a rejected revision shares its object with that revision,
+        // which keeps it (PLAN §4.5).
+        const shared = await tx.documentFile.count({
+          where: { taskId, storageKey: file.storageKey },
+        });
+        return {
+          onboardingId: task.onboardingId,
+          unused: shared === 0 ? file.storageKey : null,
+        };
       },
     );
-    await this.forget(storageKey);
+    if (unused) await this.forget(unused);
+    return this.onboardings.get(auth, onboardingId);
+  }
+
+  /**
+   * Every file not yet submitted becomes revision n+1, for the approval to review (PLAN §4.5).
+   * A document nobody reviews may be the last task, which completes the onboarding (BR-C01).
+   */
+  async submit(auth: AuthContext, taskId: string): Promise<OnboardingDetail> {
+    const onboardingId = await this.prisma.$transaction(async (tx) => {
+      const { onboardingId } = await checkTask(tx, auth, taskId, 'DOCUMENT', [
+        'PENDING',
+        'IN_PROGRESS',
+      ]);
+      // BR-E04. Counted under the lock, like the files an upload adds.
+      const files = await tx.documentFile.count({
+        where: { taskId, submissionId: null },
+      });
+      if (files === 0) {
+        throw new ConflictException('Upload a file before submitting');
+      }
+      // Revisions count up from 1 and are never deleted (BR-R07).
+      const revision =
+        (await tx.documentSubmission.count({ where: { taskId } })) + 1;
+      const submittedAt = new Date();
+      const submission = await tx.documentSubmission.create({
+        data: {
+          organizationId: auth.organizationId,
+          taskId,
+          revision,
+          submittedById: auth.employeeId,
+          submittedAt,
+        },
+        select: { id: true },
+      });
+      await tx.documentFile.updateMany({
+        where: { taskId, submissionId: null },
+        data: { submissionId: submission.id },
+      });
+      await tx.task.update({
+        where: { id: taskId },
+        data: { status: 'COMPLETED', completedAt: submittedAt },
+      });
+      await recordAudit(tx, auth, {
+        action: 'document.submitted',
+        entityType: 'document_submission',
+        entityId: submission.id,
+        onboardingId,
+        data: { taskId, revision },
+      });
+      await completeIfLast(tx, auth, onboardingId, submittedAt);
+      return onboardingId;
+    });
     return this.onboardings.get(auth, onboardingId);
   }
 

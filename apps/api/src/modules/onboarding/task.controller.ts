@@ -1,4 +1,5 @@
 import {
+  Body,
   Controller,
   Get,
   HttpCode,
@@ -7,7 +8,12 @@ import {
   Post,
   Req,
 } from '@nestjs/common';
-import type { MyTasks, OnboardingDetail } from '@joinpath/core';
+import {
+  approveSubmissionSchema,
+  type MyTasks,
+  type OnboardingDetail,
+  rejectSubmissionSchema,
+} from '@joinpath/core';
 import type { Request } from 'express';
 import { TaskService } from './task.service.js';
 
@@ -37,5 +43,29 @@ export class TaskController {
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<OnboardingDetail> {
     return this.tasks.complete(req.auth!, id);
+  }
+
+  @Post('tasks/:id/approve')
+  @HttpCode(200)
+  approve(
+    @Req() req: Request,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: unknown,
+  ): Promise<OnboardingDetail> {
+    return this.tasks.approve(
+      req.auth!,
+      id,
+      approveSubmissionSchema.parse(body),
+    );
+  }
+
+  @Post('tasks/:id/reject')
+  @HttpCode(200)
+  reject(
+    @Req() req: Request,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: unknown,
+  ): Promise<OnboardingDetail> {
+    return this.tasks.reject(req.auth!, id, rejectSubmissionSchema.parse(body));
   }
 }

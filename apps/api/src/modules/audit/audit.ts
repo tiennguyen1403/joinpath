@@ -14,6 +14,9 @@ export type AuditAction =
   | 'task.completed'
   | 'file.uploaded'
   | 'file.deleted'
+  | 'document.submitted'
+  | 'document.approved'
+  | 'document.rejected'
   | 'invitation.sent'
   | 'invitation.resent'
   | 'invitation.accepted'
@@ -33,6 +36,8 @@ export function recordAudit(
       | 'onboarding'
       | 'task'
       | 'document_file'
+      | 'document_submission'
+      | 'approval_decision'
       | 'invitation'
       | 'employee'
       | 'department';

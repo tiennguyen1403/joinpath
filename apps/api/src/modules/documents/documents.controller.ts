@@ -6,6 +6,7 @@ import {
   Delete,
   type ExceptionFilter,
   Get,
+  HttpCode,
   Param,
   ParseUUIDPipe,
   PayloadTooLargeException,
@@ -68,6 +69,15 @@ export class DocumentsController {
     @Param('fileId', ParseUUIDPipe) fileId: string,
   ): Promise<OnboardingDetail> {
     return this.documents.remove(req.auth!, id, fileId);
+  }
+
+  @Post('tasks/:id/submit')
+  @HttpCode(200)
+  submit(
+    @Req() req: Request,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<OnboardingDetail> {
+    return this.documents.submit(req.auth!, id);
   }
 
   @Get('files/:id/download-url')

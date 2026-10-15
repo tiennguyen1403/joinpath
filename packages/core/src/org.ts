@@ -6,6 +6,9 @@ export type Role = z.infer<typeof roleSchema>;
 /** BR-D04: everyone in a sandbox has an address at its own domain, so no two sandboxes share a login. */
 export const sandboxEmailDomain = (slug: string) => `${slug}.joinpath.demo`;
 
+// Someone a response names: an assignee, whoever submitted or decided.
+export const personSchema = z.object({ id: z.uuid(), fullName: z.string() });
+
 // Org API (PLAN §8), for HR only.
 export const departmentSchema = z.object({ id: z.uuid(), name: z.string() });
 export type Department = z.infer<typeof departmentSchema>;

@@ -14,10 +14,10 @@ import {
   type Client,
   createApp,
   errorOf,
-  giveAccount,
   type Org,
+  pdf,
+  png,
   seedOrg,
-  signIn,
 } from './app.js';
 
 // A document the new hire's manager reviews, and a task for IT, who therefore sees the
@@ -59,12 +59,6 @@ const reviewedByManager: TemplateDefinition = {
   ],
 };
 
-// Bytes that open as BR-P04's types, whatever comes after.
-const pdf = (size = 64) =>
-  Buffer.concat([Buffer.from('%PDF-1.7\n'), Buffer.alloc(size - 9, 0x20)]);
-const png = () =>
-  Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13]);
-
 // What the bucket holds under a task, read straight from storage (ListObjectsV2).
 const s3 = new AwsClient({
   accessKeyId: process.env.S3_ACCESS_KEY_ID!,
@@ -92,6 +86,8 @@ describe('documents', () => {
     bytes: Buffer,
     fileName: string,
   ) => client.upload(`/tasks/${id}/files`, bytes, fileName);
+  const submit = (client: Client, { id }: { id: string }) =>
+    client.post(`/tasks/${id}/submit`);
   const linkOf = async (client: Client, { id }: { id: string }) =>
     downloadUrlSchema.parse(
       (await client.get(`/files/${id}/download-url`).expect(200)).body,
@@ -114,15 +110,6 @@ describe('documents', () => {
     org.activate(
       await org.draftFor(employeeId, org.engineering.id, org.day(startsIn)),
     );
-  // A new hire with the account their invitation will give them (M2.1), signed in.
-  const hireWithAccount = async () => {
-    const id = await org.newHire();
-    const { fullName, email } = await org.prisma.employee.findUniqueOrThrow({
-      where: { id },
-    });
-    await giveAccount(org.prisma, org.organizationId, fullName);
-    return { id, client: await signIn(app, email) };
-  };
 
   beforeAll(async () => {
     app = await createApp();
@@ -161,6 +148,7 @@ describe('documents', () => {
           mimeType: 'application/pdf',
           sizeBytes: 64,
           uploadedAt: expect.any(String),
+          carriedOver: false,
         },
       ],
     });
@@ -178,6 +166,7 @@ describe('documents', () => {
           mimeType: 'image/png',
           sizeBytes: 12,
           uploadedAt: expect.any(String),
+          carriedOver: false,
         },
       ],
     });
@@ -222,7 +211,7 @@ describe('documents', () => {
   });
 
   it('AT-29 BR-P04 a file is refused unless its first bytes make it a PDF, PNG or JPEG, and above 4 MB; nothing is kept', async () => {
-    const hire = await hireWithAccount();
+    const hire = await org.hireWithAccount();
     const onboarding = await onboard(hire.id);
     const ids = taskOf(onboarding, 'Upload ID documents');
     // A Windows program, renamed to pass for a PDF.
@@ -263,7 +252,7 @@ describe('documents', () => {
   });
 
   it('BR-P04 PLAN §6.4 a submission takes five files at most, counted under the lock: of two uploads at once for the last place, one gets it', async () => {
-    const hire = await hireWithAccount();
+    const hire = await org.hireWithAccount();
     const ids = taskOf(await onboard(hire.id), 'Upload ID documents');
     for (const page of [1, 2, 3, 4]) {
       await upload(hire.client, ids, pdf(), `page-${page}.pdf`).expect(201);
@@ -289,9 +278,9 @@ describe('documents', () => {
     );
   });
 
-  it('AT-26 AT-27 BR-P02 BR-P03 FR-11 a file is seen by its uploader, the approver of its review and HR; to anyone else it is a 404, even who sees the onboarding', async () => {
+  it('AT-26 AT-27 BR-P02 BR-P03 FR-11 a file is seen by its uploader, the approver of its review and HR; to anyone else it is a 404, even who sees the onboarding; its revision likewise', async () => {
     const templateId = await org.publishedTemplate(reviewedByManager);
-    const hire = await hireWithAccount();
+    const hire = await org.hireWithAccount();
     const onboarding = await org.activate(
       await org.draftFor(hire.id, templateId, org.day(0)),
     );
@@ -347,10 +336,29 @@ describe('documents', () => {
     expect(await listed(org.hr)).toEqual([file]);
     expect(await listed(org.others.manager)).toEqual([file]);
     expect(await listed(org.others.IT)).toEqual([]);
+
+    // Submitted, the file moves to its revision, which the same people see.
+    await submit(hire.client, contract).expect(200);
+    const revisions = async (client: Client) =>
+      taskOf(await read(client, onboarding), 'Upload the signed contract')
+        .submissions;
+    for (const client of [hire.client, org.others.manager, org.hr]) {
+      expect(await revisions(client)).toEqual([
+        {
+          id: expect.any(String),
+          revision: 1,
+          submittedBy: { id: hire.id, fullName: hire.fullName },
+          submittedAt: expect.any(String),
+          files: [file],
+          decision: null,
+        },
+      ]);
+    }
+    expect(await revisions(org.others.IT)).toEqual([]);
   });
 
-  it('PLAN §7 BR-R07 the assignee deletes a file not yet submitted, object and all; a submitted one is kept', async () => {
-    const hire = await hireWithAccount();
+  it('PLAN §7 BR-R07 the assignee deletes a file not yet submitted, object and all; a submitted one is kept, and so is its object when its copy in the next revision goes', async () => {
+    const hire = await org.hireWithAccount();
     const onboarding = await onboard(hire.id);
     const ids = taskOf(onboarding, 'Upload ID documents');
     await upload(hire.client, ids, pdf(), 'front.pdf').expect(201);
@@ -385,32 +393,41 @@ describe('documents', () => {
     });
     await remove(hire.client, { id: randomUUID() }).expect(404);
 
-    // Submitting comes in M2.3: a revision made by hand takes the other file.
-    await org.prisma.documentSubmission.create({
-      data: {
-        organizationId: org.organizationId,
-        taskId: ids.id,
-        revision: 1,
-        submittedById: hire.id,
-        submittedAt: new Date(),
-        files: { connect: { id: back.id } },
-      },
-    });
+    // Submitted and sent back, the document takes files again, starting from a copy of the
+    // back over the same object (PLAN §4.5).
+    const submitted = detailOf(await submit(hire.client, ids).expect(200));
+    const [revision] = taskOf(submitted, 'Upload ID documents').submissions;
+    const sentBack = await org.hr
+      .post(`/tasks/${taskOf(onboarding, 'Review ID documents').id}/reject`, {
+        submissionId: revision.id,
+        reason: 'Add the front again',
+      })
+      .expect(200);
+    const [copy] = taskOf(detailOf(sentBack), 'Upload ID documents').files;
+    expect(copy).toEqual({ ...back, id: copy.id, carriedOver: true });
+    expect(copy.id).not.toBe(back.id);
+    // The submitted file stays with its revision (BR-R07).
     expect(errorOf(await remove(hire.client, back).expect(409))).toEqual({
       code: 'INVALID_STATE',
       message: "A submitted file can't be deleted",
     });
-    // A submitted file is no longer one for the next submission.
-    expect(
-      taskOf(await read(org.hr, onboarding), 'Upload ID documents').files,
-    ).toEqual([]);
+    // Its copy goes, but not the object, which the revision still names.
+    const dropped = await remove(hire.client, copy).expect(200);
+    expect(taskOf(detailOf(dropped), 'Upload ID documents')).toMatchObject({
+      status: 'IN_PROGRESS',
+      files: [],
+    });
+    expect(await keysOf(ids)).toHaveLength(1);
+    expect((await fetch((await linkOf(org.hr, back)).url)).status).toBe(200);
     expect(
       await org.prisma.auditEvent.findMany({
         where: { onboardingId: onboarding.id, action: 'file.deleted' },
+        orderBy: { createdAt: 'asc' },
         select: { entityId: true, data: true },
       }),
     ).toEqual([
       { entityId: front.id, data: { taskId: ids.id, fileName: 'front.pdf' } },
+      { entityId: copy.id, data: { taskId: ids.id, fileName: 'back.png' } },
     ]);
   });
 

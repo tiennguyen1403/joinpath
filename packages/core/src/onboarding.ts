@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { addDays, type IsoDate } from './dates.js';
-import { documentFileSchema } from './documents.js';
-import { employeeSchema, type Role } from './org.js';
+import { documentFileSchema, documentSubmissionSchema } from './documents.js';
+import { employeeSchema, personSchema, type Role } from './org.js';
 import {
   assigneeRuleSchema,
   taskDefSchema,
@@ -249,8 +249,6 @@ export const onboardingSummarySchema = onboardingSchema.extend({
 });
 export type OnboardingSummary = z.infer<typeof onboardingSummarySchema>;
 
-const personSchema = z.object({ id: z.uuid(), fullName: z.string() });
-
 // What activating the draft now would create. HR's picks stay in the wizard until activate.
 export const activationPreviewSchema = z.object({
   // Its templateVersion is the one to send back to activate.
@@ -303,6 +301,9 @@ export const taskSchema = z.object({
   // DOCUMENT only: the files not yet submitted, oldest first, of those the viewer may see
   // (BR-P03). Empty for any other task.
   files: z.array(documentFileSchema),
+  // DOCUMENT only: its revisions, newest first, each with the decision on it, for those who
+  // may see its files (BR-P03). Empty for any other task.
+  submissions: z.array(documentSubmissionSchema),
 });
 export type Task = z.infer<typeof taskSchema>;
 

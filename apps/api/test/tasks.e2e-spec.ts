@@ -14,10 +14,10 @@ import {
   type Client,
   createApp,
   errorOf,
-  giveAccount,
   newSlug,
   type Org,
   PASSWORD,
+  pdf,
   seedOrg,
   signIn,
 } from './app.js';
@@ -44,15 +44,6 @@ describe('tasks', () => {
     org.activate(
       await org.draftFor(employeeId, org.engineering.id, org.day(startsIn)),
     );
-  // A new hire with the account their invitation will give them (M2.1), signed in.
-  const hireWithAccount = async () => {
-    const id = await org.newHire();
-    const { fullName, email } = await org.prisma.employee.findUniqueOrThrow({
-      where: { id },
-    });
-    await giveAccount(org.prisma, org.organizationId, fullName);
-    return { id, client: await signIn(app, email) };
-  };
   const userOf = (email: string) =>
     org.prisma.user.findUniqueOrThrow({ where: { email } });
 
@@ -125,14 +116,21 @@ describe('tasks', () => {
       errorOf(await complete(org.others.IT, accounts).expect(409)),
     ).toEqual(waits);
 
-    // Uploading and approving come in M2.
-    await org.prisma.task.updateMany({
-      where: {
-        onboardingId: onboarding.id,
-        type: { in: ['DOCUMENT', 'APPROVAL'] },
-      },
-      data: { status: 'COMPLETED' },
-    });
+    // An submits the ID, which isn't enough either: HR has to approve it.
+    const ids = taskOf(onboarding, 'Upload ID documents');
+    await An.upload(`/tasks/${ids.id}/files`, pdf(), 'id.pdf').expect(201);
+    const submitted = detailOf(
+      await An.post(`/tasks/${ids.id}/submit`).expect(200),
+    );
+    expect(
+      errorOf(await complete(org.others.IT, accounts).expect(409)),
+    ).toEqual(waits);
+    const [revision] = taskOf(submitted, 'Upload ID documents').submissions;
+    await org.hr
+      .post(`/tasks/${taskOf(onboarding, 'Review ID documents').id}/approve`, {
+        submissionId: revision.id,
+      })
+      .expect(200);
     await complete(org.others.IT, accounts).expect(200);
     const res = await start(An, devEnv).expect(200);
     expect(taskOf(detailOf(res), 'Set up dev environment')).toMatchObject({
@@ -269,7 +267,7 @@ describe('tasks', () => {
   });
 
   it('§4.4 BR-E05 a document or an approval is neither started nor completed by hand, and no request sets a status', async () => {
-    const hire = await hireWithAccount();
+    const hire = await org.hireWithAccount();
     const onboarding = await onboard(hire.id, 0);
     const refusal = {
       code: 'INVALID_STATE',
@@ -356,7 +354,7 @@ describe('tasks', () => {
   });
 
   it('FR-10 My Tasks lists every task assigned to me by due date, each with its onboarding; availability tells the tabs apart', async () => {
-    const hire = await hireWithAccount();
+    const hire = await org.hireWithAccount();
     const mine = async () =>
       myTasksSchema.parse(
         (await hire.client.get('/tasks/mine').expect(200)).body,

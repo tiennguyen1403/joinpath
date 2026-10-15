@@ -68,8 +68,14 @@ export async function signIn(app: INestApplication<App>, email: string) {
 }
 export type Client = Awaited<ReturnType<typeof signIn>>;
 
-// Checklists only, so an onboarding can complete before documents and approvals can (M2):
-// every seeded template has an ID upload and its review.
+// Bytes that open as BR-P04's types, whatever comes after.
+export const pdf = (size = 64) =>
+  Buffer.concat([Buffer.from('%PDF-1.7\n'), Buffer.alloc(size - 9, 0x20)]);
+export const png = () =>
+  Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13]);
+
+// Checklists only, so an onboarding completes in a few calls: every seeded template has an ID
+// upload and its review.
 export const checklists: TemplateDefinition = {
   phases: [{ key: 'day-1', name: 'Day 1' }],
   tasks: [
@@ -161,6 +167,16 @@ export async function seedOrg(app: INestApplication<App>) {
     });
     return employee.id;
   };
+  // Someone new with the account their invitation will give them (M2.1), signed in: one more
+  // login for the file (BR-P06).
+  const hireWithAccount = async () => {
+    const id = await newHire();
+    const { fullName, email } = await prisma.employee.findUniqueOrThrow({
+      where: { id },
+    });
+    await giveAccount(prisma, organizationId, fullName);
+    return { id, fullName, client: await signIn(app, email) };
+  };
   const draftFor = async (
     employeeId: string,
     templateId = engineering.id,
@@ -225,6 +241,7 @@ export async function seedOrg(app: INestApplication<App>) {
     day: (offset: number) =>
       addDays(today(organization.timezone, 0, new Date()), offset),
     newHire,
+    hireWithAccount,
     draftFor,
     activate,
     publishedTemplate,

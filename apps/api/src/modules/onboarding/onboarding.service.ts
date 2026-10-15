@@ -58,6 +58,21 @@ export const onboardingSelect = {
   templateVersion: { select: { id: true, version: true } },
 } satisfies Prisma.OnboardingSelect;
 
+const fileSelect = {
+  id: true,
+  fileName: true,
+  mimeType: true,
+  sizeBytes: true,
+  uploadedById: true,
+  // Never sent: shared by a file and its copies (PLAN §4.5), it tells a carried-over file.
+  storageKey: true,
+  createdAt: true,
+} satisfies Prisma.DocumentFileSelect;
+const filesInOrder = [
+  { createdAt: 'asc' },
+  { id: 'asc' },
+] satisfies Prisma.DocumentFileOrderByWithRelationInput[];
+
 export const taskSelect = {
   id: true,
   phaseKey: true,
@@ -78,18 +93,30 @@ export const taskSelect = {
   status: true,
   startedAt: true,
   completedAt: true,
-  // A document's files not yet submitted, which only some may see (BR-P03): its uploader, the
-  // assignee of the approval reviewing it, and HR.
+  // A document's files not yet submitted, and its revisions, which only some may see
+  // (BR-P03): its uploader, the assignee of the approval reviewing it, and HR.
   files: {
     where: { submissionId: null },
-    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    orderBy: filesInOrder,
+    select: fileSelect,
+  },
+  submissions: {
+    orderBy: { revision: 'desc' },
     select: {
       id: true,
-      fileName: true,
-      mimeType: true,
-      sizeBytes: true,
-      uploadedById: true,
-      createdAt: true,
+      revision: true,
+      submittedBy: { select: { id: true, fullName: true } },
+      submittedAt: true,
+      files: { orderBy: filesInOrder, select: fileSelect },
+      // One at most (BR-R03).
+      decisions: {
+        select: {
+          decision: true,
+          reason: true,
+          decidedBy: { select: { id: true, fullName: true } },
+          decidedAt: true,
+        },
+      },
     },
   },
   reviewedBy: { select: { assigneeEmployeeId: true } },
@@ -127,6 +154,7 @@ type OnboardingRow = Prisma.OnboardingGetPayload<{
   select: typeof onboardingSelect;
 }>;
 type TaskRow = Prisma.TaskGetPayload<{ select: typeof taskSelect }>;
+type FileRow = TaskRow['files'][number];
 type DetailRow = Prisma.OnboardingGetPayload<{ select: typeof detailSelect }>;
 
 export function toOnboarding({
@@ -164,6 +192,7 @@ export function toTask(
     startedAt,
     completedAt,
     files,
+    submissions,
     reviewedBy,
     ...task
   }: TaskRow,
@@ -177,6 +206,23 @@ export function toTask(
     dueOn: toIsoDate(dueOn),
   };
   const approverId = reviewedBy.at(0)?.assigneeEmployeeId;
+  const sees = (uploadedById: string) =>
+    canSeeFile(viewer, { uploadedById, approverId });
+  // `before`: the files of the revision before, from which a rejection carried some over.
+  const toFiles = (list: FileRow[], before: FileRow[] = []) => {
+    const carried = new Set(before.map((file) => file.storageKey));
+    return list
+      .filter((file) => sees(file.uploadedById))
+      .map((file) => ({
+        id: file.id,
+        fileName: file.fileName,
+        // Only ever written from sniffMimeType (BR-P04).
+        mimeType: file.mimeType as DocumentMimeType,
+        sizeBytes: file.sizeBytes,
+        uploadedAt: file.createdAt.toISOString(),
+        carriedOver: carried.has(file.storageKey),
+      }));
+  };
   return {
     ...task,
     ...dates,
@@ -190,18 +236,22 @@ export function toTask(
       today,
     ),
     overdue: isOverdue({ status: task.status, ...dates }, today),
-    files: files
-      .filter((file) =>
-        canSeeFile(viewer, { uploadedById: file.uploadedById, approverId }),
-      )
-      .map((file) => ({
-        id: file.id,
-        fileName: file.fileName,
-        // Only ever written from sniffMimeType (BR-P04).
-        mimeType: file.mimeType as DocumentMimeType,
-        sizeBytes: file.sizeBytes,
-        uploadedAt: file.createdAt.toISOString(),
-      })),
+    files: toFiles(files, submissions.at(0)?.files),
+    // Newest first, so the one before each is the next one along.
+    submissions: submissions.flatMap((submission, i) => {
+      if (!sees(submission.submittedBy.id)) return [];
+      const decision = submission.decisions.at(0);
+      return {
+        id: submission.id,
+        revision: submission.revision,
+        submittedBy: submission.submittedBy,
+        submittedAt: submission.submittedAt.toISOString(),
+        files: toFiles(submission.files, submissions.at(i + 1)?.files),
+        decision: decision
+          ? { ...decision, decidedAt: decision.decidedAt.toISOString() }
+          : null,
+      };
+    }),
   };
 }
 

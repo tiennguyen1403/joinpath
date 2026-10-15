@@ -2,10 +2,10 @@
 
 > File này được nạp vào mọi session qua `CLAUDE.md`. Giữ ngắn: chỉ trạng thái hiện tại. Lịch sử chi tiết nằm trong `docs/sessions/`.
 
-**Cập nhật:** 2026-10-16 · session 018 (M2.2 · Upload tài liệu)
-**Mốc hiện tại:** M2 · Tài liệu và duyệt, đang làm: M2.1 xong (lời mời qua mock inbox), M2.2 xong (API upload, xóa file, signed download trên RustFS ở local). Cả hai chưa push. M1 · Workflow engine đã xong: tiêu chí PLAN §13 đạt trên production (trừ onboarding tự COMPLETED, chờ task của nhân viên mới ở M2). M0 · Walking skeleton đã xong: CI trên GitHub Actions, demo public tại https://joinpath.vercel.app.
+**Cập nhật:** 2026-10-16 · session 019 (M2.3 · Submit, approve / reject / rework)
+**Mốc hiện tại:** M2 · Tài liệu và duyệt, đang làm: M2.1 xong (lời mời qua mock inbox), M2.2 xong (API upload, xóa file, signed download trên RustFS ở local), M2.3 xong (API submit, approve, reject; reject chép file sang revision mới). Cả ba chưa push. M1 · Workflow engine đã xong: tiêu chí PLAN §13 đạt trên production (trừ onboarding tự COMPLETED, chờ task của nhân viên mới ở M2). M0 · Walking skeleton đã xong: CI trên GitHub Actions, demo public tại https://joinpath.vercel.app.
 
-**Session kế tiếp:** **M2.3 · Submit revision, approve / reject / rework** (xem bảng). Bước đầu: chốt với user việc reject gửi email ngay hay chờ `notify()` của M3.2 (quyết định mở bên dưới). Handoff mới nhất: `docs/sessions/018-M2.2-document-upload.md`; dữ liệu đọc từ canvas nằm ở handoff 005, 008, 009 và 016.
+**Session kế tiếp:** **M2.4a · Web: portal nhân viên mới, upload, submit, lịch sử duyệt** (xem bảng). Bước đầu: đọc mục "Canvas cho M2.4" trong handoff 019 và bảng NewHirePortal trên canvas, rồi chốt cách dựng (`file-upload` của beUI). Handoff mới nhất: `docs/sessions/019-M2.3-submit-review.md`; dữ liệu đọc từ canvas nằm ở handoff 005, 008, 009, 016 và 019.
 
 ## Quy ước session
 
@@ -37,12 +37,12 @@ Trạng thái: ✅ xong · ▶ kế tiếp · ⏳ chưa làm. Mốc M3–M5 mớ
 | M2.1a | API lời mời: bảng `invitations`, `mock_emails`; activate gửi lời mời; tra cứu và nhận lời mời, resend, `GET /mock-inbox` | AT-10 (phần invitation), AT-30, AT-32 pass; có throttle khi tra cứu và nhận lời mời | ✅ |
 | M2.1b | Web: Mock inbox, trang nhận lời mời, khung Invitation (Resend) ở detail, dòng lời mời ở wizard và toast | Qua UI: HR activate → mở email → đặt mật khẩu → An đăng nhập, thấy task của mình; sau Resend, link cũ hết hiệu lực | ✅ |
 | M2.2 | RustFS (compose + CI), upload (magic bytes, 4 MB, 5 file), xóa file chưa submit, signed download, need-to-know | AT-26, AT-27, AT-29 pass; lần upload đầu chuyển DOCUMENT sang IN_PROGRESS | ✅ |
-| **M2.3** | Submit revision, approve / reject / rework | AT-15…AT-18 pass (AT-19 cần reassign, M3.1); AT-13 bỏ đoạn đánh dấu bằng Prisma | ▶ |
-| M2.4a | Web: portal nhân viên mới, upload, submit, lịch sử duyệt | An upload, submit qua UI ở 390 px và desktop | ⏳ |
+| M2.3 | Submit revision, approve / reject / rework | AT-15…AT-18 pass (AT-19 cần reassign, M3.1); AT-13 bỏ đoạn đánh dấu bằng Prisma | ✅ |
+| **M2.4a** | Web: portal nhân viên mới, upload, submit, lịch sử duyệt | An upload, submit qua UI ở 390 px và desktop | ▶ |
 | M2.4b | Web: drawer review (xem file), approve / reject kèm lý do; nút cho DOCUMENT, APPROVAL trong My Tasks | Qua UI: Lan reject → An nộp revision 2 → Lan approve | ⏳ |
 | M2.5 | Golden path ở local, rà nhóm test P, push | Golden path bước 2–9 chạy trọn ở local (đăng nhập từng vai thay cho đổi vai, tua ngày bằng API); nhóm R, P pass | ⏳ |
 | M3.1 | Đổi ngày, reassign, override deadline, hủy; phần cancel của AT-06 | | ⏳ |
-| M3.2 | Thông báo in-app + cron tick | | ⏳ |
+| M3.2 | Thông báo in-app + cron tick; báo approver khi có submit, báo nhân viên mới khi bị reject (kèm lý do) hay được approve (BR-N02, chốt ở M2.3) | | ⏳ |
 | M3.3 | Sandbox mỗi khách + Dynamic Island (đổi vai, ngày nghiệp vụ); phần đổi vai của AT-31 | | ⏳ |
 | M3.4 | Dashboard HR + timeline | | ⏳ |
 | M3.5 | Demo public end-to-end trên host | **Mốc an toàn** | ⏳ |
@@ -58,7 +58,6 @@ Trạng thái: ✅ xong · ▶ kế tiếp · ⏳ chưa làm. Mốc M3–M5 mớ
 ## Quyết định còn mở
 
 - Provider storage cho production (S3-compatible; ứng viên R2, Tigris, Amazon S3 qua Vercel Marketplace, handoff 018): chốt ở M2.5, trước khi push. Tạo tài khoản dịch vụ ngoài thì hỏi user trước. **API đọc 5 biến `S3_*` lúc khởi động: push lên `main` khi Vercel chưa có đủ các biến đó thì API không boot.**
-- Reject gửi email kèm lý do vào mock inbox ngay ở M2.3, hay chờ `notify()` của M3.2 (BR-N02): chốt ở M2.3.
 - Người gọi cron tick (PLAN §6.5): chốt ở M3.2. Vercel Hobby chỉ cho cron chạy mỗi ngày một lần, nên nhiều khả năng dùng GitHub Actions `schedule`.
 - Preview deployment: origin khác `APP_ORIGIN` nên mọi request ghi bị 403, và preview dùng chung DB với production. Chốt khi bắt đầu dùng PR: tắt preview, hoặc cho phép origin của preview và dùng Neon branch.
 - Swagger `/api/docs` (PLAN §8) chưa thuộc session nào; khi thêm phải chỉnh CSP của `helmet`. Gắn vào session nào?
