@@ -29,6 +29,24 @@ export const formatDateIn = (timestamp: string, timeZone: string) =>
     new Date(timestamp),
   );
 
+// Small counts read as words, as the canvas writes them: "Two people have the IT role".
+const WORDS = [
+  'no',
+  'one',
+  'two',
+  'three',
+  'four',
+  'five',
+  'six',
+  'seven',
+  'eight',
+  'nine',
+  'ten',
+];
+export const inWords = (n: number) => WORDS[n] ?? String(n);
+export const capitalized = (text: string) =>
+  text[0].toUpperCase() + text.slice(1);
+
 /** "in 12 days", "today" or "3 days ago", counted from the org's today. */
 export function formatFromToday(today: IsoDate, date: IsoDate) {
   const days = Math.round(

@@ -1,9 +1,18 @@
 'use client';
 
-import { type OnboardingDetail, onboardingDetailSchema } from '@joinpath/core';
+import {
+  type OnboardingDetail,
+  onboardingDetailSchema,
+  type Task,
+  type TaskStatus,
+} from '@joinpath/core';
 import { useQuery } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { Avatar, newHireTint } from '@/components/avatar';
+import {
+  TodoList,
+  type TodoItemStatus,
+} from '@/components/beui/agents/todo-list';
 import { cn } from '@/components/beui/lib/utils';
 import {
   Alert,
@@ -18,16 +27,22 @@ import {
   useAnimatedToastStack,
 } from '@/components/beui/motion/animated-toast-stack';
 import { EmptyState } from '@/components/empty-state';
+import { TaskBadge, waitsFor } from '@/components/task-status';
 import { api, ApiError } from '@/lib/api';
-import { formatDate, formatFromToday } from '@/lib/format';
+import {
+  capitalized,
+  formatDate,
+  formatDateIn,
+  formatFromToday,
+  inWords,
+} from '@/lib/format';
 import { usePageCrumb } from '../../app-shell';
 import { STATUS_BADGE } from '../onboardings-table';
-import { capitalized, inWords } from '../review';
 import { Wizard } from '../wizard';
 
 /**
  * An onboarding's page. A draft is still the wizard, at its review; once activated it is
- * the onboarding's header, which M1.7 follows with the tasks.
+ * the onboarding's header and its tasks by phase.
  */
 export function OnboardingView({
   id,
@@ -75,7 +90,10 @@ export function OnboardingView({
           onActivated={activated}
         />
       ) : (
-        <Header onboarding={data} />
+        <>
+          <Header onboarding={data} timeZone={timeZone} />
+          <Phases onboarding={data} timeZone={timeZone} />
+        </>
       );
   } else if (
     error instanceof ApiError &&
@@ -112,10 +130,24 @@ export function OnboardingView({
   );
 }
 
-// The canvas's header; Change start date and Cancel come with M3.1, the tabs from M1.7.
-function Header({ onboarding }: { onboarding: OnboardingDetail }) {
-  const { employee, template, templateVersion, tasks, startDate, today } =
-    onboarding;
+// The canvas's header; Change start date and Cancel come with M3.1, tabs with a second view
+// (Activity in M3.4, Graph in M4.3).
+function Header({
+  onboarding,
+  timeZone,
+}: {
+  onboarding: OnboardingDetail;
+  timeZone: string;
+}) {
+  const {
+    employee,
+    template,
+    templateVersion,
+    tasks,
+    startDate,
+    today,
+    completedAt,
+  } = onboarding;
   const done = tasks.filter(({ status }) => status === 'COMPLETED').length;
   const badge = STATUS_BADGE[onboarding.status];
   return (
@@ -162,6 +194,11 @@ function Header({ onboarding }: { onboarding: OnboardingDetail }) {
         </Stat>
         <Stat
           label="Progress"
+          note={
+            completedAt
+              ? `Finished ${formatDateIn(completedAt, timeZone)}`
+              : undefined
+          }
           bar={
             // The words above carry the value, as in the onboardings table.
             <div
@@ -183,6 +220,109 @@ function Header({ onboarding }: { onboarding: OnboardingDetail }) {
           </span>
         </Stat>
       </div>
+    </>
+  );
+}
+
+const TODO_STATUS: Record<TaskStatus, TodoItemStatus> = {
+  PENDING: 'pending',
+  IN_PROGRESS: 'in-progress',
+  COMPLETED: 'completed',
+  CANCELED: 'cancelled',
+};
+
+// Each phase a todo list (PLAN §10.1). One whose tasks are all done starts folded.
+function Phases({
+  onboarding: { tasks },
+  timeZone,
+}: {
+  onboarding: OnboardingDetail;
+  timeZone: string;
+}) {
+  // The API sends the tasks by phase, then template order.
+  const phases = [...Map.groupBy(tasks, (task) => task.phaseOrder).values()];
+  return (
+    <div className="flex flex-col gap-3">
+      {phases.map((phase) => (
+        <TodoList
+          key={phase[0].phaseKey}
+          title={phaseTitle(phase)}
+          defaultOpen={phase.some(({ status }) => status !== 'COMPLETED')}
+          // Taller than any phase: the page scrolls, never the list.
+          maxHeight={10_000}
+          items={phase.map((task) => ({
+            id: task.id,
+            title: (
+              <span
+                className={
+                  task.status === 'COMPLETED' || task.status === 'CANCELED'
+                    ? 'text-muted-foreground'
+                    : 'text-foreground'
+                }
+              >
+                {task.title}
+              </span>
+            ),
+            status: TODO_STATUS[task.status],
+            // A started task holds a still arc rather than beUI's endless spinner.
+            progress: 50,
+            meta: <TaskMeta task={task} tasks={tasks} timeZone={timeZone} />,
+            detail: <TaskBadge task={task} tasks={tasks} />,
+          }))}
+        />
+      ))}
+    </div>
+  );
+}
+
+// "Day 1 · Mon, Oct 26" when every task of the phase opens that day, as the canvas names it.
+function phaseTitle(phase: Task[]) {
+  const [{ phaseName, availableOn }] = phase;
+  return phase.every((task) => task.availableOn === availableOn)
+    ? `${phaseName} · ${formatDate(availableOn)}`
+    : phaseName;
+}
+
+// Who does it and by when; started and done are real times, shown where the company is.
+function TaskMeta({
+  task,
+  tasks,
+  timeZone,
+}: {
+  task: Task;
+  tasks: Task[];
+  timeZone: string;
+}) {
+  const { assignee, status, startedAt, completedAt, overdue } = task;
+  if (status === 'COMPLETED' && completedAt) {
+    return (
+      <>
+        {assignee.fullName} · done{' '}
+        <span className="font-mono">{formatDateIn(completedAt, timeZone)}</span>
+      </>
+    );
+  }
+  const waiting =
+    task.availability === 'LOCKED_BY_DATE' &&
+    tasks.some(
+      (other) =>
+        task.dependsOn.includes(other.id) && other.status !== 'COMPLETED',
+    );
+  return (
+    <>
+      {assignee.fullName} · due{' '}
+      <span className={cn('font-mono', overdue && 'text-danger-strong')}>
+        {formatDate(task.dueOn)}
+      </span>
+      {overdue && <span className="text-danger-strong"> · overdue</span>}
+      {status === 'IN_PROGRESS' && startedAt && (
+        <>
+          {' '}
+          · started{' '}
+          <span className="font-mono">{formatDateIn(startedAt, timeZone)}</span>
+        </>
+      )}
+      {waiting && ` · then waits for ${waitsFor(task, tasks)}`}
     </>
   );
 }

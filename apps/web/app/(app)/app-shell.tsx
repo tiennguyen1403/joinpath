@@ -1,7 +1,11 @@
 'use client';
 
 import type { Me } from '@joinpath/core';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import {
+  QueryClient,
+  QueryClientProvider,
+  useQuery,
+} from '@tanstack/react-query';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   createContext,
@@ -42,6 +46,7 @@ import { Button } from '@/components/beui/motion/button/base';
 import { Logo } from '@/components/logo';
 import { ApiError } from '@/lib/api';
 import { findNavItem, NAV, type NavItem } from '@/lib/nav';
+import { myTasksQuery } from './tasks/my-tasks';
 
 type Crumb = { label: string };
 const SetCrumb = createContext<Dispatch<SetStateAction<Crumb | null>>>(
@@ -58,6 +63,15 @@ export function usePageCrumb(label: string | undefined) {
     // Clears only its own: the next page may already have set one.
     return () => setCrumb((current) => (current === crumb ? null : current));
   }, [label, setCrumb]);
+}
+
+// How many of my tasks are open, beside My tasks as the canvas's sidebar has it.
+function TasksToDo() {
+  const { data } = useQuery(myTasksQuery);
+  const count = data?.tasks.filter(
+    ({ availability }) => availability === 'READY',
+  ).length;
+  return count ? <span className="tabular-nums">{count}</span> : null;
 }
 
 export function AppShell({ me, children }: { me: Me; children: ReactNode }) {
@@ -132,6 +146,7 @@ export function AppShell({ me, children }: { me: Me; children: ReactNode }) {
                   )}
                 />
               }
+              badge={href === '/tasks' ? <TasksToDo /> : undefined}
               // Pressed: 3% over the 5% hover pill comes to the 8% of ADR 009.
               className="active:bg-foreground/[0.03]"
             >

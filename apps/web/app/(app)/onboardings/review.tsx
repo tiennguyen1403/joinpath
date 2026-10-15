@@ -25,14 +25,6 @@ import {
 } from 'reicon-react';
 import { Avatar, tintOf } from '@/components/avatar';
 import { cn } from '@/components/beui/lib/utils';
-import {
-  Alert,
-  AlertContent,
-  AlertDescription,
-  AlertIcon,
-  AlertTitle,
-  type AlertVariant,
-} from '@/components/beui/motion/alert';
 import { AnimatedBadge } from '@/components/beui/motion/animated-badge';
 import { Button, ButtonLink } from '@/components/beui/motion/button/base';
 import {
@@ -41,28 +33,12 @@ import {
   SelectItem,
   SelectTrigger,
 } from '@/components/beui/motion/select';
+import { Notice } from '@/components/notice';
 import { Table, Td, Th, THead, Tr } from '@/components/table';
 import { api, ApiError } from '@/lib/api';
-import { formatDate, formatMonthDay } from '@/lib/format';
+import { capitalized, formatDate, formatMonthDay, inWords } from '@/lib/format';
 import { Divider, NewHire, PRIMARY, type Step, WizardFrame } from './wizard';
 
-// Small counts read as words, as the canvas writes them: "Two people have the IT role".
-const WORDS = [
-  'no',
-  'one',
-  'two',
-  'three',
-  'four',
-  'five',
-  'six',
-  'seven',
-  'eight',
-  'nine',
-  'ten',
-];
-export const inWords = (n: number) => WORDS[n] ?? String(n);
-export const capitalized = (text: string) =>
-  text[0].toUpperCase() + text.slice(1);
 const countTasks = (n: number) => `${inWords(n)} ${n === 1 ? 'task' : 'tasks'}`;
 
 const TYPES: Record<
@@ -338,39 +314,6 @@ export function Review({
         </>
       )}
     </WizardFrame>
-  );
-}
-
-function Notice({
-  variant,
-  title,
-  text,
-}: {
-  variant: AlertVariant;
-  title: string;
-  text: string;
-}) {
-  return (
-    <Alert
-      variant={variant}
-      className={
-        {
-          default: '',
-          success: '',
-          info: 'bg-primary/7 text-primary-strong',
-          warning: 'bg-warning/7 text-warning-strong',
-          destructive: 'bg-destructive/7 text-danger-strong',
-        }[variant]
-      }
-    >
-      <AlertIcon />
-      <AlertContent>
-        <AlertTitle>{title}</AlertTitle>
-        <AlertDescription className="text-muted-foreground">
-          {text}
-        </AlertDescription>
-      </AlertContent>
-    </Alert>
   );
 }
 

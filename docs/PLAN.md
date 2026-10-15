@@ -1,4 +1,4 @@
-# Joinpath — Kế hoạch triển khai v0.18
+# Joinpath — Kế hoạch triển khai v0.19
 
 > **Joinpath**: Employee Onboarding & Workflow Management Platform, dự án portfolio Full-stack.
 > Bản này tinh chỉnh SRS v0.4 trong thread ChatGPT "Thiết kế dự án onboarding" (14/10/2026).
@@ -16,6 +16,7 @@
 > **v0.16 (15/10/2026):** `start`, `complete` chỉ cho CHECKLIST, kiểm theo thứ tự cố định, trả chi tiết onboarding; `GET /tasks/mine` trả `{today, tasks}`, client chia tab theo availability; `POST /demo/clock/advance` nhận 1–30 ngày, mọi vai trong sandbox, trả `{today}` (§8).
 > **v0.17 (15/10/2026):** mỗi dòng của `GET /onboardings` kèm `progress {completed, total, overdue}` và `nextTask`; onboarding kèm `completedAt` (§8); bảng tự dựng theo token thay cho `table` của beUI, TanStack Table chỉ thêm khi cần sort, lọc, phân trang (§6.2, §10.1, ADR 010).
 > **v0.18 (15/10/2026):** `GET /auth/me` kèm ngày nghiệp vụ `organization.today` (§8); wizard: chọn nhân viên trong bảng có radio, template bằng thẻ `radio`, start date bằng lịch `date-range-picker` chế độ một ngày, override bằng nút Change mở `select` (§10.1, ADR 010).
+> **v0.19 (15/10/2026):** Onboarding detail hiện task theo phase bằng `todo-list` (sửa tại chỗ: dòng `meta` dưới tên task, mỗi khối mang tên phase), không dùng bảng tự dựng; My Tasks chia tab bằng `tabs` (§10.1, ADR 010).
 
 ## TL;DR: 6 thay đổi lớn nhất
 
@@ -670,7 +671,7 @@ Nguyên tắc (ADR 010): có component beUI thì dùng, không tự vẽ và kh�
 | Task phụ thuộc | `multi-select` | Template editor |
 | Sắp xếp task | `sortable-stack` | Template editor |
 | Loại task | `radio` | Template editor |
-| Checklist của một phase | `todo-list` | Onboarding detail, New-hire portal, Landing |
+| Checklist của một phase | `todo-list` (sửa tại chỗ: `meta`, ADR 010) | Onboarding detail, New-hire portal, Landing |
 | Duyệt hoặc yêu cầu sửa | `approval-card` + `drawer` | Review |
 | Xem file đã nộp | `image-viewer` | Review |
 | Upload giấy tờ | `file-upload` | New-hire portal |
@@ -678,7 +679,7 @@ Nguyên tắc (ADR 010): có component beUI thì dùng, không tự vẽ và kh�
 | Báo kết quả vừa xảy ra | `animated-toast-stack` | Sau khi activate, Landing |
 | Thao tác trên dòng task | `context-menu` | Onboarding detail |
 | Giải thích vì sao nút bị khóa | `tooltip` | Nút Publish của Template editor |
-| Danh sách onboarding, bảng task theo phase | tự dựng (`components/table.tsx`), không dùng `table` của beUI | Dashboard, Onboardings, New onboarding, Onboarding detail |
+| Danh sách onboarding, bảng task theo phase | tự dựng (`components/table.tsx`), không dùng `table` của beUI | Dashboard, Onboardings, New onboarding |
 | Bề mặt, thông báo, công tắc, nút | `card`, `alert`, `switch`, `button-base` | Mọi nơi |
 
 Tự dựng theo token vì beUI không có: thanh tiến độ onboarding, avatar chữ cái đầu, các bước của wizard, textarea, canvas dependency graph (React Flow). Bảng cũng tự dựng (M1.6a, ADR 010): `table` của beUI là data grid ảo hóa, khung cuộn cao cố định, mọi dòng cao bằng nhau và cần `@tanstack/react-virtual`, trong khi bảng của Joinpath ngắn và các dòng cao khác nhau.
