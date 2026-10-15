@@ -286,3 +286,16 @@ export const onboardingDetailSchema = onboardingSchema.extend({
   tasks: z.array(taskSchema),
 });
 export type OnboardingDetail = z.infer<typeof onboardingDetailSchema>;
+
+// GET /tasks/mine: a task assigned to the signed-in person, with the onboarding it is part of.
+export const myTaskSchema = taskSchema.extend({ onboarding: onboardingSchema });
+export type MyTask = z.infer<typeof myTaskSchema>;
+
+export const myTasksSchema = z.object({
+  // The org's business date (PLAN §4.6), which the tasks' availability comes from.
+  today: z.iso.date(),
+  // Every task assigned to them, by due date. Availability sorts them into the tabs of My
+  // Tasks: READY to do, LOCKED_BY_DATE or BLOCKED upcoming, COMPLETED done.
+  tasks: z.array(myTaskSchema),
+});
+export type MyTasks = z.infer<typeof myTasksSchema>;

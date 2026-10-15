@@ -23,3 +23,14 @@ export function visibleOnboardings({
     ],
   };
 }
+
+/**
+ * Work on a task is its assignee's, whatever their role, HR's included (PLAN §9). Anyone
+ * else who sees the task gets a 403 (BR-E01, BR-P02).
+ */
+export function canWorkOn(
+  { employeeId }: AuthContext,
+  task: { assigneeEmployeeId: string },
+): boolean {
+  return task.assigneeEmployeeId === employeeId;
+}

@@ -2,7 +2,6 @@ import { randomUUID } from 'node:crypto';
 import type { INestApplication } from '@nestjs/common';
 import {
   activationPreviewSchema,
-  addDays,
   type Onboarding,
   onboardingDetailSchema,
   onboardingSchema,
@@ -14,15 +13,15 @@ import {
 } from '@joinpath/core';
 import type { App } from 'supertest/types.js';
 import { seedDemoOrg } from '../src/modules/demo/seed.js';
-import { PrismaService } from '../src/prisma.js';
+import type { PrismaService } from '../src/prisma.js';
 import {
   type Client,
   createApp,
   errorOf,
-  giveAccount,
   newSlug,
+  type Org,
   PASSWORD,
-  signIn,
+  seedOrg,
 } from './app.js';
 
 // The least a template needs to publish.
@@ -45,47 +44,23 @@ const definition: TemplateDefinition = {
 describe('onboardings', () => {
   let app: INestApplication<App>;
   let prisma: PrismaService;
-  let seeded: Awaited<ReturnType<typeof seedDemoOrg>>;
+  let seeded: Org['seeded'];
   let organizationId: string;
   let managerId: string;
   let engineering: Template;
   let general: Template;
   let hr: Client;
-  // IT is Duc Tran, IT2 Huy Le. An Vo and Bao Ho are new hires with an account.
-  let others: Record<'IT' | 'IT2' | 'manager' | 'An' | 'Bao', Client>;
+  let others: Org['others'];
   let anVo: { id: string };
   let baoHo: { id: string };
-  // HR's picks for the two IT tasks of Engineering Onboarding, which two people could take.
   let itPicks: Record<string, string>;
+  let day: Org['day'];
+  let newHire: Org['newHire'];
+  let draftFor: Org['draftFor'];
+  let activate: Org['activate'];
+  let publishedTemplate: Org['publishedTemplate'];
 
-  // The org's business date, `offset` days on.
-  const day = (offset: number) =>
-    addDays(today(seeded.organization.timezone, 0, new Date()), offset);
-  // Someone new with no account, who reports to the seed's manager unless told otherwise, so
-  // tests never trip over each other's open onboardings (BR-A01).
-  let hires = 0;
-  const newHire = async (manager: string | null = managerId) => {
-    hires += 1;
-    const employee = await prisma.employee.create({
-      data: {
-        organizationId,
-        fullName: `Hire ${hires}`,
-        email: `hire.${hires}@${seeded.organization.slug}.joinpath.demo`,
-        jobTitle: 'Engineer',
-        managerId: manager,
-      },
-    });
-    return employee.id;
-  };
   const create = (body: object) => hr.post('/onboardings', body);
-  const draftFor = async (
-    employeeId: string,
-    templateId = engineering.id,
-    startDate = '2026-11-02',
-  ) =>
-    onboardingSchema.parse(
-      (await create({ employeeId, templateId, startDate }).expect(201)).body,
-    );
   const read = async (client: Client, id: string) =>
     onboardingDetailSchema.parse(
       (await client.get(`/onboardings/${id}`).expect(200)).body,
@@ -99,60 +74,27 @@ describe('onboardings', () => {
     activationPreviewSchema.parse(
       (await hr.get(`/onboardings/${id}/activation-preview`).expect(200)).body,
     );
-  // As the wizard does: the version the preview shows, and the IT picks, which a template
-  // without those tasks ignores.
-  const activate = async ({ id }: { id: string }) => {
-    const { onboarding } = await preview(id);
-    const res = await hr
-      .post(`/onboardings/${id}/activate`, {
-        templateVersionId: onboarding.templateVersion.id,
-        assignees: itPicks,
-      })
-      .expect(200);
-    return onboardingDetailSchema.parse(res.body);
-  };
-  // A new template with one published version.
-  let templates = 0;
-  const publishedTemplate = async () => {
-    templates += 1;
-    const res = await hr
-      .post('/templates', { name: `Test template ${templates}` })
-      .expect(201);
-    const { id, versions } = templateSchema.parse(res.body);
-    await hr
-      .put(`/template-versions/${versions[0].id}`, definition)
-      .expect(200);
-    await hr.post(`/template-versions/${versions[0].id}/publish`).expect(200);
-    return id;
-  };
-  const employeeOf = async (email: string) =>
-    (await prisma.user.findUniqueOrThrow({ where: { email } })).employeeId;
 
   beforeAll(async () => {
     app = await createApp();
-    prisma = app.get(PrismaService);
-    seeded = await seedDemoOrg(prisma, { slug: newSlug(), password: PASSWORD });
-    organizationId = seeded.organization.id;
-    managerId = await employeeOf(seeded.emails.manager);
-    const duc = await employeeOf(seeded.emails.it);
-    itPicks = { 'prepare-laptop': duc, 'create-accounts': duc };
-    const an = await giveAccount(prisma, organizationId, 'An Vo');
-    const bao = await giveAccount(prisma, organizationId, 'Bao Ho');
-    anVo = an;
-    baoHo = bao;
-    hr = await signIn(app, seeded.emails.hr);
-    others = {
-      IT: await signIn(app, seeded.emails.it),
-      IT2: await signIn(app, seeded.emails.it2),
-      manager: await signIn(app, seeded.emails.manager),
-      An: await signIn(app, an.email),
-      Bao: await signIn(app, bao.email),
-    };
-    const all = templateSchema
-      .array()
-      .parse((await hr.get('/templates').expect(200)).body);
-    engineering = all.find((t) => t.name === 'Engineering Onboarding')!;
-    general = all.find((t) => t.name === 'General Onboarding')!;
+    ({
+      prisma,
+      seeded,
+      organizationId,
+      managerId,
+      engineering,
+      general,
+      hr,
+      others,
+      anVo,
+      baoHo,
+      itPicks,
+      day,
+      newHire,
+      draftFor,
+      activate,
+      publishedTemplate,
+    } = await seedOrg(app));
   });
 
   afterAll(async () => {
@@ -274,7 +216,7 @@ describe('onboardings', () => {
   });
 
   it('AT-05 BR-A03 BR-A08 a newly published version changes what a draft would get, never a running onboarding', async () => {
-    const templateId = await publishedTemplate();
+    const templateId = await publishedTemplate(definition);
     const draft = await draftFor(await newHire(), templateId);
     const active = await activate(await draftFor(await newHire(), templateId));
     expect(draft.templateVersion.version).toBe(1);
@@ -307,7 +249,7 @@ describe('onboardings', () => {
   });
 
   it('BR-T12 an archived template takes no new onboarding and activates no draft; a draft that has it can still change', async () => {
-    const templateId = await publishedTemplate();
+    const templateId = await publishedTemplate(definition);
     const draft = await draftFor(await newHire(), templateId);
     const another = await draftFor(await newHire());
     await hr.post(`/templates/${templateId}/archive`).expect(200);
@@ -689,7 +631,7 @@ describe('onboardings', () => {
   });
 
   it('AT-09 BR-A03 activating the version the preview showed, once a newer one is published, is a 409', async () => {
-    const templateId = await publishedTemplate();
+    const templateId = await publishedTemplate(definition);
     const draft = await draftFor(await newHire(), templateId);
     const shown = (await preview(draft.id)).onboarding.templateVersion;
     const res = await hr.post(`/templates/${templateId}/versions`).expect(201);

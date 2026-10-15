@@ -3,6 +3,7 @@ import { APP_FILTER } from '@nestjs/core';
 import { AppController } from './app.controller.js';
 import { HttpErrorFilter } from './http-error.filter.js';
 import { AuthModule } from './modules/auth/auth.module.js';
+import { DemoModule } from './modules/demo/demo.module.js';
 import { OnboardingModule } from './modules/onboarding/onboarding.module.js';
 import { OrgModule } from './modules/org/org.module.js';
 import { TemplatesModule } from './modules/templates/templates.module.js';
@@ -15,6 +16,7 @@ import { PrismaModule } from './prisma.js';
     OrgModule,
     TemplatesModule,
     OnboardingModule,
+    DemoModule,
   ],
   controllers: [AppController],
   providers: [{ provide: APP_FILTER, useClass: HttpErrorFilter }],

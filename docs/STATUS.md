@@ -2,10 +2,10 @@
 
 > File này được nạp vào mọi session qua `CLAUDE.md`. Giữ ngắn: chỉ trạng thái hiện tại. Lịch sử chi tiết nằm trong `docs/sessions/`.
 
-**Cập nhật:** 2026-10-15 · session 009 (M1.4b · Preview và activate)
-**Mốc hiện tại:** M1 · Workflow engine, xong M1.1–M1.4b (`core`; API template; API onboarding tới activate). M0 · Walking skeleton đã xong (xem bảng): CI trên GitHub Actions, demo public tại https://joinpath.vercel.app.
+**Cập nhật:** 2026-10-15 · session 010 (M1.5 · API task)
+**Mốc hiện tại:** M1 · Workflow engine, xong M1.1–M1.5 (`core`; API template; API onboarding tới activate; API task và đồng hồ demo). M0 · Walking skeleton đã xong (xem bảng): CI trên GitHub Actions, demo public tại https://joinpath.vercel.app.
 
-**Session kế tiếp:** **M1.5 · API task** (xem bảng). Handoff mới nhất: `docs/sessions/009-M1.4b-activation.md`; dữ liệu đọc từ canvas nằm ở handoff 005, 008 và 009.
+**Session kế tiếp:** **M1.6 · Web: danh sách onboarding và wizard** (xem bảng). Handoff mới nhất: `docs/sessions/010-M1.5-task-api.md`; dữ liệu đọc từ canvas nằm ở handoff 005, 008 và 009.
 
 ## Quy ước session
 
@@ -30,8 +30,8 @@ Trạng thái: ✅ xong · ▶ kế tiếp · ⏳ chưa làm. Mốc M2–M5 mớ
 | M1.3 | API template (8 endpoint chỉ HR), seed Engineering v1 + v2 và General, audit | AT-01…AT-04, AT-06 (phần publish), BR-T02 pass | ✅ |
 | M1.4a | API draft onboarding: 3 bảng, `GET /employees`, `GET /departments`, tạo và sửa draft, xem theo phạm vi | AT-11, BR-T12 (phần tạo), BR-P01, P02 pass | ✅ |
 | M1.4b | API onboarding: `today(org)`, activation preview, activate; task trong `GET /onboardings/:id`; xem onboarding qua task được giao (mọi vai) | AT-05, AT-06 (phần activate), AT-07…AT-10 (A10 phần activate), BR-T12 pass | ✅ |
-| **M1.5** | API task: `start`/`complete` checklist (khóa theo onboarding, §6.4), BR-E01, onboarding tự COMPLETED, `GET /tasks/mine`, `POST /demo/clock/advance` (chỉ sandbox, chỉ tiến; chưa có tick) | AT-12…AT-14, AT-23, AT-31 (phần đồng hồ) pass | ▶ |
-| M1.6 | Web: TanStack Query, danh sách onboarding, wizard (nhân viên → template + ngày → preview + chọn, override assignee → activate; canvas chưa có override: làm bản trước/sau) | Activate template seed qua UI; khớp màn NewOnboarding | ⏳ |
+| M1.5 | API task: `start`/`complete` checklist (khóa theo onboarding, §6.4), BR-E01, onboarding tự COMPLETED, `GET /tasks/mine`, `POST /demo/clock/advance` (chỉ sandbox, chỉ tiến; chưa có tick) | AT-12…AT-14, AT-23, AT-31 (phần đồng hồ) pass | ✅ |
+| **M1.6** | Web: TanStack Query, danh sách onboarding, wizard (nhân viên → template + ngày → preview + chọn, override assignee → activate; canvas chưa có override: làm bản trước/sau) | Activate template seed qua UI; khớp màn NewOnboarding | ▶ |
 | M1.7 | Web: onboarding detail (task theo phase, badge availability) + My Tasks | IT và Manager complete checklist qua UI; khóa theo ngày/dependency đúng; onboarding tự COMPLETED | ⏳ |
 | M1.8 | Employees: API tạo, sửa (email lowercase khi ghi, vì unique của `users.email` phân biệt hoa thường) + màn danh sách và form | Integration test employees pass; HR tạo, sửa nhân viên qua UI | ⏳ |
 | M1.9 | Templates: danh sách + lịch sử version (chỉ xem); chốt tiêu chí M1; push + deploy (hỏi user) | Tiêu chí M1 (PLAN §13) đạt trên production; nhóm test T, A, E pass (trừ A07, E04 thuộc M2) | ⏳ |
@@ -62,6 +62,7 @@ Trạng thái: ✅ xong · ▶ kế tiếp · ⏳ chưa làm. Mốc M2–M5 mớ
 - `image-viewer` (PLAN §10.1) không có trên registry beUI: chọn thay thế ở M2.4 (ứng viên `morphing-lightbox`).
 - BR-R01 ở mức template: M1.4a chốt không thêm rule chặn publish. Còn mở cho M4.1: editor có gợi ý (không chặn) khi DOCUMENT và APPROVAL của nó cùng giao `DIRECT_MANAGER` không?
 - Nút "Discard draft" (canvas, editor) cần xóa DRAFT, trái PLAN §7 (không xóa bản ghi nghiệp vụ) và §8 (không có endpoint): chốt ở M4.1.
+- Onboarding tự COMPLETED qua UI (tiêu chí của M1.7, M1.9): template seed nào cũng có DOCUMENT và APPROVAL, mà tới M2 mới làm xong được. Seed thêm một template chỉ có checklist, hay để phần này cho M2.5? Chốt ở M1.7. API đã kiểm bằng test (BR-C01, AT-23).
 
 ## Chạy dự án
 
@@ -74,6 +75,8 @@ pnpm db:migrate        # prisma migrate dev (lần đầu, hoặc khi đổi sch
 pnpm db:seed           # tạo lại org acme: lan.pham@acme.joinpath.demo (HR), duc.tran@… (IT), minh.nguyen@… (MEMBER)
 pnpm dev               # web http://localhost:3000 (đăng nhập ở /login) · api http://localhost:3001/api/health
 pnpm test              # cần Postgres + migration; rồi pnpm lint · pnpm typecheck · pnpm format:check
+# Tua ngày nghiệp vụ: POST /api/demo/clock/advance {days} (1–30, org sandbox; acme là sandbox), chưa có UI (M3.3). Đưa đồng hồ local về hôm nay:
+docker compose exec -T postgres psql -U joinpath -d joinpath -c "UPDATE organizations SET clock_offset_days = 0 WHERE slug = 'acme'"
 pnpm exec playwright-cli -s=joinpath open http://localhost:3000/login   # Chrome có cửa sổ để kiểm tra UI; `show` mở dashboard xem trực tiếp
 ```
 

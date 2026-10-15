@@ -1,4 +1,4 @@
-# Joinpath — Kế hoạch triển khai v0.15
+# Joinpath — Kế hoạch triển khai v0.16
 
 > **Joinpath**: Employee Onboarding & Workflow Management Platform, dự án portfolio Full-stack.
 > Bản này tinh chỉnh SRS v0.4 trong thread ChatGPT "Thiết kế dự án onboarding" (14/10/2026).
@@ -13,6 +13,7 @@
 > **v0.13 (15/10/2026):** partial unique index khai báo ngay trong Prisma schema (preview `partialIndexes`), CHECK vẫn viết SQL tay (§6.2); `POST /templates` tạo kèm DRAFT v1 rỗng; archive không đảo ngược; mọi route template chỉ dành cho HR, kể cả GET (§8).
 > **v0.14 (15/10/2026):** bỏ `tasks.completed_by`, vì chỉ assignee complete được task nên cột này luôn trùng `assignee_employee_id` (§7); body của `POST` và `PATCH /onboardings`, draft hiện bản published mới nhất (§8); người không phải HR không thấy onboarding DRAFT, còn ai có task trong một onboarding thì xem được onboarding đó (§9).
 > **v0.15 (15/10/2026):** preview là `GET` không nhận lựa chọn của HR; wizard giữ lựa chọn và gửi một lần trong body của activate, `assignees` tùy chọn (§4.7); shape của preview, activate trả chi tiết onboarding kèm task, `details` của 422 (§8).
+> **v0.16 (15/10/2026):** `start`, `complete` chỉ cho CHECKLIST, kiểm theo thứ tự cố định, trả chi tiết onboarding; `GET /tasks/mine` trả `{today, tasks}`, client chia tab theo availability; `POST /demo/clock/advance` nhận 1–30 ngày, mọi vai trong sandbox, trả `{today}` (§8).
 
 ## TL;DR: 6 thay đổi lớn nhất
 
@@ -556,8 +557,10 @@ POST /onboardings/:id/resend-invitation
 GET  /onboardings/:id/activity
 
 # Tasks
-GET  /tasks/mine
-POST /tasks/:id/start       POST /tasks/:id/complete
+GET  /tasks/mine                              # {today, tasks: [Task + onboarding]}: mọi task giao cho mình, theo dueOn; client chia tab theo availability
+POST /tasks/:id/start       POST /tasks/:id/complete   # chỉ CHECKLIST, chỉ assignee (mọi vai); trả chi tiết onboarding như activate
+                                              # thứ tự kiểm: ngoài phạm vi 404 → không phải assignee 403 → không phải CHECKLIST 409
+                                              # → khóa (§6.4), onboarding không ACTIVE 409 → sai status 409 → chưa tới ngày, prerequisite chưa xong 409 TASK_NOT_ELIGIBLE
 POST /tasks/:id/files       (multipart)       DELETE /tasks/:id/files/:fileId   # chỉ file chưa submit
 POST /tasks/:id/submit
 POST /tasks/:id/approve     {submissionId}
@@ -572,6 +575,7 @@ GET /mock-inbox             GET /dashboard
 
 # Demo (chỉ sandbox) và internal
 POST /demo/sandboxes        POST /demo/switch-user {employeeId}   POST /demo/clock/advance {days}
+                                              # clock/advance: days nguyên 1–30, mọi vai; ngoài sandbox 403; trả {today}; từ M3.2 chạy kèm tick
 POST /internal/cron/tick                      # yêu cầu header secret
 ```
 

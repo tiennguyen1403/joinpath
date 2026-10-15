@@ -13,7 +13,10 @@ import {
   isOverdue,
   type Onboarding,
   type OnboardingDetail,
+  type OnboardingStatus,
   planActivation,
+  type Task,
+  type TaskStatus,
   type TemplateDefinition,
   type UpdateOnboarding,
 } from '@joinpath/core';
@@ -25,10 +28,11 @@ import { orgToday, personSelect } from '../org/org.service.js';
 import { visibleOnboardings } from './onboarding.policy.js';
 
 // DATE columns travel as midnight UTC; the API speaks 'YYYY-MM-DD' (PLAN §4.6).
-const toIsoDate = (date: Date): IsoDate => date.toISOString().slice(0, 10);
+export const toIsoDate = (date: Date): IsoDate =>
+  date.toISOString().slice(0, 10);
 const fromIsoDate = (date: IsoDate) => new Date(`${date}T00:00:00Z`);
 
-const onboardingSelect = {
+export const onboardingSelect = {
   id: true,
   status: true,
   startDate: true,
@@ -49,40 +53,43 @@ const onboardingSelect = {
   templateVersion: { select: { id: true, version: true } },
 } satisfies Prisma.OnboardingSelect;
 
+export const taskSelect = {
+  id: true,
+  phaseKey: true,
+  phaseName: true,
+  phaseOrder: true,
+  position: true,
+  title: true,
+  description: true,
+  type: true,
+  assignee: { select: { id: true, fullName: true } },
+  reviewsTaskId: true,
+  dependsOn: {
+    orderBy: { dependsOn: { position: 'asc' } },
+    select: { dependsOnTaskId: true },
+  },
+  availableOn: true,
+  dueOn: true,
+  status: true,
+  startedAt: true,
+  completedAt: true,
+} satisfies Prisma.TaskSelect;
+
 const detailSelect = {
   ...onboardingSelect,
   tasks: {
     orderBy: [{ phaseOrder: 'asc' }, { position: 'asc' }],
-    select: {
-      id: true,
-      phaseKey: true,
-      phaseName: true,
-      phaseOrder: true,
-      position: true,
-      title: true,
-      description: true,
-      type: true,
-      assignee: { select: { id: true, fullName: true } },
-      reviewsTaskId: true,
-      dependsOn: {
-        orderBy: { dependsOn: { position: 'asc' } },
-        select: { dependsOnTaskId: true },
-      },
-      availableOn: true,
-      dueOn: true,
-      status: true,
-      startedAt: true,
-      completedAt: true,
-    },
+    select: taskSelect,
   },
 } satisfies Prisma.OnboardingSelect;
 
 type OnboardingRow = Prisma.OnboardingGetPayload<{
   select: typeof onboardingSelect;
 }>;
+type TaskRow = Prisma.TaskGetPayload<{ select: typeof taskSelect }>;
 type DetailRow = Prisma.OnboardingGetPayload<{ select: typeof detailSelect }>;
 
-function toOnboarding({
+export function toOnboarding({
   id,
   status,
   startDate,
@@ -107,33 +114,44 @@ function toOnboarding({
 }
 
 // Availability and overdue are worked out on each read, from the org's today (PLAN §4.4).
+export function toTask(
+  { dependsOn, availableOn, dueOn, startedAt, completedAt, ...task }: TaskRow,
+  onboardingStatus: OnboardingStatus,
+  prereqStatuses: TaskStatus[],
+  today: IsoDate,
+): Task {
+  const dates = {
+    availableOn: toIsoDate(availableOn),
+    dueOn: toIsoDate(dueOn),
+  };
+  return {
+    ...task,
+    ...dates,
+    dependsOn: dependsOn.map((dep) => dep.dependsOnTaskId),
+    startedAt: startedAt?.toISOString() ?? null,
+    completedAt: completedAt?.toISOString() ?? null,
+    availability: availability(
+      { status: task.status, ...dates },
+      onboardingStatus,
+      prereqStatuses,
+      today,
+    ),
+    overdue: isOverdue({ status: task.status, ...dates }, today),
+  };
+}
+
 function toDetail(row: DetailRow, today: IsoDate): OnboardingDetail {
   const statusById = new Map(row.tasks.map((task) => [task.id, task.status]));
   return {
     ...toOnboarding(row),
     today,
-    tasks: row.tasks.map(
-      ({ dependsOn, availableOn, dueOn, startedAt, completedAt, ...task }) => {
-        const dates = {
-          availableOn: toIsoDate(availableOn),
-          dueOn: toIsoDate(dueOn),
-        };
-        const prereqs = dependsOn.map((dep) => dep.dependsOnTaskId);
-        return {
-          ...task,
-          ...dates,
-          dependsOn: prereqs,
-          startedAt: startedAt?.toISOString() ?? null,
-          completedAt: completedAt?.toISOString() ?? null,
-          availability: availability(
-            { status: task.status, ...dates },
-            row.status,
-            prereqs.map((prereq) => statusById.get(prereq)!),
-            today,
-          ),
-          overdue: isOverdue({ status: task.status, ...dates }, today),
-        };
-      },
+    tasks: row.tasks.map((task) =>
+      toTask(
+        task,
+        row.status,
+        task.dependsOn.map((dep) => statusById.get(dep.dependsOnTaskId)!),
+        today,
+      ),
     ),
   };
 }

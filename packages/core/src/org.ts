@@ -20,3 +20,14 @@ export const employeeSchema = z.object({
     .nullable(),
 });
 export type Employee = z.infer<typeof employeeSchema>;
+
+// Demo API (PLAN §8): in a sandbox, anyone moves the org's business date on (BR-D02).
+export const advanceClockSchema = z.object({
+  // Forward only (PLAN §4.6), and a month at most: the seeded workflows span a few weeks.
+  days: z.int().min(1).max(30),
+});
+export type AdvanceClock = z.infer<typeof advanceClockSchema>;
+
+// The org's business date once moved.
+export const clockSchema = z.object({ today: z.iso.date() });
+export type Clock = z.infer<typeof clockSchema>;
