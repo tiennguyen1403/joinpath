@@ -268,7 +268,7 @@ describe('tasks', () => {
     ]);
   });
 
-  it('§4.4 a document or an approval is neither started nor completed by hand', async () => {
+  it('§4.4 BR-E05 a document or an approval is neither started nor completed by hand, and no request sets a status', async () => {
     const hire = await hireWithAccount();
     const onboarding = await onboard(hire.id, 0);
     const refusal = {
@@ -285,6 +285,11 @@ describe('tasks', () => {
         refusal,
       );
     }
+    // BR-E05: a status changes only through the commands; no route takes one.
+    const upload = taskOf(onboarding, 'Upload ID documents');
+    await hire.client
+      .patch(`/tasks/${upload.id}`, { status: 'COMPLETED' })
+      .expect(404);
   });
 
   it('BR-C01 BR-C02 the last task completed completes the onboarding in the same transaction; then nothing moves', async () => {

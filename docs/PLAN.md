@@ -1,4 +1,4 @@
-# Joinpath — Kế hoạch triển khai v0.20
+# Joinpath — Kế hoạch triển khai v0.21
 
 > **Joinpath**: Employee Onboarding & Workflow Management Platform, dự án portfolio Full-stack.
 > Bản này tinh chỉnh SRS v0.4 trong thread ChatGPT "Thiết kế dự án onboarding" (14/10/2026).
@@ -18,6 +18,7 @@
 > **v0.18 (15/10/2026):** `GET /auth/me` kèm ngày nghiệp vụ `organization.today` (§8); wizard: chọn nhân viên trong bảng có radio, template bằng thẻ `radio`, start date bằng lịch `date-range-picker` chế độ một ngày, override bằng nút Change mở `select` (§10.1, ADR 010).
 > **v0.19 (15/10/2026):** Onboarding detail hiện task theo phase bằng `todo-list` (sửa tại chỗ: dòng `meta` dưới tên task, mỗi khối mang tên phase), không dùng bảng tự dựng; My Tasks chia tab bằng `tabs` (§10.1, ADR 010).
 > **v0.20 (15/10/2026):** HR thêm và đổi tên phòng ban (`POST /departments`, `PATCH /departments/:id`, không xóa), tạo và sửa hồ sơ nhân viên: email lưu chữ thường, chỉ đổi được khi người đó chưa có tài khoản; manager không được là chính họ hay người báo cáo cho họ; `GET /auth/me` kèm `organization.emailDomain` (§8); màn Employees dùng `tabs`, `input`, `select` và bảng tự dựng (§10.1).
+> **v0.21 (15/10/2026):** màn Templates chỉ xem (M1.9): bảng tự dựng, mỗi dòng liệt kê các version, mới nhất trước, và đánh dấu Current cho bản mà onboarding mới sẽ dùng; template chưa publish hoặc đã archive mang badge (§10.1).
 
 ## TL;DR: 6 thay đổi lớn nhất
 
@@ -667,7 +668,7 @@ Nguyên tắc (ADR 010): có component beUI thì dùng, không tự vẽ và kh�
 | Điều hướng app | `animated-sidebar` | Mọi màn của HR / IT sau đăng nhập |
 | Điều khiển demo (ngày nghiệp vụ, đổi vai) | `dynamic-island` | Mọi màn trong sandbox |
 | Đang ở đâu | `breadcrumb` | Header các trang |
-| Trạng thái task và onboarding | `animated-badge` | Danh sách, bảng, header |
+| Trạng thái task, onboarding và template | `animated-badge` | Danh sách, bảng, header |
 | Đổi chế độ xem, lọc danh sách | `tabs` | Onboarding detail và graph, My tasks, Mock inbox, Template editor, Review, Employees (People, Departments) |
 | Chọn một người | `select` | New onboarding (ô chọn và nút Change ở bước 3), Template editor, Employees (manager; phòng ban cũng dùng `select`) |
 | Chọn một mục trong danh sách | `radio` | New onboarding (nhân viên ở bước 1, template ở bước 2) |
@@ -685,7 +686,7 @@ Nguyên tắc (ADR 010): có component beUI thì dùng, không tự vẽ và kh�
 | Báo kết quả vừa xảy ra | `animated-toast-stack` | Sau khi activate, Landing |
 | Thao tác trên dòng task | `context-menu` | Onboarding detail |
 | Giải thích vì sao nút bị khóa | `tooltip` | Nút Publish của Template editor |
-| Danh sách onboarding, nhân viên, phòng ban; bảng task theo phase | tự dựng (`components/table.tsx`), không dùng `table` của beUI | Dashboard, Onboardings, New onboarding, Employees |
+| Danh sách onboarding, nhân viên, phòng ban, template; bảng task theo phase | tự dựng (`components/table.tsx`), không dùng `table` của beUI | Dashboard, Onboardings, New onboarding, Employees, Templates |
 | Bề mặt, thông báo, công tắc, nút | `card`, `alert`, `switch`, `button-base` | Mọi nơi |
 
 Tự dựng theo token vì beUI không có: thanh tiến độ onboarding, avatar chữ cái đầu, các bước của wizard, textarea, canvas dependency graph (React Flow). Bảng cũng tự dựng (M1.6a, ADR 010): `table` của beUI là data grid ảo hóa, khung cuộn cao cố định, mọi dòng cao bằng nhau và cần `@tanstack/react-virtual`, trong khi bảng của Joinpath ngắn và các dòng cao khác nhau.

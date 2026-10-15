@@ -346,17 +346,20 @@ describe('onboardings', () => {
     ).toEqual([{ action: 'onboarding.created' }]);
   });
 
-  it('FR-07 PATCH refuses a bad body, an unknown onboarding, and one that is no longer a draft', async () => {
+  it('FR-07 BR-E05 PATCH refuses a bad body, a status, an unknown onboarding, and one that is no longer a draft', async () => {
     const draft = await draftFor(await newHire());
     const path = `/onboardings/${draft.id}`;
+    // BR-E05: status is not a field, so { status } changes as little as {}.
     for (const body of [
       {},
+      { status: 'ACTIVE' },
       { startDate: '2026-02-30' },
       { employeeId: 'nobody' },
     ]) {
       const res = await hr.patch(path, body).expect(400);
       expect(errorOf(res).code).toBe('VALIDATION_FAILED');
     }
+    expect((await read(hr, draft.id)).status).toBe('DRAFT');
     await hr
       .patch(`/onboardings/${randomUUID()}`, { startDate: '2026-11-09' })
       .expect(404);
@@ -661,7 +664,7 @@ describe('onboardings', () => {
     });
   });
 
-  it('FR-26 preview and activate refuse a bad body, an unknown onboarding, and one already activated', async () => {
+  it('FR-26 BR-A02 preview and activate refuse a bad body, an unknown onboarding, and one already activated', async () => {
     const draft = await draftFor(await newHire());
     const { onboarding } = await preview(draft.id);
     const templateVersionId = onboarding.templateVersion.id;
@@ -947,7 +950,7 @@ describe('onboardings', () => {
     });
   });
 
-  it('AT-06 §9 only HR creates, edits, previews or activates an onboarding', async () => {
+  it('AT-06 BR-A02 §9 only HR creates, edits, previews or activates an onboarding', async () => {
     const employeeId = await newHire();
     const draft = await draftFor(await newHire());
     const { onboarding } = await preview(draft.id);
