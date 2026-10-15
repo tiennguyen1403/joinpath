@@ -17,6 +17,10 @@ const NEW_HIRE_TINTS = [
 export const newHireTint = (id: string) =>
   NEW_HIRE_TINTS[parseInt(id.slice(-4), 16) % NEW_HIRE_TINTS.length];
 
+/** The tint of anyone: their role's, or a new hire's when they have no account yet. */
+export const tintOf = (id: string, role: Role | undefined) =>
+  role ? ROLE_TINT[role] : newHireTint(id);
+
 const initials = (name: string) =>
   name
     .split(' ')

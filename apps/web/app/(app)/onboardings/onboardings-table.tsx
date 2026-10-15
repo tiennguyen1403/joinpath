@@ -41,7 +41,7 @@ export function NewOnboardingButton() {
 
 // Tinted as on the canvas. Small text on a tint takes the strong shade (ADR 009), and success
 // takes the theme's hue rather than beUI's emerald.
-const BADGE: Record<
+export const STATUS_BADGE: Record<
   OnboardingStatus,
   { label: string; status: AnimatedBadgeStatus; className?: string }
 > = {
@@ -141,7 +141,7 @@ function Row({
   const { id, status, employee, template, templateVersion, progress } =
     onboarding;
   const href = `/onboardings/${id}`;
-  const badge = BADGE[status];
+  const badge = STATUS_BADGE[status];
   return (
     // The name's link stretches over the row, so the whole row opens the onboarding.
     <Tr className="relative active:bg-foreground/8">

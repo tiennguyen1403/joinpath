@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import type { INestApplication } from '@nestjs/common';
-import { apiErrorSchema, meSchema } from '@joinpath/core';
+import { apiErrorSchema, meSchema, today } from '@joinpath/core';
 import request from 'supertest';
 import type { App } from 'supertest/types.js';
 import { seedDemoOrg } from '../src/modules/demo/seed.js';
@@ -73,7 +73,7 @@ describe('auth', () => {
     }
   });
 
-  it('FR-01 BR-P01 me returns the user, role and organization of the session', async () => {
+  it('FR-01 BR-P01 FR-28 me returns the user, role, organization and business date of the session', async () => {
     const cases = [
       {
         email: seeded.emails.hr,
@@ -91,11 +91,11 @@ describe('auth', () => {
         employee: { fullName: 'Minh Nguyen', jobTitle: 'Engineering Manager' },
       },
     ];
+    let cookie = '';
     for (const { email, role, employee } of cases) {
       // Emails are trimmed and lowercased before lookup.
-      const res = await me(await signIn(` ${email.toUpperCase()} `)).expect(
-        200,
-      );
+      cookie = await signIn(` ${email.toUpperCase()} `);
+      const res = await me(cookie).expect(200);
       expect(meSchema.parse(res.body)).toMatchObject({
         email,
         role,
@@ -104,9 +104,20 @@ describe('auth', () => {
           id: seeded.organization.id,
           name: 'Acme Tech',
           timezone: 'Asia/Ho_Chi_Minh',
+          today: today('Asia/Ho_Chi_Minh', 0, new Date()),
         },
       });
     }
+
+    // The demo clock moves the business date (PLAN §4.6).
+    await prisma.organization.update({
+      where: { id: seeded.organization.id },
+      data: { clockOffsetDays: 5 },
+    });
+    const moved = await me(cookie).expect(200);
+    expect(meSchema.parse(moved.body).organization.today).toBe(
+      today('Asia/Ho_Chi_Minh', 5, new Date()),
+    );
   });
 
   it('FR-01 logout revokes the session server-side and clears the cookie', async () => {

@@ -269,6 +269,11 @@ export const activateOnboardingSchema = z.object({
 });
 export type ActivateOnboarding = z.infer<typeof activateOnboardingSchema>;
 
+// `details` of 422 ASSIGNEE_UNRESOLVED: each task activate could not give an owner.
+export const unresolvedAssigneesSchema = z.array(
+  z.object({ taskKey: z.string(), problem: assigneeProblemSchema }),
+);
+
 // A task of an activated onboarding. The status is stored; availability and overdue are
 // worked out from the org's today (PLAN §4.4).
 export const taskSchema = z.object({

@@ -57,6 +57,8 @@ export const meSchema = z.object({
     id: z.uuid(),
     name: z.string(),
     timezone: z.string(),
+    // Its business date (PLAN §4.6), the demo clock's offset included.
+    today: z.iso.date(),
   }),
 });
 export type Me = z.infer<typeof meSchema>;

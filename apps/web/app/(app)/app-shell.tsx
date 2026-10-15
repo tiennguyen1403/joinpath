@@ -3,7 +3,16 @@
 import type { Me } from '@joinpath/core';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { usePathname, useRouter } from 'next/navigation';
-import { type MouseEvent, type ReactNode, useState } from 'react';
+import {
+  createContext,
+  type Dispatch,
+  type MouseEvent,
+  type ReactNode,
+  type SetStateAction,
+  useContext,
+  useEffect,
+  useState,
+} from 'react';
 import { Logout, Menu } from 'reicon-react';
 import { Avatar, ROLE_TINT } from '@/components/avatar';
 import { cn } from '@/components/beui/lib/utils';
@@ -24,6 +33,7 @@ import {
 import {
   Breadcrumb,
   BreadcrumbItem,
+  BreadcrumbLink,
   BreadcrumbList,
   BreadcrumbPage,
   BreadcrumbSeparator,
@@ -33,10 +43,34 @@ import { Logo } from '@/components/logo';
 import { ApiError } from '@/lib/api';
 import { findNavItem, NAV, type NavItem } from '@/lib/nav';
 
+type Crumb = { label: string };
+const SetCrumb = createContext<Dispatch<SetStateAction<Crumb | null>>>(
+  () => {},
+);
+
+/** Names a page below a nav item in the breadcrumb, as in "Onboardings › An Vo". */
+export function usePageCrumb(label: string | undefined) {
+  const setCrumb = useContext(SetCrumb);
+  useEffect(() => {
+    if (label === undefined) return;
+    const crumb = { label };
+    setCrumb(crumb);
+    // Clears only its own: the next page may already have set one.
+    return () => setCrumb((current) => (current === crumb ? null : current));
+  }, [label, setCrumb]);
+}
+
 export function AppShell({ me, children }: { me: Me; children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const current = findNavItem(me.role, pathname);
+  // A page below a nav item keeps that item current, as the canvas draws New onboarding.
+  const section =
+    current ??
+    [...NAV[me.role].org, ...NAV[me.role].you].find((item) =>
+      pathname.startsWith(`${item.href}/`),
+    );
+  const [crumb, setCrumb] = useState<Crumb | null>(null);
   const [queryClient] = useState(
     () =>
       new QueryClient({
@@ -89,10 +123,13 @@ export function AppShell({ me, children }: { me: Me; children: ReactNode }) {
           <AnimatedSidebarMenuItem key={href}>
             <AnimatedSidebarMenuButton
               href={href}
-              isActive={href === pathname}
+              isActive={href === section?.href}
               icon={
                 <Icon
-                  className={cn('size-4', href === pathname && 'text-primary')}
+                  className={cn(
+                    'size-4',
+                    href === section?.href && 'text-primary',
+                  )}
                 />
               }
               // Pressed: 3% over the 5% hover pill comes to the 8% of ADR 009.
@@ -149,24 +186,44 @@ export function AppShell({ me, children }: { me: Me; children: ReactNode }) {
               <Menu className="size-5" />
             </AnimatedSidebarTrigger>
             <Breadcrumb>
-              <BreadcrumbList>
-                <BreadcrumbItem key="org">
-                  <span className="px-2 text-muted-foreground">
-                    {me.organization.name}
-                  </span>
-                </BreadcrumbItem>
-                {current && (
-                  <BreadcrumbItem key={current.href}>
-                    <BreadcrumbSeparator />
-                    <BreadcrumbPage>{current.label}</BreadcrumbPage>
+              {/* A nav page sits under the org; a page below one, under its nav item. */}
+              {current || !section ? (
+                <BreadcrumbList>
+                  <BreadcrumbItem key="org">
+                    <span className="px-2 text-muted-foreground">
+                      {me.organization.name}
+                    </span>
                   </BreadcrumbItem>
-                )}
-              </BreadcrumbList>
+                  {current && (
+                    <BreadcrumbItem key={current.href}>
+                      <BreadcrumbSeparator />
+                      <BreadcrumbPage>{current.label}</BreadcrumbPage>
+                    </BreadcrumbItem>
+                  )}
+                </BreadcrumbList>
+              ) : (
+                <BreadcrumbList>
+                  <BreadcrumbItem key={section.href}>
+                    <BreadcrumbLink
+                      href={section.href}
+                      className="font-normal hover:bg-foreground/5 focus-visible:ring-primary"
+                    >
+                      {section.label}
+                    </BreadcrumbLink>
+                  </BreadcrumbItem>
+                  {crumb && (
+                    <BreadcrumbItem key="page">
+                      <BreadcrumbSeparator />
+                      <BreadcrumbPage>{crumb.label}</BreadcrumbPage>
+                    </BreadcrumbItem>
+                  )}
+                </BreadcrumbList>
+              )}
             </Breadcrumb>
           </header>
           <div className="px-4 pt-8 pb-16 md:px-8">
             <div className="mx-auto flex max-w-290 flex-col gap-6">
-              {children}
+              <SetCrumb.Provider value={setCrumb}>{children}</SetCrumb.Provider>
             </div>
           </div>
         </AnimatedSidebarInset>

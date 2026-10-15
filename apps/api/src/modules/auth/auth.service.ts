@@ -1,5 +1,5 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
-import type { Login, Me } from '@joinpath/core';
+import { type Login, type Me, today } from '@joinpath/core';
 import { PrismaService } from '../../prisma.js';
 import { hashPassword, verifyPassword } from './password.js';
 import {
@@ -44,16 +44,31 @@ export class AuthService {
       });
   }
 
-  me({ userId }: AuthContext): Promise<Me> {
-    return this.prisma.user.findUniqueOrThrow({
+  async me({ userId }: AuthContext): Promise<Me> {
+    const { organization, ...user } = await this.prisma.user.findUniqueOrThrow({
       where: { id: userId },
       select: {
         id: true,
         email: true,
         role: true,
         employee: { select: { id: true, fullName: true, jobTitle: true } },
-        organization: { select: { id: true, name: true, timezone: true } },
+        organization: {
+          select: {
+            id: true,
+            name: true,
+            timezone: true,
+            clockOffsetDays: true,
+          },
+        },
       },
     });
+    const { clockOffsetDays, ...org } = organization;
+    return {
+      ...user,
+      organization: {
+        ...org,
+        today: today(org.timezone, clockOffsetDays, new Date()),
+      },
+    };
   }
 }

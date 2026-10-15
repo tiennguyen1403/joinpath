@@ -1,19 +1,18 @@
-import { EmptyState } from '@/components/empty-state';
+import type { Metadata } from 'next';
+import { requireMe } from '@/lib/session';
+import { OnboardingView } from './onboarding-view';
 
-// Until M1.6b and M1.7 build them: the wizard at /onboardings/new, an onboarding's page here.
+export const metadata: Metadata = { title: 'Onboarding · Joinpath' };
+
 export default async function OnboardingPage({
   params,
 }: PageProps<'/onboardings/[id]'>) {
-  const { id } = await params;
+  const [{ id }, me] = await Promise.all([params, requireMe()]);
   return (
-    <>
-      <h1 className="text-3xl font-semibold tracking-tight">
-        {id === 'new' ? 'New onboarding' : 'Onboarding'}
-      </h1>
-      <EmptyState
-        title="Coming soon"
-        description="This part of Joinpath is still being built."
-      />
-    </>
+    <OnboardingView
+      id={id}
+      orgName={me.organization.name}
+      timeZone={me.organization.timezone}
+    />
   );
 }

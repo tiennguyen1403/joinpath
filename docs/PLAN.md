@@ -1,4 +1,4 @@
-# Joinpath — Kế hoạch triển khai v0.17
+# Joinpath — Kế hoạch triển khai v0.18
 
 > **Joinpath**: Employee Onboarding & Workflow Management Platform, dự án portfolio Full-stack.
 > Bản này tinh chỉnh SRS v0.4 trong thread ChatGPT "Thiết kế dự án onboarding" (14/10/2026).
@@ -15,6 +15,7 @@
 > **v0.15 (15/10/2026):** preview là `GET` không nhận lựa chọn của HR; wizard giữ lựa chọn và gửi một lần trong body của activate, `assignees` tùy chọn (§4.7); shape của preview, activate trả chi tiết onboarding kèm task, `details` của 422 (§8).
 > **v0.16 (15/10/2026):** `start`, `complete` chỉ cho CHECKLIST, kiểm theo thứ tự cố định, trả chi tiết onboarding; `GET /tasks/mine` trả `{today, tasks}`, client chia tab theo availability; `POST /demo/clock/advance` nhận 1–30 ngày, mọi vai trong sandbox, trả `{today}` (§8).
 > **v0.17 (15/10/2026):** mỗi dòng của `GET /onboardings` kèm `progress {completed, total, overdue}` và `nextTask`; onboarding kèm `completedAt` (§8); bảng tự dựng theo token thay cho `table` của beUI, TanStack Table chỉ thêm khi cần sort, lọc, phân trang (§6.2, §10.1, ADR 010).
+> **v0.18 (15/10/2026):** `GET /auth/me` kèm ngày nghiệp vụ `organization.today` (§8); wizard: chọn nhân viên trong bảng có radio, template bằng thẻ `radio`, start date bằng lịch `date-range-picker` chế độ một ngày, override bằng nút Change mở `select` (§10.1, ADR 010).
 
 ## TL;DR: 6 thay đổi lớn nhất
 
@@ -532,6 +533,7 @@ Prefix `/api` (đi qua rewrite). API thiết kế theo command chứ không cho 
 ```http
 # Auth
 POST /auth/login            POST /auth/logout            GET /auth/me
+                                              # me: user, role, employee, organization {id, name, timezone, today}; today là ngày nghiệp vụ (§4.6), web không tự tính được vì cần clock offset
 POST /auth/invitations/accept                 {token, password}
 
 # Tổ chức (HR)
@@ -660,7 +662,9 @@ Nguyên tắc (ADR 010): có component beUI thì dùng, không tự vẽ và kh�
 | Đang ở đâu | `breadcrumb` | Header các trang |
 | Trạng thái task và onboarding | `animated-badge` | Danh sách, bảng, header |
 | Đổi chế độ xem, lọc danh sách | `tabs` | Onboarding detail và graph, My tasks, Mock inbox, Template editor, Review |
-| Chọn một người | `select` | New onboarding, Template editor |
+| Chọn một người | `select` | New onboarding (ô chọn và nút Change ở bước 3), Template editor |
+| Chọn một mục trong danh sách | `radio` | New onboarding (nhân viên ở bước 1, template ở bước 2) |
+| Ngày bắt đầu | `date-range-picker` với prop `single` (sửa tại chỗ, ADR 010) | New onboarding |
 | Ô nhập chữ | `input` | Sign in, Accept invitation, Template editor, Review |
 | Số ngày lệch so với ngày bắt đầu | `adaptive-stepper` | Template editor |
 | Task phụ thuộc | `multi-select` | Template editor |

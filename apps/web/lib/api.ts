@@ -10,12 +10,23 @@ export class ApiError extends Error {
   }
 }
 
-/** Browser only: asks the API through this origin's /api (ADR 007) and checks the answer. */
+/**
+ * Browser only: asks the API through this origin's /api (ADR 007) and checks the answer.
+ * A write sends its body as JSON.
+ */
 export async function api<T>(
   path: string,
   schema: { parse: (data: unknown) => T },
+  write?: { method: 'POST' | 'PATCH'; body: unknown },
 ): Promise<T> {
-  const res = await fetch(`/api${path}`);
+  const res = await fetch(
+    `/api${path}`,
+    write && {
+      method: write.method,
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(write.body),
+    },
+  );
   if (res.status === 401) {
     // The session ended: it expired, or a sign-out elsewhere revoked it.
     window.location.assign('/login');

@@ -2,10 +2,10 @@
 
 > File này được nạp vào mọi session qua `CLAUDE.md`. Giữ ngắn: chỉ trạng thái hiện tại. Lịch sử chi tiết nằm trong `docs/sessions/`.
 
-**Cập nhật:** 2026-10-15 · session 011 (M1.6a · Danh sách onboarding)
-**Mốc hiện tại:** M1 · Workflow engine, xong M1.1–M1.6a (xem bảng). M0 · Walking skeleton đã xong: CI trên GitHub Actions, demo public tại https://joinpath.vercel.app.
+**Cập nhật:** 2026-10-15 · session 012 (M1.6b · Wizard)
+**Mốc hiện tại:** M1 · Workflow engine, xong M1.1–M1.6b (xem bảng). M0 · Walking skeleton đã xong: CI trên GitHub Actions, demo public tại https://joinpath.vercel.app.
 
-**Session kế tiếp:** **M1.6b · Web: wizard** (xem bảng). Handoff mới nhất: `docs/sessions/011-M1.6a-onboardings-list.md`; dữ liệu đọc từ canvas nằm ở handoff 005, 008 và 009.
+**Session kế tiếp:** **M1.7 · Web: onboarding detail + My Tasks** (xem bảng). Handoff mới nhất: `docs/sessions/012-M1.6b-wizard.md`; dữ liệu đọc từ canvas nằm ở handoff 005, 008 và 009.
 
 ## Quy ước session
 
@@ -30,8 +30,8 @@ Trạng thái: ✅ xong · ▶ kế tiếp · ⏳ chưa làm. Mốc M2–M5 mớ
 | M1.4b | API `today(org)`, preview, activate; task trong detail | AT-05, AT-07…AT-10 pass | ✅ |
 | M1.5 | API task `start`/`complete`, onboarding tự COMPLETED, My Tasks, đồng hồ demo | AT-12…AT-14, AT-23, AT-31 pass | ✅ |
 | M1.6a | Web: TanStack Query, bảng Onboardings (`/onboardings`, Dashboard); `GET /onboardings` kèm progress, next task | HR, IT, Manager thấy đúng danh sách qua UI | ✅ |
-| **M1.6b** | Web: wizard (nhân viên → template + ngày → preview, chọn và override assignee → activate); bản trước/sau cho bước 1, 2, override; sau activate sang `/onboardings/:id` (header + banner) | Activate template seed qua UI; khớp màn NewOnboarding | ▶ |
-| M1.7 | Web: onboarding detail (task theo phase, badge availability) + My Tasks | IT và Manager complete checklist qua UI; khóa theo ngày/dependency đúng; onboarding tự COMPLETED | ⏳ |
+| M1.6b | Web: wizard 3 bước, chọn và override assignee, activate; header + toast; `today` của org trong `/auth/me` | Activate template seed qua UI; khớp màn NewOnboarding | ✅ |
+| **M1.7** | Web: onboarding detail (task theo phase, badge availability) + My Tasks | IT và Manager complete checklist qua UI; khóa theo ngày/dependency đúng; onboarding tự COMPLETED | ▶ |
 | M1.8 | Employees: API tạo, sửa (email lowercase khi ghi, vì unique của `users.email` phân biệt hoa thường) + màn danh sách và form | Integration test employees pass; HR tạo, sửa nhân viên qua UI | ⏳ |
 | M1.9 | Templates: danh sách + lịch sử version (chỉ xem); chốt tiêu chí M1; push + deploy (hỏi user) | Tiêu chí M1 (PLAN §13) đạt trên production; nhóm test T, A, E pass (trừ A07, E04 thuộc M2) | ⏳ |
 | M2.1 | Invitation + mock inbox + nhận lời mời + resend; phần invitation của AT-10 | | ⏳ |
@@ -61,7 +61,6 @@ Trạng thái: ✅ xong · ▶ kế tiếp · ⏳ chưa làm. Mốc M2–M5 mớ
 - `image-viewer` (PLAN §10.1) không có trên registry beUI: chọn thay thế ở M2.4 (ứng viên `morphing-lightbox`).
 - BR-R01 ở mức template: M1.4a chốt không thêm rule chặn publish. Còn mở cho M4.1: editor có gợi ý (không chặn) khi DOCUMENT và APPROVAL của nó cùng giao `DIRECT_MANAGER` không?
 - Nút "Discard draft" (canvas, editor) cần xóa DRAFT, trái PLAN §7 (không xóa bản ghi nghiệp vụ) và §8 (không có endpoint): chốt ở M4.1.
-- Ô start date của wizard: beUI không có date picker một ngày, và không dùng `<input type="date">`. Chốt qua bản trước/sau ở M1.6b.
 - Onboarding tự COMPLETED qua UI (tiêu chí của M1.7, M1.9): template seed nào cũng có DOCUMENT và APPROVAL, mà tới M2 mới làm xong được. Seed thêm một template chỉ có checklist, hay để phần này cho M2.5? Chốt ở M1.7. API đã kiểm bằng test (BR-C01, AT-23).
 
 ## Chạy dự án
@@ -106,7 +105,7 @@ Web đọc `API_URL` (`apps/web/.env.example`). Thêm component beUI: `cd apps/w
 - Node trên Windows bỏ qua `TZ`: thử code ngày với timezone có DST thì chạy trên Linux (container hoặc CI).
 - Kiểm tra UI bằng Playwright CLI (headed), không dùng Claude in Chrome (Chrome của extension ở máy khác). `open` không tự trả về trong Bash tool: ghi output ra file (`> .playwright-cli/cmd.log 2>&1`); `--filename` tính từ thư mục hiện tại. Đăng nhập không lộ mật khẩu: storage state + `state-load` (handoff 011).
 - Đừng `pnpm build` khi `pnpm dev` đang chạy (`nest build` xóa `dist`, api dev chết). Dừng `pnpm dev` chạy nền không tắt node của next và nest: `Stop-Process` theo command line.
-- Script Python sửa file repo: đọc, ghi với `newline=""` (không thì thành CRLF); in output vitest cần `PYTHONIOENCODING=utf-8`.
+- Script Python sửa file repo: đọc, ghi với `newline=""` (không thì thành CRLF); in output vitest cần `PYTHONIOENCODING=utf-8` (`python -I` bỏ qua biến này: dùng `sys.stdout.reconfigure(encoding='utf-8')`).
 - Sửa `packages/core` khi `pnpm dev` đang chạy: web có thể giữ bản core cũ, nên build core rồi restart `pnpm dev`.
 - Vercel CLI 62.2.0 (global, đã đăng nhập; hook đầu session báo "not installed" là sai). MCP Vercel trả 403 với team này: dùng `vercel api`, `vercel logs`, `vercel inspect --logs`. Không chạy `vercel deploy` từ máy (CLI upload cả `apps/api/.env`).
 - Secret không bao giờ in ra transcript. Đặt secret qua file tạm trong scratchpad rồi xóa ngay, hoặc để user tự gõ trong terminal riêng.
