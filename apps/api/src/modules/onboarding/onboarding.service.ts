@@ -14,6 +14,7 @@ import {
   type Onboarding,
   type OnboardingDetail,
   type OnboardingStatus,
+  type OnboardingSummary,
   planActivation,
   type Task,
   type TaskStatus,
@@ -37,6 +38,7 @@ export const onboardingSelect = {
   status: true,
   startDate: true,
   activatedAt: true,
+  completedAt: true,
   employee: { select: personSelect },
   template: {
     select: {
@@ -83,6 +85,15 @@ const detailSelect = {
   },
 } satisfies Prisma.OnboardingSelect;
 
+const summarySelect = {
+  ...onboardingSelect,
+  tasks: {
+    // The next task first: due soonest, then in template order, since many share a date.
+    orderBy: [{ dueOn: 'asc' }, { phaseOrder: 'asc' }, { position: 'asc' }],
+    select: { id: true, title: true, status: true, dueOn: true },
+  },
+} satisfies Prisma.OnboardingSelect;
+
 type OnboardingRow = Prisma.OnboardingGetPayload<{
   select: typeof onboardingSelect;
 }>;
@@ -94,6 +105,7 @@ export function toOnboarding({
   status,
   startDate,
   activatedAt,
+  completedAt,
   employee,
   template: { versions, ...template },
   templateVersion,
@@ -107,6 +119,7 @@ export function toOnboarding({
     status,
     startDate: toIsoDate(startDate),
     activatedAt: activatedAt?.toISOString() ?? null,
+    completedAt: completedAt?.toISOString() ?? null,
     employee,
     template,
     templateVersion: version,
@@ -162,13 +175,33 @@ function toDetail(row: DetailRow, today: IsoDate): OnboardingDetail {
 export class OnboardingService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async list(auth: AuthContext): Promise<Onboarding[]> {
+  async list(auth: AuthContext): Promise<OnboardingSummary[]> {
     const onboardings = await this.prisma.onboarding.findMany({
       where: visibleOnboardings(auth),
-      orderBy: { startDate: 'desc' },
-      select: onboardingSelect,
+      // The newest first among those starting the same day, so reloads keep the order.
+      orderBy: [{ startDate: 'desc' }, { createdAt: 'desc' }],
+      select: summarySelect,
     });
-    return onboardings.map(toOnboarding);
+    const today = await orgToday(this.prisma, auth.organizationId);
+    return onboardings.map(({ tasks, ...row }) => {
+      const next = tasks.find(
+        (task) => task.status === 'PENDING' || task.status === 'IN_PROGRESS',
+      );
+      return {
+        ...toOnboarding(row),
+        progress: {
+          completed: tasks.filter((task) => task.status === 'COMPLETED').length,
+          total: tasks.length,
+          overdue: tasks.filter((task) =>
+            isOverdue(
+              { status: task.status, dueOn: toIsoDate(task.dueOn) },
+              today,
+            ),
+          ).length,
+        },
+        nextTask: next ? { id: next.id, title: next.title } : null,
+      };
+    });
   }
 
   async get(auth: AuthContext, id: string): Promise<OnboardingDetail> {

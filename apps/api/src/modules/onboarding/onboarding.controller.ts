@@ -13,8 +13,8 @@ import {
   activateOnboardingSchema,
   type ActivationPreview,
   createOnboardingSchema,
-  type Onboarding,
   type OnboardingDetail,
+  type OnboardingSummary,
   updateOnboardingSchema,
 } from '@joinpath/core';
 import type { Request } from 'express';
@@ -27,7 +27,7 @@ export class OnboardingController {
   constructor(private readonly onboardings: OnboardingService) {}
 
   @Get('onboardings')
-  list(@Req() req: Request): Promise<Onboarding[]> {
+  list(@Req() req: Request): Promise<OnboardingSummary[]> {
     return this.onboardings.list(req.auth!);
   }
 

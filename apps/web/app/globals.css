@@ -14,6 +14,8 @@
   --violet-strong: #6744ac;
   --accent-strong: #007679;
   --danger-strong: #a5292b;
+  --success-strong: #007631;
+  --warning-strong: #904a00;
 }
 
 @theme inline {
@@ -23,6 +25,8 @@
   --color-violet-strong: var(--violet-strong);
   --color-accent-strong: var(--accent-strong);
   --color-danger-strong: var(--danger-strong);
+  --color-success-strong: var(--success-strong);
+  --color-warning-strong: var(--warning-strong);
 }
 
 body {

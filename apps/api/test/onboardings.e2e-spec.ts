@@ -5,6 +5,7 @@ import {
   type Onboarding,
   onboardingDetailSchema,
   onboardingSchema,
+  onboardingSummarySchema,
   type Template,
   type TemplateDefinition,
   templateSchema,
@@ -15,6 +16,7 @@ import type { App } from 'supertest/types.js';
 import { seedDemoOrg } from '../src/modules/demo/seed.js';
 import type { PrismaService } from '../src/prisma.js';
 import {
+  checklists,
   type Client,
   createApp,
   errorOf,
@@ -117,6 +119,7 @@ describe('onboardings', () => {
       status: 'DRAFT',
       startDate: '2026-11-02',
       activatedAt: null,
+      completedAt: null,
       employee: {
         id: chi.id,
         fullName: 'Chi Dang',
@@ -868,6 +871,80 @@ describe('onboardings', () => {
     expect((await read(others.IT, an.id)).tasks).toHaveLength(11);
     expect(await listed(others.IT2)).toEqual([]);
     await others.IT2.get(`/onboardings/${an.id}`).expect(404);
+  });
+
+  it('FR-19 BR-E06 BR-C01 the list counts tasks done and overdue and names the next one; a finished onboarding has none next', async () => {
+    const rows = async (client: Client) =>
+      onboardingSummarySchema
+        .array()
+        .parse((await client.get('/onboardings').expect(200)).body);
+    const rowOf = async (client: Client, id: string) =>
+      (await rows(client)).find((row) => row.id === id)!;
+
+    // Starting today: six tasks before day 1 are past due on activation (BR-A06).
+    const draft = await draftFor(await newHire(), engineering.id, day(0));
+    expect(await rowOf(hr, draft.id)).toMatchObject({
+      status: 'DRAFT',
+      completedAt: null,
+      progress: { completed: 0, total: 0, overdue: 0 },
+      nextTask: null,
+    });
+    const active = await activate(draft);
+    const byTitle = (title: string) => ({
+      id: active.tasks.find((task) => task.title === title)!.id,
+      title,
+    });
+    expect(active.tasks.filter((task) => task.overdue)).toHaveLength(6);
+    expect(await rowOf(hr, draft.id)).toMatchObject({
+      status: 'ACTIVE',
+      progress: { completed: 0, total: 11, overdue: 6 },
+      nextTask: byTitle('Upload ID documents'),
+    });
+
+    // The upload is done (its command comes in M2) and the manager assigns a buddy. Four
+    // tasks are then due three days before the start: template order puts the review first,
+    // though it was created after the other three.
+    await prisma.task.update({
+      where: { id: byTitle('Upload ID documents').id },
+      data: { status: 'COMPLETED', completedAt: new Date() },
+    });
+    await others.manager
+      .post(`/tasks/${byTitle('Assign an onboarding buddy').id}/complete`)
+      .expect(200);
+    const progressed = await rowOf(hr, draft.id);
+    expect(progressed).toMatchObject({
+      progress: { completed: 2, total: 11, overdue: 4 },
+      nextTask: byTitle('Review ID documents'),
+    });
+    // Duc has tasks in it, so he sees it, counted the same.
+    expect(await rowOf(others.IT, draft.id)).toEqual(progressed);
+
+    // Same start date: the newer onboarding is listed first.
+    const templateId = await publishedTemplate(checklists);
+    const short = await activate(
+      await draftFor(await newHire(), templateId, day(0)),
+    );
+    const ids = (await rows(hr)).map((row) => row.id);
+    expect(ids.indexOf(short.id)).toBeLessThan(ids.indexOf(draft.id));
+
+    // A task in progress is still open, and not yet done.
+    await hr.post(`/tasks/${short.tasks[1].id}/start`).expect(200);
+    await others.manager
+      .post(`/tasks/${short.tasks[0].id}/complete`)
+      .expect(200);
+    expect(await rowOf(hr, short.id)).toMatchObject({
+      progress: { completed: 1, total: 2, overdue: 0 },
+      nextTask: { id: short.tasks[1].id, title: 'Print a badge' },
+    });
+    const done = onboardingDetailSchema.parse(
+      (await hr.post(`/tasks/${short.tasks[1].id}/complete`).expect(200)).body,
+    );
+    expect(await rowOf(hr, short.id)).toMatchObject({
+      status: 'COMPLETED',
+      completedAt: done.tasks[1].completedAt,
+      progress: { completed: 2, total: 2, overdue: 0 },
+      nextTask: null,
+    });
   });
 
   it('AT-06 §9 only HR creates, edits, previews or activates an onboarding', async () => {

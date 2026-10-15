@@ -1,4 +1,4 @@
-# Joinpath — Kế hoạch triển khai v0.16
+# Joinpath — Kế hoạch triển khai v0.17
 
 > **Joinpath**: Employee Onboarding & Workflow Management Platform, dự án portfolio Full-stack.
 > Bản này tinh chỉnh SRS v0.4 trong thread ChatGPT "Thiết kế dự án onboarding" (14/10/2026).
@@ -14,6 +14,7 @@
 > **v0.14 (15/10/2026):** bỏ `tasks.completed_by`, vì chỉ assignee complete được task nên cột này luôn trùng `assignee_employee_id` (§7); body của `POST` và `PATCH /onboardings`, draft hiện bản published mới nhất (§8); người không phải HR không thấy onboarding DRAFT, còn ai có task trong một onboarding thì xem được onboarding đó (§9).
 > **v0.15 (15/10/2026):** preview là `GET` không nhận lựa chọn của HR; wizard giữ lựa chọn và gửi một lần trong body của activate, `assignees` tùy chọn (§4.7); shape của preview, activate trả chi tiết onboarding kèm task, `details` của 422 (§8).
 > **v0.16 (15/10/2026):** `start`, `complete` chỉ cho CHECKLIST, kiểm theo thứ tự cố định, trả chi tiết onboarding; `GET /tasks/mine` trả `{today, tasks}`, client chia tab theo availability; `POST /demo/clock/advance` nhận 1–30 ngày, mọi vai trong sandbox, trả `{today}` (§8).
+> **v0.17 (15/10/2026):** mỗi dòng của `GET /onboardings` kèm `progress {completed, total, overdue}` và `nextTask`; onboarding kèm `completedAt` (§8); bảng tự dựng theo token thay cho `table` của beUI, TanStack Table chỉ thêm khi cần sort, lọc, phân trang (§6.2, §10.1, ADR 010).
 
 ## TL;DR: 6 thay đổi lớn nhất
 
@@ -403,7 +404,7 @@ Sơ đồ trên là ở local. Trên Vercel (ADR 011), router của Vercel chia 
 
 | Lớp | Lựa chọn | Ghi chú |
 |---|---|---|
-| Web | Next.js 16 (App Router), React, TypeScript, Tailwind 4, component beUI (cài qua shadcn registry `https://beui.dev/r`) | Dùng component beUI có sẵn trước, không dùng control mặc định của trình duyệt; chỉ tự dựng phần beUI không có (§10.1). Phần sau đăng nhập chủ yếu là client components; thêm TanStack Query khi có danh sách và mutation (M1) |
+| Web | Next.js 16 (App Router), React, TypeScript, Tailwind 4, component beUI (cài qua shadcn registry `https://beui.dev/r`) | Dùng component beUI có sẵn trước, không dùng control mặc định của trình duyệt; chỉ tự dựng phần beUI không có (§10.1). Phần sau đăng nhập chủ yếu là client components; TanStack Query cho danh sách và mutation (từ M1.6a). TanStack Table (headless) chỉ thêm khi một màn cần sort, lọc hoặc phân trang (ứng viên: Employees M1.8, analytics M4.4) |
 | Icons | `reicon-react` 1.2.6 (MIT) | Bộ Outline: lưới 24, nét 1.5px, `currentColor`. reicon không có icon grip nên tay kéo dùng `menu`. Component beUI nào import `lucide-react` thì đổi sang icon reicon tương ứng |
 | Design tokens | `theme.css` của beUI + `--primary-strong: #0067D1` + lớp hover + màu active nav | Ba chỗ lệch so với beUI: (1) chữ trắng trên `#0285F7` chỉ đạt 3.7:1 nên dùng `#0067D1`; (2) hover của mọi link điều hướng (sidebar, header) và dòng bảng/danh sách là lớp phủ foreground 5%, 8% khi nhấn, vì `muted/60` của beUI gần như không thấy; (3) active nav nền `#E3F0FC`, chữ `#0067D1`, icon `#0285F7` thay cho `muted/70`. Không shadow. Xem bảng Foundations trên canvas |
 | Motion | `motion/react` + `lib/ease.ts` của beUI, copy nguyên và giữ MIT notice | Các spring PRESS / SWAP / PANEL / LAYOUT; luôn có nhánh reduced motion |
@@ -547,6 +548,8 @@ POST /template-versions/:id/publish
 # Onboardings
 GET  /onboardings           GET /onboardings/:id         # theo phạm vi (§9); draft hiện bản published mới nhất, tức bản activate sẽ dùng
                                               # /:id kèm today và task (availability, overdue tính theo today(org)); POST, PATCH, activate trả đúng shape này
+                                              # list: start date muộn nhất trước, cùng ngày thì mới tạo trước; mỗi dòng kèm progress {completed, total, overdue}
+                                              # và nextTask {id, title} | null: task chưa xong có dueOn sớm nhất, hòa thì theo thứ tự template
 POST /onboardings                             {employeeId, templateId, startDate}
 PATCH /onboardings/:id                        {employeeId?, templateId?, startDate?}   # chỉ khi DRAFT; ít nhất 1 field
 GET  /onboardings/:id/activation-preview      # chỉ DRAFT, template chưa archive (không thì 409); {onboarding, today, tasks: PlannedTask[], people: [{id, fullName}]}
@@ -671,10 +674,10 @@ Nguyên tắc (ADR 010): có component beUI thì dùng, không tự vẽ và kh�
 | Báo kết quả vừa xảy ra | `animated-toast-stack` | Sau khi activate, Landing |
 | Thao tác trên dòng task | `context-menu` | Onboarding detail |
 | Giải thích vì sao nút bị khóa | `tooltip` | Nút Publish của Template editor |
-| Danh sách onboarding, bảng task theo phase | `table` | Dashboard, New onboarding |
+| Danh sách onboarding, bảng task theo phase | tự dựng (`components/table.tsx`), không dùng `table` của beUI | Dashboard, Onboardings, New onboarding, Onboarding detail |
 | Bề mặt, thông báo, công tắc, nút | `card`, `alert`, `switch`, `button-base` | Mọi nơi |
 
-Tự dựng theo token vì beUI không có: thanh tiến độ onboarding, avatar chữ cái đầu, các bước của wizard, textarea, canvas dependency graph (React Flow).
+Tự dựng theo token vì beUI không có: thanh tiến độ onboarding, avatar chữ cái đầu, các bước của wizard, textarea, canvas dependency graph (React Flow). Bảng cũng tự dựng (M1.6a, ADR 010): `table` của beUI là data grid ảo hóa, khung cuộn cao cố định, mọi dòng cao bằng nhau và cần `@tanstack/react-virtual`, trong khi bảng của Joinpath ngắn và các dòng cao khác nhau.
 
 ---
 

@@ -1,8 +1,11 @@
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
-import { EmptyState } from '@/components/empty-state';
 import { homeFor } from '@/lib/nav';
 import { requireMe } from '@/lib/session';
+import {
+  NewOnboardingButton,
+  OnboardingsTable,
+} from '../onboardings/onboardings-table';
 
 export const metadata: Metadata = { title: 'Dashboard · Joinpath' };
 
@@ -18,19 +21,27 @@ function partOfDay(timeZone: string) {
   return hour < 12 ? 'morning' : hour < 18 ? 'afternoon' : 'evening';
 }
 
-// HR's home. Stats, attention list and the onboardings table arrive with data in M3.4.
+// HR's home. The stats, the attention and due-soon lists and the activity arrive in M3.4.
 export default async function DashboardPage() {
   const me = await requireMe();
   if (me.role !== 'HR') redirect(homeFor(me.role));
   return (
     <>
-      <h1 className="text-3xl font-semibold tracking-tight">
-        Good {partOfDay(me.organization.timezone)},{' '}
-        {me.employee.fullName.split(' ')[0]}
-      </h1>
-      <EmptyState
-        title="No onboardings yet"
-        description="Onboardings you start show up here, along with anything that needs your attention."
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <h1 className="text-3xl font-semibold tracking-tight">
+          Good {partOfDay(me.organization.timezone)},{' '}
+          {me.employee.fullName.split(' ')[0]}
+        </h1>
+        <NewOnboardingButton />
+      </div>
+      <OnboardingsTable
+        heading="Onboardings"
+        timeZone={me.organization.timezone}
+        empty={{
+          title: 'No onboardings yet',
+          description:
+            'Onboardings you start show up here, along with anything that needs your attention.',
+        }}
       />
     </>
   );

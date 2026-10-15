@@ -60,6 +60,34 @@ export async function signIn(app: INestApplication<App>, email: string) {
 }
 export type Client = Awaited<ReturnType<typeof signIn>>;
 
+// Checklists only, so an onboarding can complete before documents and approvals can (M2):
+// every seeded template has an ID upload and its review.
+export const checklists: TemplateDefinition = {
+  phases: [{ key: 'day-1', name: 'Day 1' }],
+  tasks: [
+    {
+      key: 'welcome',
+      phase: 'day-1',
+      title: 'Welcome meeting',
+      type: 'CHECKLIST',
+      assignee: { kind: 'DIRECT_MANAGER' },
+      availableOffsetDays: 0,
+      dueOffsetDays: 0,
+      dependsOn: [],
+    },
+    {
+      key: 'badge',
+      phase: 'day-1',
+      title: 'Print a badge',
+      type: 'CHECKLIST',
+      assignee: { kind: 'ROLE', role: 'HR' },
+      availableOffsetDays: 0,
+      dueOffsetDays: 0,
+      dependsOn: [],
+    },
+  ],
+};
+
 /** New hires get an account through their invitation (M2); tests give one directly. */
 export async function giveAccount(
   prisma: PrismaService,

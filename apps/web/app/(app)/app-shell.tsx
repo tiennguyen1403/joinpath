@@ -1,9 +1,11 @@
 'use client';
 
-import type { Me, Role } from '@joinpath/core';
+import type { Me } from '@joinpath/core';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { usePathname, useRouter } from 'next/navigation';
-import type { MouseEvent, ReactNode } from 'react';
+import { type MouseEvent, type ReactNode, useState } from 'react';
 import { Logout, Menu } from 'reicon-react';
+import { Avatar, ROLE_TINT } from '@/components/avatar';
 import { cn } from '@/components/beui/lib/utils';
 import {
   AnimatedSidebar,
@@ -28,35 +30,38 @@ import {
 } from '@/components/beui/motion/breadcrumb';
 import { Button } from '@/components/beui/motion/button/base';
 import { Logo } from '@/components/logo';
+import { ApiError } from '@/lib/api';
 import { findNavItem, NAV, type NavItem } from '@/lib/nav';
-
-// Initials avatar tint per role, as on the canvas (beUI has no avatar).
-const AVATAR: Record<Role, string> = {
-  HR: 'bg-violet/10 text-violet-strong',
-  IT: 'bg-foreground/8 text-foreground',
-  MEMBER: 'bg-accent/10 text-accent-strong',
-};
-
-const initials = (name: string) =>
-  name
-    .split(' ')
-    .map((word) => word[0])
-    .join('')
-    .slice(0, 2)
-    .toUpperCase();
 
 export function AppShell({ me, children }: { me: Me; children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const current = findNavItem(me.role, pathname);
+  const [queryClient] = useState(
+    () =>
+      new QueryClient({
+        // An answer from the API stands; only a request that got none is tried again.
+        defaultOptions: {
+          queries: {
+            retry: (failures, error) =>
+              !(error instanceof ApiError) && failures < 3,
+          },
+        },
+      }),
+  );
 
-  // beUI's sidebar renders plain <a href>. Nav links go through the Next router instead,
-  // so the shell and its sliding active pill stay mounted between pages.
-  function followNav(event: MouseEvent) {
-    const href = (event.target as Element).closest('a')?.getAttribute('href');
+  // beUI renders plain <a href> (sidebar, button links). Links within the app go through the
+  // Next router instead, so the shell and its sliding active pill stay mounted between pages.
+  function followLink(event: MouseEvent) {
+    const anchor = (event.target as Element).closest('a');
+    const href = anchor?.getAttribute('href');
     if (
-      !href ||
-      !findNavItem(me.role, href) ||
+      !anchor ||
+      !href?.startsWith('/') ||
+      href.startsWith('//') ||
+      href.startsWith('/api/') ||
+      anchor.target ||
+      anchor.hasAttribute('download') ||
       event.defaultPrevented ||
       event.button !== 0 ||
       event.metaKey ||
@@ -102,72 +107,70 @@ export function AppShell({ me, children }: { me: Me; children: ReactNode }) {
   );
 
   return (
-    <AnimatedSidebarProvider onClickCapture={followNav}>
-      <AnimatedSidebar collapsible="none" ariaLabel="Main navigation">
-        <AnimatedSidebarHeader className="h-16 justify-center border-b border-border px-5">
-          <Logo />
-        </AnimatedSidebarHeader>
-        <AnimatedSidebarContent>
-          {group(me.organization.name, NAV[me.role].org)}
-          {group('You', NAV[me.role].you)}
-        </AnimatedSidebarContent>
-        <AnimatedSidebarFooter>
-          <div className="flex items-center gap-2.5 p-1">
-            <span
-              className={cn(
-                'flex size-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold',
-                AVATAR[me.role],
-              )}
-            >
-              {initials(me.employee.fullName)}
-            </span>
-            <span className="flex min-w-0 flex-1 flex-col text-sm">
-              <span className="truncate font-medium">
-                {me.employee.fullName}
-              </span>
-              <span className="truncate text-xs text-muted-foreground">
-                {me.employee.jobTitle}
-              </span>
-            </span>
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label="Sign out"
-              onClick={signOut}
-              className="hover:bg-foreground/5 active:bg-foreground/8"
-            >
-              <Logout className="size-4" />
-            </Button>
-          </div>
-        </AnimatedSidebarFooter>
-      </AnimatedSidebar>
-      <AnimatedSidebarInset>
-        <header className="flex h-16 shrink-0 items-center gap-2 border-b border-border px-4 md:px-8">
-          <AnimatedSidebarTrigger className="-ml-2 hover:bg-foreground/5 md:hidden">
-            <Menu className="size-5" />
-          </AnimatedSidebarTrigger>
-          <Breadcrumb>
-            <BreadcrumbList>
-              <BreadcrumbItem key="org">
-                <span className="px-2 text-muted-foreground">
-                  {me.organization.name}
+    <QueryClientProvider client={queryClient}>
+      <AnimatedSidebarProvider onClickCapture={followLink}>
+        <AnimatedSidebar collapsible="none" ariaLabel="Main navigation">
+          <AnimatedSidebarHeader className="h-16 justify-center border-b border-border px-5">
+            <Logo />
+          </AnimatedSidebarHeader>
+          <AnimatedSidebarContent>
+            {group(me.organization.name, NAV[me.role].org)}
+            {group('You', NAV[me.role].you)}
+          </AnimatedSidebarContent>
+          <AnimatedSidebarFooter>
+            <div className="flex items-center gap-2.5 p-1">
+              <Avatar
+                name={me.employee.fullName}
+                className={cn('size-9', ROLE_TINT[me.role])}
+              />
+              <span className="flex min-w-0 flex-1 flex-col text-sm">
+                <span className="truncate font-medium">
+                  {me.employee.fullName}
                 </span>
-              </BreadcrumbItem>
-              {current && (
-                <BreadcrumbItem key={current.href}>
-                  <BreadcrumbSeparator />
-                  <BreadcrumbPage>{current.label}</BreadcrumbPage>
+                <span className="truncate text-xs text-muted-foreground">
+                  {me.employee.jobTitle}
+                </span>
+              </span>
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Sign out"
+                onClick={signOut}
+                className="hover:bg-foreground/5 active:bg-foreground/8"
+              >
+                <Logout className="size-4" />
+              </Button>
+            </div>
+          </AnimatedSidebarFooter>
+        </AnimatedSidebar>
+        <AnimatedSidebarInset>
+          <header className="flex h-16 shrink-0 items-center gap-2 border-b border-border px-4 md:px-8">
+            <AnimatedSidebarTrigger className="-ml-2 hover:bg-foreground/5 md:hidden">
+              <Menu className="size-5" />
+            </AnimatedSidebarTrigger>
+            <Breadcrumb>
+              <BreadcrumbList>
+                <BreadcrumbItem key="org">
+                  <span className="px-2 text-muted-foreground">
+                    {me.organization.name}
+                  </span>
                 </BreadcrumbItem>
-              )}
-            </BreadcrumbList>
-          </Breadcrumb>
-        </header>
-        <div className="px-4 pt-8 pb-16 md:px-8">
-          <div className="mx-auto flex max-w-290 flex-col gap-6">
-            {children}
+                {current && (
+                  <BreadcrumbItem key={current.href}>
+                    <BreadcrumbSeparator />
+                    <BreadcrumbPage>{current.label}</BreadcrumbPage>
+                  </BreadcrumbItem>
+                )}
+              </BreadcrumbList>
+            </Breadcrumb>
+          </header>
+          <div className="px-4 pt-8 pb-16 md:px-8">
+            <div className="mx-auto flex max-w-290 flex-col gap-6">
+              {children}
+            </div>
           </div>
-        </div>
-      </AnimatedSidebarInset>
-    </AnimatedSidebarProvider>
+        </AnimatedSidebarInset>
+      </AnimatedSidebarProvider>
+    </QueryClientProvider>
   );
 }

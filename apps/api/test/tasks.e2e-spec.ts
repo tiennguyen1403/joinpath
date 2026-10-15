@@ -6,11 +6,11 @@ import {
   type OnboardingDetail,
   onboardingDetailSchema,
   onboardingSchema,
-  type TemplateDefinition,
 } from '@joinpath/core';
 import type { App } from 'supertest/types.js';
 import { seedDemoOrg } from '../src/modules/demo/seed.js';
 import {
+  checklists,
   type Client,
   createApp,
   errorOf,
@@ -21,34 +21,6 @@ import {
   seedOrg,
   signIn,
 } from './app.js';
-
-// Checklists only, so an onboarding can complete before documents and approvals can (M2):
-// every seeded template has an ID upload and its review.
-const checklists: TemplateDefinition = {
-  phases: [{ key: 'day-1', name: 'Day 1' }],
-  tasks: [
-    {
-      key: 'welcome',
-      phase: 'day-1',
-      title: 'Welcome meeting',
-      type: 'CHECKLIST',
-      assignee: { kind: 'DIRECT_MANAGER' },
-      availableOffsetDays: 0,
-      dueOffsetDays: 0,
-      dependsOn: [],
-    },
-    {
-      key: 'badge',
-      phase: 'day-1',
-      title: 'Print a badge',
-      type: 'CHECKLIST',
-      assignee: { kind: 'ROLE', role: 'HR' },
-      availableOffsetDays: 0,
-      dueOffsetDays: 0,
-      dependsOn: [],
-    },
-  ],
-};
 
 // Logins in one app share a throttle bucket (10 per minute, BR-P06): seedOrg signs in six
 // people, so this file signs in four more at most.
@@ -325,7 +297,10 @@ describe('tasks', () => {
     // A task in progress is not done.
     await start(org.hr, badge).expect(200);
     const first = await complete(org.others.manager, welcome).expect(200);
-    expect(detailOf(first).status).toBe('ACTIVE');
+    expect(detailOf(first)).toMatchObject({
+      status: 'ACTIVE',
+      completedAt: null,
+    });
 
     const last = detailOf(await complete(org.hr, badge).expect(200));
     expect(last.status).toBe('COMPLETED');
@@ -334,12 +309,7 @@ describe('tasks', () => {
       'COMPLETED',
     ]);
     // At the moment its last task was.
-    const { completedAt } = await org.prisma.onboarding.findUniqueOrThrow({
-      where: { id: onboarding.id },
-    });
-    expect(completedAt?.toISOString()).toBe(
-      taskOf(last, 'Print a badge').completedAt,
-    );
+    expect(last.completedAt).toBe(taskOf(last, 'Print a badge').completedAt);
     const hr = await userOf(org.seeded.emails.hr);
     expect(
       await org.prisma.auditEvent.findMany({

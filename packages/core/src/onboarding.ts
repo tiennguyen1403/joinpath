@@ -224,6 +224,8 @@ export const onboardingSchema = z.object({
   status: onboardingStatusSchema,
   startDate: z.iso.date(),
   activatedAt: z.iso.datetime().nullable(),
+  // When its last task was completed (BR-C01).
+  completedAt: z.iso.datetime().nullable(),
   employee: employeeSchema.omit({ user: true }),
   template: z.object({ id: z.uuid(), name: z.string() }),
   // The version the tasks came from. A draft has none yet, so it shows the one activating
@@ -231,6 +233,20 @@ export const onboardingSchema = z.object({
   templateVersion: z.object({ id: z.uuid(), version: z.int() }),
 });
 export type Onboarding = z.infer<typeof onboardingSchema>;
+
+// GET /onboardings: a row of the onboardings table. A draft has no tasks yet.
+export const onboardingSummarySchema = onboardingSchema.extend({
+  // Overdue by the org's today (BR-E06), as the detail marks each task.
+  progress: z.object({
+    completed: z.int(),
+    total: z.int(),
+    overdue: z.int(),
+  }),
+  // The open task due soonest, then in template order: the table's Next step. Null when no
+  // task is open: a draft, or a finished onboarding.
+  nextTask: z.object({ id: z.uuid(), title: z.string() }).nullable(),
+});
+export type OnboardingSummary = z.infer<typeof onboardingSummarySchema>;
 
 const personSchema = z.object({ id: z.uuid(), fullName: z.string() });
 
