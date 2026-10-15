@@ -25,6 +25,7 @@ Dự án chạy qua nhiều session ngắn; mỗi session là một dòng trong 
 
 - Chưa rõ điều gì thì hỏi user cho đến khi rõ hẳn; không tự quyết thay user.
 - Không đi lại các quyết định đã chốt (PLAN §1, §15, các ADR). Muốn đổi: nêu lý do và hỏi trước.
+- Trước khi đề xuất thu hẹp hay đổi phạm vi một tính năng, grep PLAN §1, §15 và bảng FR theo từ khóa của tính năng đó.
 - Hỏi trước mỗi lần làm việc hướng ra ngoài: tạo GitHub repo, push, deploy, tạo tài khoản hoặc secret trên dịch vụ ngoài, cài phần mềm global.
 - Ngôn ngữ: UI, code, comment, README, ADR viết tiếng Anh. Tài liệu nội bộ (PLAN, STATUS, handoff, file này) viết tiếng Việt, giữ thuật ngữ tiếng Anh. User trao đổi bằng tiếng Việt.
 - Stack và version pin theo PLAN §6.2 (Next.js 16, NestJS 12 ESM, Prisma 7.10, TypeScript 6.0, Vitest 4, pnpm 12, Node 24 LTS, Postgres 18). Không thêm thư viện ngoài plan khi chưa hỏi.
