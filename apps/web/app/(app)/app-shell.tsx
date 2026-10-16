@@ -39,6 +39,7 @@ import {
   BreadcrumbSeparator,
 } from '@/components/beui/motion/breadcrumb';
 import { Button } from '@/components/beui/motion/button/base';
+import { DemoIsland } from '@/components/demo-island';
 import { Logo } from '@/components/logo';
 import { notificationsQuery } from '@/components/notifications';
 import { QueryProvider } from '@/components/query-provider';
@@ -204,6 +205,9 @@ export function AppShell({ me, children }: { me: Me; children: ReactNode }) {
           </AnimatedSidebarFooter>
         </AnimatedSidebar>
         <AnimatedSidebarInset>
+          {me.organization.demo && (
+            <DemoIsland me={me} demo={me.organization.demo} />
+          )}
           <header className="flex h-16 shrink-0 items-center gap-2 border-b border-border px-4 md:px-8">
             <AnimatedSidebarTrigger className="-ml-2 hover:bg-foreground/5 md:hidden">
               <Menu className="size-5" />

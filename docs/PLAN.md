@@ -1,4 +1,4 @@
-# Joinpath — Kế hoạch triển khai v0.34
+# Joinpath — Kế hoạch triển khai v0.35
 
 > **Joinpath**: Employee Onboarding & Workflow Management Platform, dự án portfolio Full-stack.
 > Bản này tinh chỉnh SRS v0.4 trong thread ChatGPT "Thiết kế dự án onboarding" (14/10/2026).
@@ -32,6 +32,7 @@
 > **v0.32 (16/10/2026):** thông báo trên web (M3.2b): trang Notifications mở từ sidebar, số chưa đọc nằm cạnh mục; trên portal là chuông mở `popover-morph` ở mọi độ rộng; danh sách tự dựng theo token, không dùng `notification-stack`. Cạnh My tasks: số task quá hạn màu đỏ, nếu không có thì số task READY (§10.1).
 > **v0.33 (16/10/2026):** M3 chia thành 9 session: M3.3 tách thành API sandbox (M3.3a), mốc giờ theo ngày nghiệp vụ (M3.3b) và web (M3.3c) (§13). Trong sandbox, mọi mốc giờ hiện theo giờ nghiệp vụ, tính từ lịch sử tua ngày; thay đánh đổi "giờ thật" cũ (§4.6, làm ở M3.3b). `POST /demo/sandboxes`: org riêng trong 24 giờ, kèm onboarding A, B, C chạy bằng handler thật, đăng nhập luôn với vai HR; tối đa 5 sandbox mỗi giờ mỗi IP và 200 sandbox còn hạn. `switch-user`: thứ tự kiểm, mã lỗi (§8, §9, §11). Purge sandbox hết hạn chạy trong cron tick và mỗi lần tạo sandbox (§6.5). Production seed org cố định không kèm scenarios (§11).
 > **v0.34 (16/10/2026):** mốc giờ theo giờ nghiệp vụ (M3.3b, BR-D05 mới): lịch sử tua ngày lưu ở bảng `clock_advances` (§7), mỗi mốc giờ dời theo lần tua cuối cùng không muộn hơn nó, mốc trong tương lai (hạn lời mời) theo đồng hồ hiện tại; hạn của sandbox, của signed URL và session giữ giờ thật; hạn link trong email mời viết theo giờ nghiệp vụ (§4.6, §5, §8).
+> **v0.35 (16/10/2026):** M3 chia thành 10 session: web của demo tách thành M3.3c (Dynamic Island trong app shell, nút Try demo ở trang Sign in) và M3.3d (island trên portal và mock inbox, bản 390 px, đường từ portal sang My tasks, banner) (§13). `GET /auth/me` kèm `organization.demo` (expiresAt, nextStartDate, people) cho island (§8); `dynamic-island` sửa tại chỗ (§10.1, ADR 010); Try demo nằm ở trang Sign in tới khi có Landing (§11).
 
 ## TL;DR: 6 thay đổi lớn nhất
 
@@ -585,6 +586,11 @@ POST /auth/login            POST /auth/logout            GET /auth/me
                                               # me: user, role, employee, organization {id, name, timezone, today, emailDomain}; today là ngày nghiệp vụ (§4.6), web không tự tính được vì cần clock offset
                                               # emailDomain: phần sau @ của mọi email trong sandbox (BR-D04), null ngoài sandbox; form nhân viên chỉ cho nhập phần trước @
                                               # onboardingId: onboarding của chính người đó mà portal hiện (§10): bản ACTIVE, nếu không có thì bản COMPLETED mới nhất; null nếu không có
+                                              # organization.demo: cho Dynamic Island (§10), null ngoài sandbox (BR-D02). expiresAt: lúc sandbox bị xóa, theo giờ thật,
+                                              # null nếu không hết hạn (acme); nextStartDate: start date sớm nhất sau hôm nay của onboarding ACTIVE (nút "Jump to"), null nếu không có;
+                                              # people: mọi người có tài khoản ACTIVE, cộng người mới của onboarding DRAFT/ACTIVE chưa có tài khoản (hasAccount false),
+                                              # kind HR, IT (theo vai), rồi NEW_HIRE (có onboarding không bị hủy), MANAGER (có người báo cáo trực tiếp), MEMBER;
+                                              # xếp theo thứ tự HR, IT, MANAGER, MEMBER, NEW_HIRE, trong nhóm theo tên. POST /demo/sandboxes và switch-user trả cùng shape
 POST /auth/invitations/lookup                 {token}   # public, throttle như login: những gì trang nhận lời mời hiện trước khi đặt mật khẩu
                                               # (org, người mới, manager, start date, today, hạn của link, task của người mới); token hỏng, đã dùng, hết hạn, bị thay → 410
 POST /auth/invitations/accept                 {token, password}   # public, throttle; password 8–200 ký tự; tạo user MEMBER với email hiện tại của người mới,
@@ -749,7 +755,7 @@ Nguyên tắc (ADR 010): có component beUI thì dùng, không tự vẽ và kh�
 | Việc trong Joinpath | Component beUI | Màn hình |
 |---|---|---|
 | Điều hướng app | `animated-sidebar` | Mọi màn của HR / IT sau đăng nhập |
-| Điều khiển demo (ngày nghiệp vụ, đổi vai) | `dynamic-island` | Mọi màn trong sandbox |
+| Điều khiển demo (ngày nghiệp vụ, đổi vai) | `dynamic-island` (sửa tại chỗ: không có live region, `compactClassName`, hộp đo không co, ADR 010) | Mọi màn trong sandbox: app shell (M3.3c), portal và mock inbox (M3.3d) |
 | Đang ở đâu | `breadcrumb` | Header các trang |
 | Trạng thái task, onboarding và template | `animated-badge` | Danh sách, bảng, header |
 | Đổi chế độ xem, lọc danh sách | `tabs` | Onboarding detail và graph, My tasks, Mock inbox, Template editor, Review, Employees (People, Departments) |
@@ -780,7 +786,7 @@ Tự dựng theo token vì beUI không có: thanh tiến độ onboarding, avata
 
 ## 11. Chiến lược demo
 
-- **Landing `/`:** một màn giới thiệu, nút "Try live demo", link tới GitHub và tài liệu.
+- **Landing `/`:** một màn giới thiệu, nút "Try live demo", link tới GitHub và tài liệu. Tới khi có Landing (M5.3), nút Try demo là "Start a demo instead" trên trang Sign in (M3.3c).
 - **`POST /demo/sandboxes`:** tạo org `is_sandbox` với `expires_at = now + 24h` qua `seedDemoOrg`, kèm scenarios, rồi đăng nhập luôn với vai HR (M3.3a). Mật khẩu của sandbox là chuỗi ngẫu nhiên không ai biết: khách đổi vai bằng `switch-user`, người mới tự đặt mật khẩu qua lời mời.
 - **Org cố định trước M3:** local dev và bản prod ở M0–M2 dùng một org sandbox không hết hạn (`expires_at = null`), nên có thể tua ngày khi tự test. Từ M3, landing chuyển sang "Try demo"; org này giữ lại để chụp ảnh cho tài liệu, hoặc xóa đi.
 - **`seedDemoOrg(db, { slug, password, expiresAt?, createdIpHash?, scenarios? })`** (`apps/api/src/modules/demo/seed.ts`) là một hàm dùng cho cả ba nơi: local dev, test fixture và sandbox. Hàm tự tạo org (slug quyết định đuôi email, BR-D04) và trả về org kèm email đăng nhập của từng vai.
@@ -867,7 +873,7 @@ Tự dựng theo token vì beUI không có: thanh tiến độ onboarding, avata
 | **M0** Walking skeleton | 1 (2–3 ngày đầu) | 4 (thực tế) | pnpm workspace (`web`, `api`, `core`); docker compose (Postgres); Prisma: org, departments, employees, users, sessions; seed một org cố định (§11); login/logout/me; layout theo vai trò; rewrite proxy; CI; **chọn host và deploy** | Có URL public, đăng nhập được bằng user seed |
 | **M1** Workflow engine | 1–2 | 11 (thực tế) | `core`: schema + `validateTemplate` + tính ngày + availability + activation plan, unit test kỹ. API template (tạo, `PUT` JSON, publish, archive; chưa có editor, template lấy từ seed). Nhân viên (CRUD tối thiểu). Draft → preview → activate. Checklist. Business clock + endpoint tua ngày (để tự test; UI demo bar làm ở M3). Ghi audit. Wizard, Onboarding detail, My Tasks | Activate được template seed; IT và Manager làm checklist; khóa theo ngày/dependency chạy đúng; onboarding tự COMPLETED; nhóm test T, A, E pass |
 | **M2** Tài liệu và duyệt | 3 | 7 (thực tế) | Invitation + mock inbox + nhận lời mời + resend; thêm RustFS vào docker compose và CI; upload (magic bytes → S3); submit revision; approve/reject/rework; signed download; need-to-know; portal nhân viên mới | Golden path (§11) chạy trọn vẹn ở local; nhóm test R, P pass |
-| **M3** Vận hành và demo | 4 | 9 (chia ở M3.1; M3.3 tách ba ở M3.3a) | Đổi ngày, reassign, override deadline, hủy; thông báo in-app; cron tick; sandbox + demo bar; dashboard HR cơ bản; timeline | **Mốc an toàn:** demo public chạy được end-to-end trên host |
+| **M3** Vận hành và demo | 4 | 10 (chia ở M3.1; M3.3 tách ba ở M3.3a, M3.3c tách đôi) | Đổi ngày, reassign, override deadline, hủy; thông báo in-app; cron tick; sandbox + demo bar; dashboard HR cơ bản; timeline | **Mốc an toàn:** demo public chạy được end-to-end trên host |
 | **M4** Editor và trực quan | 5 | ~5 | Template editor dạng form (phases, tasks, chọn `dependsOn`, rule, offset) + validate tức thì bằng `core` + lịch sử version; dependency graph; analytics theo phòng ban | **MVP cut line:** đủ mọi FR mức Must |
 | **M5** Hoàn thiện | 6 | 4 | Playwright golden path; rà lại ma trận quyền, cross-tenant, upload; trạng thái rỗng và lỗi; a11y; checklist hướng dẫn demo; landing page; README, ADR, sơ đồ, video demo | Sẵn sàng đưa vào portfolio |
 | Dự phòng | 7 | — | Dành cho phần bị trễ. Nếu đúng tiến độ: launch sớm, hoặc làm các mục Could | — |

@@ -1,8 +1,12 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import {
   type AcceptInvitation,
+  type Demo,
+  type DemoPersonKind,
+  demoPersonKindSchema,
   type Invitation,
   type InvitationToken,
+  type IsoDate,
   type Login,
   type Me,
   sandboxEmailDomain,
@@ -11,7 +15,7 @@ import {
 import type { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../prisma.js';
 import { recordAudit } from '../audit/audit.js';
-import { toIsoDate } from '../onboarding/onboarding.service.js';
+import { fromIsoDate, toIsoDate } from '../onboarding/onboarding.service.js';
 import { clockOf, clockSelect } from '../org/org.service.js';
 import { invalidInvitation, usable } from './invitation.js';
 import { hashPassword, verifyPassword } from './password.js';
@@ -102,20 +106,94 @@ export class AuthService {
             clockOffsetDays: true,
             slug: true,
             isSandbox: true,
+            expiresAt: true,
           },
         },
       },
     });
-    const { clockOffsetDays, slug, isSandbox, ...org } = organization;
+    const { clockOffsetDays, slug, isSandbox, expiresAt, ...org } =
+      organization;
+    const date = today(org.timezone, clockOffsetDays, new Date());
     return {
       ...user,
       employee,
       onboardingId: own?.id ?? null,
       organization: {
         ...org,
-        today: today(org.timezone, clockOffsetDays, new Date()),
+        today: date,
         emailDomain: isSandbox ? sandboxEmailDomain(slug) : null,
+        demo: isSandbox ? await this.demo(org.id, date, expiresAt) : null,
       },
+    };
+  }
+
+  /** What the demo controls show (PLAN §10): whom the guest can play, and two dates. */
+  private async demo(
+    organizationId: string,
+    date: IsoDate,
+    expiresAt: Date | null,
+  ): Promise<Demo> {
+    const [people, next] = await Promise.all([
+      this.prisma.employee.findMany({
+        where: {
+          organizationId,
+          OR: [
+            { user: { status: 'ACTIVE' } },
+            // Shown, but nobody can play them until they accept their invitation.
+            {
+              user: { is: null },
+              onboardings: { some: { status: { in: ['DRAFT', 'ACTIVE'] } } },
+            },
+          ],
+        },
+        orderBy: { fullName: 'asc' },
+        select: {
+          id: true,
+          fullName: true,
+          user: { select: { role: true } },
+          _count: {
+            select: {
+              reports: true,
+              onboardings: { where: { status: { not: 'CANCELED' } } },
+            },
+          },
+        },
+      }),
+      this.prisma.onboarding.findFirst({
+        where: {
+          organizationId,
+          status: 'ACTIVE',
+          startDate: { gt: fromIsoDate(date) },
+        },
+        orderBy: { startDate: 'asc' },
+        select: { startDate: true },
+      }),
+    ]);
+    const kindOf = ({
+      user,
+      _count,
+    }: (typeof people)[number]): DemoPersonKind =>
+      user?.role === 'HR' || user?.role === 'IT'
+        ? user.role
+        : _count.onboardings
+          ? 'NEW_HIRE'
+          : _count.reports
+            ? 'MANAGER'
+            : 'MEMBER';
+    const order = demoPersonKindSchema.options;
+    return {
+      // The sandbox's own expiry stays on the real clock (PLAN §4.6).
+      expiresAt: expiresAt?.toISOString() ?? null,
+      nextStartDate: next && toIsoDate(next.startDate),
+      people: people
+        .map((person) => ({
+          employeeId: person.id,
+          fullName: person.fullName,
+          kind: kindOf(person),
+          hasAccount: person.user !== null,
+        }))
+        // Stable, so each kind keeps the names in order.
+        .sort((a, b) => order.indexOf(a.kind) - order.indexOf(b.kind)),
     };
   }
 

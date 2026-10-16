@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { roleSchema } from './org.js';
+import { demoSchema, roleSchema } from './org.js';
 
 export * from './dates.js';
 export * from './documents.js';
@@ -154,6 +154,8 @@ export const meSchema = z.object({
     today: z.iso.date(),
     // What follows the @ in every address of a sandbox (BR-D04); null outside one.
     emailDomain: z.string().nullable(),
+    // For the demo controls (PLAN §10); null outside a sandbox (BR-D02).
+    demo: demoSchema.nullable(),
   }),
 });
 export type Me = z.infer<typeof meSchema>;

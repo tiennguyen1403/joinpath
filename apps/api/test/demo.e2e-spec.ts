@@ -26,6 +26,7 @@ import {
 } from '../src/modules/demo/sandbox.js';
 import { seedDemoOrg } from '../src/modules/demo/seed.js';
 import { keysUnder, putObject } from '../src/modules/documents/storage.js';
+import { fromIsoDate } from '../src/modules/onboarding/onboarding.service.js';
 import { PrismaService } from '../src/prisma.js';
 import {
   clientFor,
@@ -34,6 +35,7 @@ import {
   newSlug,
   PASSWORD,
   pdf,
+  signIn,
 } from './app.js';
 
 const HOUR_MS = 60 * 60 * 1000;
@@ -188,6 +190,127 @@ describe('demo', () => {
     expect(await keysUnder(`orgs/${sandbox.id}/`)).toHaveLength(2);
   });
 
+  it('BR-D01 BR-D02 FR-27 me gives the demo controls whom the guest can play, when the sandbox resets and where Jump goes; outside a sandbox, nothing', async () => {
+    const idsIn = async (organizationId: string) =>
+      Object.fromEntries(
+        (await prisma.employee.findMany({ where: { organizationId } })).map(
+          ({ fullName, id }) => [fullName, id],
+        ),
+      );
+    const peopleOf = (
+      ids: Record<string, string>,
+      people: [string, string, boolean][],
+    ) =>
+      people.map(([fullName, kind, hasAccount]) => ({
+        employeeId: ids[fullName],
+        fullName,
+        kind,
+        hasAccount,
+      }));
+
+    // Try demo's, by kind and then name: An's account comes with their invitation, and A, a
+    // draft, is no running onboarding to jump to. The reset is on the real clock.
+    const org = await prisma.organization.findUniqueOrThrow({
+      where: { id: sandbox.id },
+    });
+    expect(sandbox.me.organization.demo).toEqual({
+      expiresAt: org.expiresAt!.toISOString(),
+      nextStartDate: null,
+      people: peopleOf(await idsIn(sandbox.id), [
+        ['Lan Pham', 'HR', true],
+        ['Duc Tran', 'IT', true],
+        ['Huy Le', 'IT', true],
+        ['Minh Nguyen', 'MANAGER', true],
+        ['An Vo', 'NEW_HIRE', false],
+        ['Bao Ho', 'NEW_HIRE', true],
+        ['Chi Dang', 'NEW_HIRE', true],
+      ]),
+    });
+
+    // A company that never expires, without onboardings: only its staff.
+    const organizationId = other.organization.id;
+    const ids = await idsIn(organizationId);
+    const hr = await signIn(app, other.emails.hr);
+    const read = async () =>
+      meSchema.parse((await hr.get('/auth/me').expect(200)).body).organization;
+    const { today: date } = await read();
+    const staff: [string, string, boolean][] = [
+      ['Lan Pham', 'HR', true],
+      ['Duc Tran', 'IT', true],
+      ['Huy Le', 'IT', true],
+      ['Minh Nguyen', 'MANAGER', true],
+    ];
+    expect((await read()).demo).toEqual({
+      expiresAt: null,
+      nextStartDate: null,
+      people: peopleOf(ids, staff),
+    });
+
+    // Open onboardings bring their new hires in, accounts still to come. Jump goes to the first
+    // start after today of a running one: not a draft's, nor one starting today.
+    const { id: templateId } = await prisma.template.findFirstOrThrow({
+      where: { organizationId },
+    });
+    const opened = (
+      fullName: string,
+      status: 'DRAFT' | 'ACTIVE',
+      days: number,
+    ) => ({
+      organizationId,
+      employeeId: ids[fullName],
+      templateId,
+      status,
+      startDate: fromIsoDate(addDays(date, days)),
+    });
+    await prisma.onboarding.createMany({
+      data: [
+        opened('An Vo', 'DRAFT', 2),
+        opened('Bao Ho', 'ACTIVE', 0),
+        opened('Chi Dang', 'ACTIVE', 9),
+      ],
+    });
+    expect((await read()).demo).toEqual({
+      expiresAt: null,
+      nextStartDate: addDays(date, 9),
+      people: peopleOf(ids, [
+        ...staff,
+        ['An Vo', 'NEW_HIRE', false],
+        ['Bao Ho', 'NEW_HIRE', false],
+        ['Chi Dang', 'NEW_HIRE', false],
+      ]),
+    });
+
+    // A locked account is nobody to play, so it leaves the list.
+    await prisma.user.update({
+      where: { employeeId: ids['Huy Le'] },
+      data: { status: 'DISABLED' },
+    });
+    try {
+      expect(
+        (await read()).demo!.people.map((person) => person.fullName),
+      ).not.toContain('Huy Le');
+    } finally {
+      await prisma.user.update({
+        where: { employeeId: ids['Huy Le'] },
+        data: { status: 'ACTIVE' },
+      });
+    }
+
+    // Outside a sandbox there are no demo controls.
+    await prisma.organization.update({
+      where: { id: organizationId },
+      data: { isSandbox: false },
+    });
+    try {
+      expect((await read()).demo).toBeNull();
+    } finally {
+      await prisma.organization.update({
+        where: { id: organizationId },
+        data: { isSandbox: true },
+      });
+    }
+  });
+
   it('BR-D05 once the demo clock moves, the API dates what happens by the business day; what came before keeps its date', async () => {
     const lan = clientFor(app, sandbox.cookie);
     const { timezone, today: started } = sandbox.me.organization;
@@ -224,6 +347,13 @@ describe('demo', () => {
     expect(org.clockOffsetDays).toBe(3);
     expect(org.clockAdvances.map((advance) => advance.offsetDays)).toEqual([3]);
     const [{ createdAt: movedAt }] = org.clockAdvances;
+    // The sandbox still resets by the real clock (BR-D01).
+    const demo = async () =>
+      meSchema.parse((await lan.get('/auth/me').expect(200)).body).organization
+        .demo!;
+    expect((await demo()).expiresAt).toBe(
+      sandbox.me.organization.demo!.expiresAt,
+    );
 
     // C's story keeps its dates; a link not run out yet goes by the clock as it is now.
     const chiNow = await read('Chi Dang');
@@ -290,6 +420,8 @@ describe('demo', () => {
     expect(
       (await listed()).find((each) => each.id === activated.id)!.activatedAt,
     ).toBe(activated.activatedAt);
+    // Running and starting later, A is where Jump goes now.
+    expect((await demo()).nextStartDate).toBe(activated.startDate);
     const { sentAt, expiresAt } = activated.invitation!;
     expect(dayOf(sentAt)).toBe(moved.today);
     expect(

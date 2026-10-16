@@ -9,8 +9,9 @@ import {
 import { motion, useReducedMotion } from 'motion/react';
 import { useRouter } from 'next/navigation';
 import { type FormEvent, useState } from 'react';
-import { Envelope, Eye, EyeSlash } from 'reicon-react';
+import { AlertCircle, Envelope, Eye, EyeSlash, Loader } from 'reicon-react';
 import { EASE_OUT } from '@/components/beui/lib/ease';
+import { cn } from '@/components/beui/lib/utils';
 import {
   Alert,
   AlertContent,
@@ -20,6 +21,7 @@ import {
 import { Button } from '@/components/beui/motion/button/base';
 import { Card } from '@/components/beui/motion/card';
 import { Input } from '@/components/beui/motion/input';
+import { demoErrorOf, startDemo } from '@/lib/demo';
 import { homeFor } from '@/lib/nav';
 
 const MESSAGES: Partial<Record<ErrorCode, string>> = {
@@ -37,6 +39,20 @@ export function LoginForm() {
   const [invalid, setInvalid] = useState({ email: false, password: false });
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [starting, setStarting] = useState(false);
+  const [demoError, setDemoError] = useState<string | null>(null);
+
+  // Try demo (PLAN §11): on success the page loads the new sandbox's dashboard.
+  async function tryDemo() {
+    setDemoError(null);
+    setStarting(true);
+    try {
+      await startDemo();
+    } catch (cause) {
+      setDemoError(demoErrorOf(cause));
+      setStarting(false);
+    }
+  }
 
   async function signIn(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -144,11 +160,49 @@ export function LoginForm() {
         <Button
           type="submit"
           size="lg"
-          disabled={pending}
+          disabled={pending || starting}
           className="w-full bg-primary-strong hover:bg-primary-strong/90"
         >
           {pending ? 'Signing in…' : 'Sign in'}
         </Button>
+        <div className="flex items-center gap-3 text-[13px] text-muted-foreground">
+          <span className="h-px flex-1 bg-border" />
+          or
+          <span className="h-px flex-1 bg-border" />
+        </div>
+        <div className="flex flex-col gap-2.5">
+          <Button
+            size="lg"
+            variant="secondary"
+            disabled={pending || starting}
+            aria-busy={starting || undefined}
+            onClick={tryDemo}
+            // While it runs it spins at full strength; only Sign in dims.
+            className={cn('w-full', starting && 'disabled:opacity-100')}
+          >
+            {starting ? (
+              <Loader className="size-4 animate-spin motion-reduce:animate-none" />
+            ) : (
+              <span className="size-1.5 rounded-full bg-accent" />
+            )}
+            {starting ? 'Starting your demo…' : 'Start a demo instead'}
+          </Button>
+          {/* A failed demo says why in place of the line under its button. */}
+          {demoError ? (
+            <p
+              role="alert"
+              className="flex items-start justify-center gap-1.5 text-[13px] leading-5 text-danger-strong"
+            >
+              <AlertCircle className="mt-0.5 size-4 shrink-0" />
+              {demoError}
+            </p>
+          ) : (
+            <p className="text-center text-[13px] leading-5 text-balance text-muted-foreground">
+              Creates a private sandbox company for 24 hours.{' '}
+              <span className="whitespace-nowrap">No sign-up.</span>
+            </p>
+          )}
+        </div>
       </Card>
     </motion.form>
   );

@@ -72,3 +72,34 @@ export type Clock = z.infer<typeof clockSchema>;
 // POST /demo/switch-user: in a sandbox, the guest plays anyone with an account (BR-D02).
 export const switchUserSchema = z.object({ employeeId: z.uuid() });
 export type SwitchUser = z.infer<typeof switchUserSchema>;
+
+// How the demo controls (PLAN §10) name a person, in the order they list them: HR and IT by
+// their role, then a manager (people report to them), a member, and a new hire (an onboarding
+// of their own).
+export const demoPersonKindSchema = z.enum([
+  'HR',
+  'IT',
+  'MANAGER',
+  'MEMBER',
+  'NEW_HIRE',
+]);
+export type DemoPersonKind = z.infer<typeof demoPersonKindSchema>;
+
+// What the demo controls show of a sandbox; `me` carries it there, and only there (BR-D02).
+export const demoSchema = z.object({
+  // When the sandbox goes, all in it (BR-D01): on the real clock (PLAN §4.6); null if never.
+  expiresAt: z.iso.datetime().nullable(),
+  // Where "Jump to" goes: the earliest start date after today of a running onboarding.
+  nextStartDate: z.iso.date().nullable(),
+  // Everyone with a working account, and the new hires of open onboardings still waiting for
+  // theirs, whom nobody can play until they accept their invitation.
+  people: z.array(
+    z.object({
+      employeeId: z.uuid(),
+      fullName: z.string(),
+      kind: demoPersonKindSchema,
+      hasAccount: z.boolean(),
+    }),
+  ),
+});
+export type Demo = z.infer<typeof demoSchema>;
