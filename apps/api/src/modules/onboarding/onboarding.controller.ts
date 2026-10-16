@@ -12,8 +12,10 @@ import {
 import {
   activateOnboardingSchema,
   type ActivationPreview,
+  type ActivityEvent,
   cancelOnboardingSchema,
   createOnboardingSchema,
+  type Dashboard,
   type OnboardingDetail,
   type OnboardingSummary,
   rescheduleOnboardingSchema,
@@ -51,6 +53,21 @@ export class OnboardingController {
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<OnboardingDetail> {
     return this.onboardings.get(req.auth!, id);
+  }
+
+  @Get('onboardings/:id/activity')
+  activity(
+    @Req() req: Request,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<ActivityEvent[]> {
+    return this.onboardings.activity(req.auth!, id);
+  }
+
+  // HR's home (PLAN §10).
+  @Roles('HR')
+  @Get('dashboard')
+  dashboard(@Req() req: Request): Promise<Dashboard> {
+    return this.onboardings.dashboard(req.auth!);
   }
 
   // A draft only; the body changes any of employeeId, templateId, startDate.

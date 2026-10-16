@@ -416,3 +416,111 @@ export const myTasksSchema = z.object({
   tasks: z.array(myTaskSchema),
 });
 export type MyTasks = z.infer<typeof myTasksSchema>;
+
+const taskRefSchema = z.object({ id: z.uuid(), title: z.string() });
+const activityBaseSchema = z.object({
+  id: z.uuid(),
+  // By the business day it happened on (BR-D05).
+  at: z.iso.datetime(),
+  // Null if the system did it, which nothing on a timeline records yet.
+  actor: personSchema.nullable(),
+  onboarding: z.object({ id: z.uuid(), employee: personSchema }),
+  // The task it is about, if one.
+  task: taskRefSchema.nullable(),
+});
+
+/**
+ * Something that happened to an onboarding, from its audit trail (PLAN §7). Uploading and
+ * removing files stays off it: the submission says what counts. Only those who see a
+ * document's files hear of its revisions and decisions (BR-P03).
+ */
+export const activityEventSchema = z.discriminatedUnion('action', [
+  activityBaseSchema.extend({
+    action: z.enum([
+      'onboarding.created',
+      'onboarding.canceled',
+      'onboarding.completed',
+      'task.started',
+      'task.completed',
+      'invitation.sent',
+      'invitation.resent',
+      'invitation.accepted',
+    ]),
+  }),
+  activityBaseSchema.extend({
+    action: z.literal('onboarding.activated'),
+    version: z.int(),
+    taskCount: z.int(),
+    // HR's picks (§4.7): who took the tasks the template could not settle.
+    picks: z.array(z.object({ task: taskRefSchema, assignee: personSchema })),
+  }),
+  activityBaseSchema.extend({
+    action: z.literal('onboarding.rescheduled'),
+    from: z.iso.date(),
+    to: z.iso.date(),
+    // HR's deadlines that went back to the template's (BR-S02).
+    dueReset: z.array(
+      z.object({ task: taskRefSchema, from: z.iso.date(), to: z.iso.date() }),
+    ),
+  }),
+  activityBaseSchema.extend({
+    action: z.literal('task.reassigned'),
+    from: personSchema,
+    to: personSchema,
+  }),
+  activityBaseSchema.extend({
+    action: z.enum(['task.due_changed', 'task.due_reset']),
+    from: z.iso.date(),
+    to: z.iso.date(),
+  }),
+  activityBaseSchema.extend({
+    // `task`: the DOCUMENT submitted, or the APPROVAL that decided.
+    action: z.enum([
+      'document.submitted',
+      'document.approved',
+      'document.rejected',
+    ]),
+    revision: z.int(),
+  }),
+]);
+export type ActivityEvent = z.infer<typeof activityEventSchema>;
+
+// GET /dashboard, HR's home (PLAN §10). The web counts and words what needs attention.
+export const dashboardSchema = z.object({
+  today: z.iso.date(),
+  // The running onboardings and the drafts, the soonest start first. A draft names the tasks
+  // activating it now would leave without an owner, as its review does (§4.7).
+  onboardings: z.array(
+    onboardingSchema.extend({
+      unassigned: z.array(
+        plannedTaskSchema.pick({ title: true, assignee: true }),
+      ),
+    }),
+  ),
+  // The open tasks of the running onboardings, by due date.
+  tasks: z.array(
+    taskSchema
+      .pick({
+        id: true,
+        title: true,
+        type: true,
+        assignee: true,
+        reviewsTaskId: true,
+        dependsOn: true,
+        availableOn: true,
+        dueOn: true,
+        status: true,
+        availability: true,
+        overdue: true,
+      })
+      .extend({
+        onboardingId: z.uuid(),
+        // APPROVAL only: when the newest revision of its document came in; null before one,
+        // and for any other task.
+        submittedAt: z.iso.datetime().nullable(),
+      }),
+  ),
+  // The org's newest events, on any onboarding.
+  activity: z.array(activityEventSchema),
+});
+export type Dashboard = z.infer<typeof dashboardSchema>;

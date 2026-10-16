@@ -2,12 +2,12 @@
 
 > File này được nạp vào mọi session qua `CLAUDE.md`. Giữ ngắn: chỉ trạng thái hiện tại. Lịch sử chi tiết nằm trong `docs/sessions/`.
 
-**Cập nhật:** 2026-10-16 · session 030 (M3.3d · island trên portal, mock inbox và điện thoại; golden path 1–9 qua UI)
-**Mốc hiện tại:** M3 · Vận hành và demo, xong 8/10 session.
+**Cập nhật:** 2026-10-17 · session 031 (M3.4a · API dashboard HR và activity của onboarding)
+**Mốc hiện tại:** M3 · Vận hành và demo, xong 9/11 session.
 
-M0, M1, M2 đã xong; demo public tại https://joinpath.vercel.app, đã push tới M2.4b (các commit từ `M2.5` tới `M3.3d` còn ở local). M3.1: HR đổi ngày bắt đầu, hủy, reassign, đổi deadline qua UI. M3.2: thông báo trong app và email (BR-N02); tick nhắc việc khi tua ngày và mỗi ngày qua Vercel Cron (chưa có trên prod). M3.3a–b: `POST /demo/sandboxes` (sandbox 24 giờ kèm A, B, C), `switch-user`, purge; mốc giờ theo ngày nghiệp vụ (BR-D05). M3.3c–d: Dynamic Island trên mọi trang của sandbox (app shell, portal, mock inbox; thiếu chỗ thì ở hàng riêng dưới header), Try demo ở trang Sign in, notice "Don't upload real documents", đường portal → My tasks. Golden path (PLAN §11) bước 1–9 chạy trọn ở local chỉ bằng UI (M3.3d).
+M0, M1, M2 đã xong; demo public tại https://joinpath.vercel.app, đã push tới M2.4b (các commit từ `M2.5` tới `M3.4a` còn ở local). M3.1: HR đổi ngày bắt đầu, hủy, reassign, đổi deadline qua UI. M3.2: thông báo trong app và email (BR-N02); tick nhắc việc khi tua ngày và mỗi ngày qua Vercel Cron (chưa có trên prod). M3.3a–b: `POST /demo/sandboxes` (sandbox 24 giờ kèm A, B, C), `switch-user`, purge; mốc giờ theo ngày nghiệp vụ (BR-D05). M3.3c–d: Dynamic Island trên mọi trang của sandbox (app shell, portal, mock inbox; thiếu chỗ thì ở hàng riêng dưới header), Try demo ở trang Sign in, notice "Don't upload real documents", đường portal → My tasks. Golden path (PLAN §11) bước 1–9 chạy trọn ở local chỉ bằng UI (M3.3d). M3.4a: `GET /dashboard` (chỉ HR) và `GET /onboardings/:id/activity` (timeline từ `audit_events`, revision và quyết định theo BR-P03); chưa có web.
 
-**Session kế tiếp:** **M3.4 · Dashboard HR + tab Activity** (xem bảng). Bước đầu: đọc bảng `Dashboard`, `OnboardingDetail` trên canvas chính, chốt shape của `GET /dashboard` và `GET /onboardings/:id/activity` (từ `audit_events`), quyết định tách a/b. Handoff mới nhất: `docs/sessions/030-M3.3d-island-phones.md`; dữ liệu canvas ở handoff 005, 008, 009, 016, 019, 025, 027 và hàng 12–13 của canvas chính.
+**Session kế tiếp:** **M3.4b · Web: dashboard HR + Activity** (xem bảng). Bước đầu: bảng trước/sau trên canvas cho chỗ đặt Activity (card ở cột phải như canvas, hay tab thật), Activity của người không phải HR, trạng thái rỗng và lỗi của dashboard; chốt câu chữ theo action. Handoff mới nhất: `docs/sessions/031-M3.4a-dashboard-activity-api.md`; dữ liệu canvas ở handoff 005, 008, 009, 016, 019, 025, 027 và hàng 12–13 của canvas chính.
 
 ## Quy ước session
 
@@ -26,7 +26,8 @@ Trạng thái: ✅ xong · ▶ kế tiếp · ⏳ chưa làm. Mốc M4–M5 mớ
 | M2.1a–M2.5 | Tài liệu và duyệt: lời mời, mock inbox, resend; RustFS, upload (magic bytes, 4 MB, 5 file), signed download, need-to-know; submit, approve / reject / rework; web: nhận lời mời, portal người mới, drawer review | Golden path bước 2–9 chạy trọn ở local qua UI; nhóm test R, P pass (handoff 016–022) | ✅ |
 | M3.1a–M3.2b | Đổi ngày bắt đầu, hủy, reassign, đổi deadline (`planReschedule` trong `core`, API, web); thông báo trong app và email, cron tick, trang Notifications và chuông trên portal | AT-06, AT-19–AT-22, AT-24, AT-25 pass; qua UI mỗi vai làm được việc của mình (handoff 023–026) | ✅ |
 | M3.3a–M3.3d | Sandbox (`POST /demo/sandboxes`, scenarios A/B/C, purge, `switch-user`); mốc giờ theo ngày nghiệp vụ (`clock_advances`); Dynamic Island trên mọi trang của sandbox, cả 390 px; Try demo; notice dữ liệu giả; portal → My tasks | AT-31, BR-D01, BR-D05, BR-P06 pass; golden path bước 1–9 chạy ở local chỉ bằng UI (handoff 027–030) | ✅ |
-| **M3.4** | Dashboard HR + tab Activity (`GET /dashboard`, `GET /onboardings/:id/activity`); có thể tách a/b | Golden path bước 10 ở local | ▶ |
+| M3.4a | API: `GET /dashboard`, `GET /onboardings/:id/activity` (từ `audit_events`), schema trong `core` | Hai endpoint chạy, test FR-19 pass (handoff 031) | ✅ |
+| **M3.4b** | Web: dashboard HR theo canvas, Activity trên trang chi tiết onboarding | Golden path bước 10 ở local | ▶ |
 | M3.5 | Demo public end-to-end trên host; upload và xem file thật trên production (hoãn từ M2.5); đặt `CRON_SECRET`, kiểm Vercel Cron chạy với Services (không được thì GitHub Actions, handoff 025); đo thời gian tạo sandbox, kiểm purge với R2 (token cần quyền list, handoff 027) | **Mốc an toàn:** golden path 1–10 chạy trên production | ⏳ |
 | M4.1 | Template editor dạng form + validate tức thì bằng `core` | | ⏳ |
 | M4.2 | Lịch sử version + luồng publish trên UI | | ⏳ |

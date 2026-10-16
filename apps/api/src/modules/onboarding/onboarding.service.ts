@@ -7,9 +7,11 @@ import {
 import {
   type ActivateOnboarding,
   type ActivationPreview,
+  type ActivityEvent,
   availability,
   type CancelOnboarding,
   type CreateOnboarding,
+  type Dashboard,
   type DocumentMimeType,
   type IsoDate,
   isOverdue,
@@ -27,6 +29,7 @@ import {
 } from '@joinpath/core';
 import type { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../prisma.js';
+import { readActivity } from '../audit/activity.js';
 import { recordAudit } from '../audit/audit.js';
 import { sendInvitation } from '../auth/invitation.js';
 import type { AuthContext } from '../auth/session.js';
@@ -364,6 +367,131 @@ export class OnboardingService {
       await orgClock(this.prisma, auth.organizationId),
       auth,
     );
+  }
+
+  /** Its timeline, for whoever sees the onboarding (PLAN §9). */
+  async activity(auth: AuthContext, id: string): Promise<ActivityEvent[]> {
+    const found = await this.prisma.onboarding.count({
+      where: { id, ...visibleOnboardings(auth) },
+    });
+    if (!found) throw new NotFoundException('Onboarding not found');
+    return readActivity(
+      this.prisma,
+      auth,
+      await orgClock(this.prisma, auth.organizationId),
+      { onboardingId: id },
+    );
+  }
+
+  /**
+   * HR's home (PLAN §10): the running onboardings and the drafts, the open tasks of the
+   * running ones, and the newest of what happened.
+   */
+  async dashboard(auth: AuthContext): Promise<Dashboard> {
+    const { organizationId } = auth;
+    const clock = await orgClock(this.prisma, organizationId);
+    const onboardings = await this.prisma.onboarding.findMany({
+      where: { organizationId, status: { in: ['ACTIVE', 'DRAFT'] } },
+      orderBy: [{ startDate: 'asc' }, { createdAt: 'asc' }],
+      select: onboardingSelect,
+    });
+    const tasks = await this.prisma.task.findMany({
+      where: {
+        organizationId,
+        status: { in: ['PENDING', 'IN_PROGRESS'] },
+        onboarding: { status: 'ACTIVE' },
+      },
+      orderBy: [
+        { dueOn: 'asc' },
+        { onboardingId: 'asc' },
+        { phaseOrder: 'asc' },
+        { position: 'asc' },
+      ],
+      select: {
+        id: true,
+        title: true,
+        type: true,
+        assignee: { select: { id: true, fullName: true } },
+        reviewsTaskId: true,
+        dependsOn: {
+          orderBy: { dependsOn: { position: 'asc' } },
+          select: {
+            dependsOnTaskId: true,
+            dependsOn: { select: { status: true } },
+          },
+        },
+        availableOn: true,
+        dueOn: true,
+        status: true,
+        onboardingId: true,
+        // An approval's document, and when its newest revision came in.
+        reviews: {
+          select: {
+            submissions: {
+              orderBy: { revision: 'desc' },
+              take: 1,
+              select: { submittedAt: true },
+            },
+          },
+        },
+      },
+    });
+    return {
+      today: clock.today,
+      onboardings: await Promise.all(
+        onboardings.map(async (row) => {
+          const onboarding = toOnboarding(row, clock);
+          if (onboarding.status !== 'DRAFT') {
+            return { ...onboarding, unassigned: [] };
+          }
+          const plan = await planFor(
+            this.prisma,
+            organizationId,
+            {
+              employeeId: onboarding.employee.id,
+              templateVersionId: onboarding.templateVersion.id,
+              startDate: onboarding.startDate,
+            },
+            {},
+          );
+          return {
+            ...onboarding,
+            unassigned: plan.tasks
+              .filter((task) => task.problem !== undefined)
+              .map(({ title, assignee }) => ({ title, assignee })),
+          };
+        }),
+      ),
+      tasks: tasks.map(
+        ({ dependsOn, reviews, availableOn, dueOn, ...task }) => {
+          const dates = {
+            availableOn: toIsoDate(availableOn),
+            dueOn: toIsoDate(dueOn),
+          };
+          const submittedAt = reviews?.submissions.at(0)?.submittedAt;
+          return {
+            ...task,
+            ...dates,
+            dependsOn: dependsOn.map((dep) => dep.dependsOnTaskId),
+            availability: availability(
+              { status: task.status, ...dates },
+              'ACTIVE',
+              dependsOn.map((dep) => dep.dependsOn.status),
+              clock.today,
+            ),
+            overdue: isOverdue({ status: task.status, ...dates }, clock.today),
+            submittedAt: submittedAt ? clock.at(submittedAt) : null,
+          };
+        },
+      ),
+      activity: await readActivity(
+        this.prisma,
+        auth,
+        clock,
+        { organizationId, onboardingId: { not: null } },
+        10,
+      ),
+    };
   }
 
   /** What activating the draft now would create, before HR's picks (PLAN §4.7). */
