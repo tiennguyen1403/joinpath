@@ -23,6 +23,7 @@
 - Tự kiểm bảng phương án trước khi đưa user duyệt (M4.1a): bảng `.dc.html` là HTML tĩnh, trình duyệt thường dựng được như canvas.
   - `python -m http.server <port> --bind 127.0.0.1 --directory <scratchpad>`, rồi `run-code --filename` một script: mỗi bảng đặt viewport bằng chiều rộng khung, chờ `document.fonts.ready`, ẩn thanh cuộn (`addStyleTag` `html{scrollbar-width:none}`), đo `scrollHeight`, `scrollWidth` so với `clientWidth`, chụp `fullPage`.
   - Đặt `h` của khung trong `canvas.json` và `$preview` của bảng bằng chiều cao đo được. Hướng dẫn của loại canvas Design bảo không tự kiểm khi user chưa yêu cầu: dự án này thì kiểm.
+- Kéo thả của `sortable-stack` (motion `Reorder`) chạy với `page.mouse`: `down` trên tay nắm, `move` từng bước nhỏ (vd 8 px, chờ 16 ms), rồi `up`. Bàn phím: `focus` tay nắm rồi `ArrowUp`, `ArrowDown`, `Home`, `End` (M4.1b).
 - `click` nhận locator thay cho ref: `click "getByRole('button', { name: 'Lan Pham, HR' })"`, đỡ phải `snapshot` trước mỗi bước (M3.3d).
   - Tên khớp theo chuỗi con, không phân biệt hoa thường: "Mock inbox" khớp cả "Open mock inbox", locator trùng hai phần tử thì không bấm gì. Thêm `exact: true`.
   - Mở island xong thì pill biến mất khỏi DOM (thành dialog): `eval` tìm `button[aria-label^="Demo controls"]` lúc đó trả null.
@@ -40,6 +41,8 @@
   - `pnpm db:seed` cần `S3_*` và bucket (onboarding B, C upload file), trừ khi chạy `--no-scenarios`. Giả lập thiếu một biến của `.env` bằng cách đặt nó rỗng trước lệnh (`S3_ENDPOINT= pnpm …`): biến rỗng trong môi trường thắng `--env-file` (M3.3a).
 - `seed.yml` chạy trên GitHub Actions, xa Neon: mỗi query mất vài trăm ms, nên transaction của `seedDemoOrg` để timeout 30 s. Seed xóa org `acme` trước, ngoài transaction: seed fail là prod mất org demo tới lần chạy sau.
 - Đừng `pnpm build` khi `pnpm dev` đang chạy (`nest build` xóa `dist`, api dev chết). Dừng `pnpm dev` chạy nền không tắt node của next và nest: `Stop-Process` theo command line.
+  - Chỉ lọc theo `next`, `nest`, `apps\api`, `tsc`: lọc theo `pnpm` hay `joinpath` khớp cả trình duyệt của Playwright CLI (`node_modules\.pnpm\playwright-core…`) và tắt nó (M4.1b).
+- Prettier với đường dẫn có `[id]`: truyền đúng đường dẫn (`prettier --write "apps/web/app/(app)/templates/[id]/editor.tsx"`); escape kiểu glob `[[]id]` thì không khớp file nào (M4.1b).
 - Script Python sửa file repo: đọc, ghi với `newline=""` (không thì thành CRLF); in output vitest cần `PYTHONIOENCODING=utf-8` (`python -I` bỏ qua biến này: dùng `sys.stdout.reconfigure(encoding='utf-8')`).
   - Heredoc `python - <<'EOF'` dài, có nhiều dấu nháy đơn, có lúc bị Bash tool báo "unexpected EOF while looking for matching `''": ghi script vào scratchpad bằng Write rồi chạy `python -I <file>` (M3.1a).
   - `$TMP` của Git Bash không phải scratchpad của session: file tạm, bản sao lưu thì dùng đường dẫn scratchpad tuyệt đối.

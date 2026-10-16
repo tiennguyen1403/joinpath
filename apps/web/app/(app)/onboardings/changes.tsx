@@ -71,7 +71,7 @@ const listed = (names: string[]) =>
     ? names.join('')
     : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
 
-const TINTED_DANGER =
+export const TINTED_DANGER =
   'bg-destructive/10 text-danger-strong hover:bg-destructive/15 active:bg-destructive/20';
 
 /**
@@ -269,7 +269,7 @@ const Picked = ({ date, note }: { date: string; note: string }) => (
   </div>
 );
 
-function Lines({
+export function Lines({
   title,
   lines,
 }: {

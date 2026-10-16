@@ -1,14 +1,22 @@
 'use client';
 
 import { type Template, templateSchema } from '@joinpath/core';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
-import { Check } from 'reicon-react';
+import { useRouter } from 'next/navigation';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { Check, Plus } from 'reicon-react';
 import { AnimatedBadge } from '@/components/beui/motion/animated-badge';
+import { Button } from '@/components/beui/motion/button/base';
+import {
+  CenterMorphModal,
+  CenterMorphModalContent,
+} from '@/components/beui/motion/center-morph-modal';
+import { Input } from '@/components/beui/motion/input';
 import { EmptyState } from '@/components/empty-state';
 import { Notice } from '@/components/notice';
 import { Table, Td, Th, THead, Tr } from '@/components/table';
-import { api } from '@/lib/api';
+import { api, messageOf } from '@/lib/api';
 import { formatDateIn } from '@/lib/format';
 
 export function Templates({ timeZone }: { timeZone: string }) {
@@ -54,6 +62,141 @@ export function Templates({ timeZone }: { timeZone: string }) {
         ))}
       </tbody>
     </Table>
+  );
+}
+
+/** Names a new template in a dialog; created, it opens as draft v1 in the editor (FR-04). */
+export function NewTemplateButton() {
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const button = useRef<HTMLButtonElement>(null);
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [missing, setMissing] = useState(false);
+  const descriptionId = useId();
+  const hintId = useId();
+  const create = useMutation({
+    mutationFn: (body: { name: string; description: string }) =>
+      api('/templates', templateSchema, { method: 'POST', body }),
+    onSuccess: (template) => {
+      queryClient.setQueryData(['template', template.id], template);
+      void queryClient.invalidateQueries({ queryKey: ['templates'] });
+      router.push(`/templates/${template.id}`);
+    },
+  });
+  const close = () => {
+    setOpen(false);
+    setName('');
+    setDescription('');
+    setMissing(false);
+    create.reset();
+    button.current?.focus();
+  };
+  // The modal re-runs its focus effect whenever this callback changes, so it stays one function.
+  const closing = useRef(close);
+  useEffect(() => {
+    closing.current = close;
+  });
+  const onOpenChange = useCallback((next: boolean) => {
+    if (!next) closing.current();
+  }, []);
+
+  return (
+    <>
+      <Button
+        ref={button}
+        aria-haspopup="dialog"
+        onClick={() => setOpen(true)}
+        className="bg-primary-strong hover:bg-primary-strong/90"
+      >
+        <Plus aria-hidden className="size-4" />
+        New template
+      </Button>
+      <CenterMorphModal open={open} onOpenChange={onOpenChange}>
+        <CenterMorphModalContent
+          ariaLabel="New template"
+          closeButtonLabel="Close"
+          // The drawer's scrim (Foundations).
+          backdropClassName="bg-black/40"
+        >
+          <form
+            className="flex flex-col gap-4.5 p-6"
+            onSubmit={(event) => {
+              event.preventDefault();
+              const named = name.trim();
+              if (named) {
+                create.mutate({ name: named, description: description.trim() });
+              } else {
+                setMissing(true);
+              }
+            }}
+          >
+            <h2 className="pr-10 text-xl leading-7 font-semibold tracking-tight">
+              New template
+            </h2>
+            <p className="-mt-3 text-[13px] leading-5 text-muted-foreground">
+              It starts as draft v1. Add its phases and tasks, then publish it.
+            </p>
+            <Input
+              label="Name"
+              value={name}
+              onChange={(value) => {
+                setName(value);
+                setMissing(false);
+              }}
+              maxLength={80}
+              autoComplete="off"
+              disabled={create.isPending}
+              error={missing && 'Give the template a name.'}
+              classNames={{ errorMessage: 'text-danger-strong' }}
+            />
+            <div className="flex flex-col gap-1.5">
+              <label
+                htmlFor={descriptionId}
+                className="px-1 text-sm font-medium"
+              >
+                Description{' '}
+                <span className="font-normal text-muted-foreground">
+                  · optional
+                </span>
+              </label>
+              <textarea
+                id={descriptionId}
+                rows={3}
+                maxLength={500}
+                value={description}
+                onChange={(event) => setDescription(event.target.value)}
+                disabled={create.isPending}
+                aria-describedby={hintId}
+                className="resize-y rounded-2xl border border-border bg-transparent px-4 py-2.5 text-sm leading-[22px] outline-none transition-colors focus:border-foreground/40 focus:ring-2 focus:ring-ring/40"
+              />
+              <p
+                id={hintId}
+                className="px-1 text-xs leading-4 text-muted-foreground"
+              >
+                Shown under its name in Templates.
+              </p>
+            </div>
+            {create.error && (
+              <Notice
+                variant="destructive"
+                title="Couldn't create the template"
+                text={messageOf(create.error)}
+              />
+            )}
+            <Button
+              type="submit"
+              size="lg"
+              disabled={create.isPending}
+              className="bg-primary-strong hover:bg-primary-strong/90"
+            >
+              {create.isPending ? 'Creating…' : 'Create template'}
+            </Button>
+          </form>
+        </CenterMorphModalContent>
+      </CenterMorphModal>
+    </>
   );
 }
 

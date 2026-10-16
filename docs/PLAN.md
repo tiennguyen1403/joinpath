@@ -1,4 +1,4 @@
-# Joinpath — Kế hoạch triển khai v0.40
+# Joinpath — Kế hoạch triển khai v0.41
 
 > **Joinpath**: Employee Onboarding & Workflow Management Platform, dự án portfolio Full-stack.
 > Bản này tinh chỉnh SRS v0.4 trong thread ChatGPT "Thiết kế dự án onboarding" (14/10/2026).
@@ -38,6 +38,7 @@
 > **v0.38 (17/10/2026):** web của dashboard HR và Activity (M3.4b). Activity là card ở cột phải trang chi tiết, cho mọi người xem được onboarding, chưa có tab tới khi có graph. Dashboard tự đếm, viết câu và chọn việc cần chú ý từ `GET /dashboard`; task bị chặn quy về task gốc bằng `blockersOf` trong `core` (§10, §10.1).
 > **v0.39 (17/10/2026):** Vercel Cron chạy được với Services (kiểm ở M3.5): không cần GitHub Actions (§6.5). M3 xong sau 11 session, golden path chạy trên production (§13).
 > **v0.40 (17/10/2026):** M4 chia thành 5 session: M4.1 tách thành sửa task (M4.1a) và sửa cấu trúc template (M4.1b) (§13). Editor gợi ý, không chặn, khi APPROVAL và DOCUMENT mà nó duyệt cùng giao `DIRECT_MANAGER` (§4.2). Bỏ bản nháp template bằng `DELETE /template-versions/:id`: chỉ DRAFT của template đã có bản published, xóa hẳn và ghi audit; thêm một ngoại lệ vào quy tắc không xóa bản ghi nghiệp vụ (§7, §8). Template editor của M4.1a: trang của template, Edit tạo draft, panel sửa task, validate trên trình duyệt, tự lưu; `adaptive-stepper` và `multi-select` sửa tại chỗ (§10, §10.1).
+> **v0.41 (17/10/2026):** sửa cấu trúc template (M4.1b). Key của task và phase sinh từ title lúc thêm (`keyFor`); xóa task gỡ mọi link tới nó (`withoutTasks`), xóa phase kéo theo các task của nó (§4.2). Editor: thêm task, phase bằng ô nhập tại chỗ, menu ⋯ của phase (Rename, Move up, Move down, Delete), kéo thả task trong phase, hộp xác nhận xóa, New template từ trang Templates, draft rỗng, dưới 1280 px panel mở trong drawer, lưu bị 409 thì dừng (§10, §10.1).
 
 ## TL;DR: 6 thay đổi lớn nhất
 
@@ -219,6 +220,7 @@ Zod schema chỉ kiểm từng field: kiểu, độ dài, key dạng slug, offse
 - `message` viết tiếng Anh và gọi task bằng title, vì UI không hiện key.
 - DRAFT lưu được khi còn lỗi; publish thì phải hết lỗi (BR-T03).
 - Editor gợi ý, không chặn publish, khi APPROVAL và DOCUMENT mà nó duyệt cùng giao `DIRECT_MANAGER`: hai task luôn trùng người, nên lần activate nào HR cũng phải chọn approver khác (BR-R01, §4.7). Cùng giao một `ROLE` thì không gợi ý, vì còn tùy org có mấy người giữ role đó; preview đã xử lý (M4.1a).
+- Editor sinh key cho task và phase mới bằng `keyFor` trong `core`: slug của title lúc thêm, bỏ dấu, trùng thì thêm `-2`, `-3`; sửa title sau đó không đổi key. Xóa task gỡ mọi `dependsOn` và `reviews` trỏ tới nó (`withoutTasks`); APPROVAL mất tài liệu thì báo BR-T08 tới khi chọn tài liệu khác. Xóa phase xóa luôn các task của nó (M4.1b).
 
 ### 4.3 Vòng đời onboarding
 
@@ -782,7 +784,14 @@ Activity trên trang chi tiết (M3.4b) là card ở cột phải, dưới Invit
 
 Template editor (M4.1a), mở từ một dòng của bảng Templates (`/templates/:id`):
 - Template chưa có draft: bản published mới nhất, chỉ đọc, kèm nút Edit tạo DRAFT kế tiếp (BR-T02). Đã archive: chỉ đọc, không có Edit.
-- Draft: các phase bên trái; bên phải là panel Edit task (title, loại, tài liệu mà APPROVAL duyệt, người làm, phase, ngày mở và hạn, Waits for, Instructions). Phần cấu trúc (thêm, xóa, kéo thả) để M4.1b; Publish, Discard và tab version để M4.2.
+- Draft: các phase bên trái; bên phải là panel Edit task (title, loại, tài liệu mà APPROVAL duyệt, người làm, phase, ngày mở và hạn, Waits for, Instructions). Publish, Discard và tab version để M4.2.
+- Cấu trúc (M4.1b):
+  - **Thêm:** Add task dưới mỗi phase và Add phase cuối danh sách là ô nhập tại chỗ. Enter thêm task và giữ ô cho task tiếp theo; Enter thêm phase rồi mở ô task đầu tiên của nó; bấm ra ngoài khi đã gõ cũng thêm; Esc bỏ. Task mới là Checklist cho New hire, ngày mở và hạn như task ngay trên nó (phase rỗng: day 1). Tối đa 20 phase và 100 task như schema.
+  - **Menu ⋯ của phase:** Rename tại chỗ, Move up, Move down, Delete phase. Task kéo thả bằng tay nắm trong phase, hoặc bằng phím trên tay nắm; sang phase khác thì đổi field Phase.
+  - **Xóa:** Delete task (nút thùng rác trên panel) luôn hỏi; phase có task thì hỏi, phase rỗng xóa ngay. Hộp xác nhận nêu các link sẽ mất.
+  - **New template** trên trang Templates (tên, mô tả tùy chọn) tạo DRAFT v1 rồi mở editor. Draft rỗng chỉ có "Start with a phase", chưa hiện Alert.
+  - **Dưới 1280 px:** panel Edit task mở trong `drawer` bên phải (480 px; điện thoại: hết chiều ngang), dòng trạng thái lưu hiện thêm dưới tiêu đề.
+  - **Lưu bị 409** (draft vừa được publish hoặc template bị archive ở nơi khác): dừng tự lưu, dòng trạng thái nói lý do kèm Reload.
 - Mỗi thay đổi chạy `templateDefinitionSchema` rồi `validateTemplate` ngay trên trình duyệt: Alert "Fix N problems to publish" liệt kê câu của `core`, badge "N problems" trên task, câu đó dưới field sửa được nó. Vòng phụ thuộc dùng câu của canvas, viết từ phía task đang sửa, và tô đỏ link gây vòng; gợi ý BR-R01 ở §4.2.
 - Draft tự lưu 600 ms sau thay đổi cuối (PUT cả definition); title trống thì chưa lưu; rời trang thì gửi nốt phần chưa gửi.
 
@@ -805,7 +814,7 @@ Nguyên tắc (ADR 010): có component beUI thì dùng, không tự vẽ và kh�
 | Ô nhập chữ | `input` | Sign in, Accept invitation, Template editor, Review, Employees |
 | Số ngày lệch so với ngày bắt đầu | `adaptive-stepper` (sửa tại chỗ: `fill`, ADR 010; editor tô nền viên thuốc xám, liquid trong suốt) | Template editor |
 | Task phụ thuộc | `multi-select` (sửa tại chỗ: `chipClassName` theo từng chip, ADR 010) | Template editor |
-| Sắp xếp task | `sortable-stack` | Template editor |
+| Sắp xếp task trong một phase | `sortable-stack` (tay nắm là `Reorder` của reicon, M4.1b) | Template editor |
 | Loại task | `radio` | Template editor |
 | Checklist của một phase | `todo-list` (sửa tại chỗ: `meta`, `body`, ADR 010) | Onboarding detail, New-hire portal, Landing |
 | Duyệt hoặc yêu cầu sửa | `approval-card` (sửa tại chỗ: `meta`, ADR 010) + `drawer` (sửa tại chỗ: portal, giữ focus, ADR 010) | Review (drawer mở từ My tasks) |
@@ -814,8 +823,9 @@ Nguyên tắc (ADR 010): có component beUI thì dùng, không tự vẽ và kh�
 | Đặt mật khẩu | `input` (không dùng `signup-form`: bản này luôn có ô Name, Email sửa được và checkbox Terms; M2.1b) | Accept invitation |
 | Báo kết quả vừa xảy ra | `animated-toast-stack` | Sau khi activate, Landing |
 | Chuông thông báo và danh sách mở từ nó | `popover-morph`, mọi độ rộng (M3.2b) | Header của New-hire portal |
-| Thao tác trên dòng task | `context-menu` (sửa tại chỗ: nút ⋯ mở bằng click, ADR 010) | Onboarding detail |
-| Đổi ngày bắt đầu, hủy, reassign, đổi hạn | `center-morph-modal` (sửa tại chỗ: Esc nhường `select` đang mở, ADR 010) | Onboarding detail, review của draft |
+| Thao tác trên dòng task; ⋯ của phase (Rename, Move up, Move down, Delete) | `context-menu` (sửa tại chỗ: nút ⋯ mở bằng click, ADR 010) | Onboarding detail; Template editor (M4.1b) |
+| Đổi ngày bắt đầu, hủy, reassign, đổi hạn; xác nhận xóa task, phase; New template | `center-morph-modal` (sửa tại chỗ: Esc nhường `select` đang mở, ADR 010) | Onboarding detail, review của draft; Template editor, Templates (M4.1b) |
+| Panel Edit task dưới 1280 px | `drawer` (480 px, điện thoại hết chiều ngang) | Template editor (M4.1b) |
 | Giải thích vì sao nút bị khóa | `tooltip` | Nút Publish của Template editor |
 | Danh sách onboarding, nhân viên, phòng ban, template; bảng task theo phase | tự dựng (`components/table.tsx`), không dùng `table` của beUI | Dashboard, Onboardings, New onboarding, Employees, Templates |
 | Bề mặt, thông báo, công tắc, nút | `card`, `alert`, `switch`, `button-base` | Mọi nơi |

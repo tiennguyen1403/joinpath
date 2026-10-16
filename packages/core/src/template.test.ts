@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  keyFor,
   templateDefinitionSchema,
   validateTemplate,
+  withoutTasks,
   type TaskDef,
 } from './template.js';
 import {
@@ -307,5 +309,43 @@ describe('templateDefinitionSchema', () => {
     expect(accepts({ dueOffsetDays: 1.5 })).toBe(false);
     expect(accepts({ dueOffsetDays: 366 })).toBe(false);
     expect(templateDefinitionSchema.parse(engineering)).toEqual(engineering);
+  });
+});
+
+describe('keyFor', () => {
+  it('BR-T04 a new part is keyed by its title, accents dropped, numbered when taken', () => {
+    expect(keyFor('Upload ID documents', [], 'task')).toBe(
+      'upload-id-documents',
+    );
+    expect(keyFor('  Đăng ký tài khoản! ', [], 'task')).toBe(
+      'dang-ky-tai-khoan',
+    );
+    expect(keyFor('🎉', [], 'task')).toBe('task');
+    expect(keyFor('Week 1', ['week-1', 'week-1-2'], 'phase')).toBe('week-1-3');
+
+    const taken = Array.from({ length: 99 }, (_, i) =>
+      i === 0 ? 'a'.repeat(60) : `${'a'.repeat(60)}-${i + 1}`,
+    );
+    const long = keyFor(`${'A'.repeat(70)} B`, taken, 'task');
+    expect(long).toBe(`${'a'.repeat(60)}-100`);
+    expect(
+      templateDefinitionSchema.safeParse(template(task(long))).success,
+    ).toBe(true);
+  });
+});
+
+describe('withoutTasks', () => {
+  it('BR-T04 takes every link to the deleted tasks along, so none points at nothing', () => {
+    const def = withoutTasks(engineering, ['upload-id', 'set-up-dev-env']);
+    expect(def.tasks.map((t) => t.key)).not.toContain('upload-id');
+    expect(def.tasks.find((t) => t.key === 'review-id')?.reviews).toBe(
+      undefined,
+    );
+    expect(def.tasks.find((t) => t.key === 'ship-first-pr')?.dependsOn).toEqual(
+      [],
+    );
+    expect(def.phases).toEqual(engineering.phases);
+    // What is left only lacks a document for the approval to review.
+    expect(validateTemplate(def).map(({ rule }) => rule)).toEqual(['BR-T08']);
   });
 });

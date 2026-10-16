@@ -12,6 +12,31 @@ const keySchema = z
 // 0 is the start date ("day 1"), -7 a week before it. Calendar days.
 const offsetDaysSchema = z.int().min(-365).max(365);
 
+/**
+ * The key of a task or phase being added: its title as a slug, accents dropped, numbered when
+ * the template already has it. Set once: renaming the part keeps it.
+ */
+export function keyFor(
+  title: string,
+  taken: Iterable<string>,
+  fallback: 'task' | 'phase',
+): string {
+  const slug =
+    title
+      .normalize('NFD')
+      .replace(/\p{M}/gu, '')
+      .toLowerCase()
+      .replaceAll('đ', 'd')
+      .replace(/[^a-z0-9]+/g, '-')
+      // Room for "-100" in the 64 the schema allows.
+      .slice(0, 60)
+      .replace(/^-|-$/g, '') || fallback;
+  const used = new Set(taken);
+  let key = slug;
+  for (let n = 2; used.has(key); n++) key = `${slug}-${n}`;
+  return key;
+}
+
 // BR-T11: a template assigns work by rule, never to a named person.
 export const assigneeRuleSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('NEW_HIRE') }),
@@ -36,13 +61,17 @@ export const taskDefSchema = z.object({
 });
 export type TaskDef = z.infer<typeof taskDefSchema>;
 
+// How many parts one template holds; the editor stops adding at these.
+export const MAX_PHASES = 20;
+export const MAX_TASKS = 100;
+
 export const templateDefinitionSchema = z.object({
   // Display order.
   phases: z
     .array(z.object({ key: keySchema, name: z.string().trim().min(1).max(60) }))
-    .max(20),
+    .max(MAX_PHASES),
   // Order within a phase.
-  tasks: z.array(taskDefSchema).max(100),
+  tasks: z.array(taskDefSchema).max(MAX_TASKS),
 });
 export type TemplateDefinition = z.infer<typeof templateDefinitionSchema>;
 
@@ -307,4 +336,26 @@ export function validateTemplate(def: TemplateDefinition): TemplateIssue[] {
   }
 
   return issues;
+}
+
+/**
+ * The definition without these tasks, or any link to them, so none points at a task that is
+ * gone (BR-T04). An approval that reviewed one reviews nothing until another document is picked.
+ */
+export function withoutTasks(
+  def: TemplateDefinition,
+  keys: string[],
+): TemplateDefinition {
+  const gone = new Set(keys);
+  return {
+    ...def,
+    tasks: def.tasks
+      .filter((task) => !gone.has(task.key))
+      .map((task) => ({
+        ...task,
+        dependsOn: task.dependsOn.filter((key) => !gone.has(key)),
+        reviews:
+          task.reviews && gone.has(task.reviews) ? undefined : task.reviews,
+      })),
+  };
 }
