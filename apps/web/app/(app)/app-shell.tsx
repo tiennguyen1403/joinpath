@@ -43,7 +43,7 @@ import { DemoIsland } from '@/components/demo-island';
 import { Logo } from '@/components/logo';
 import { notificationsQuery } from '@/components/notifications';
 import { QueryProvider } from '@/components/query-provider';
-import { findNavItem, NAV, type NavItem } from '@/lib/nav';
+import { findNavItem, NAV, type NavItem, youNavFor } from '@/lib/nav';
 import { myTasksQuery } from './tasks/my-tasks';
 
 type Crumb = { label: string };
@@ -176,7 +176,7 @@ export function AppShell({ me, children }: { me: Me; children: ReactNode }) {
           </AnimatedSidebarHeader>
           <AnimatedSidebarContent>
             {group(me.organization.name, NAV[me.role].org)}
-            {group('You', NAV[me.role].you)}
+            {group('You', youNavFor(me))}
           </AnimatedSidebarContent>
           <AnimatedSidebarFooter>
             <div className="flex items-center gap-2.5 p-1">
@@ -205,9 +205,6 @@ export function AppShell({ me, children }: { me: Me; children: ReactNode }) {
           </AnimatedSidebarFooter>
         </AnimatedSidebar>
         <AnimatedSidebarInset>
-          {me.organization.demo && (
-            <DemoIsland me={me} demo={me.organization.demo} />
-          )}
           <header className="flex h-16 shrink-0 items-center gap-2 border-b border-border px-4 md:px-8">
             <AnimatedSidebarTrigger className="-ml-2 hover:bg-foreground/5 md:hidden">
               <Menu className="size-5" />
@@ -248,6 +245,9 @@ export function AppShell({ me, children }: { me: Me; children: ReactNode }) {
               )}
             </Breadcrumb>
           </header>
+          {me.organization.demo && (
+            <DemoIsland me={me} demo={me.organization.demo} shell />
+          )}
           <div className="px-4 pt-8 pb-16 md:px-8">
             <div className="mx-auto flex max-w-290 flex-col gap-6">
               <SetCrumb.Provider value={setCrumb}>{children}</SetCrumb.Provider>

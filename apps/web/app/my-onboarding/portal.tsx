@@ -10,7 +10,7 @@ import {
 } from '@joinpath/core';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
-import { Eye, Logout, Route, Undo } from 'reicon-react';
+import { ArrowRight, Eye, ListCheck, Logout, Route, Undo } from 'reicon-react';
 import { Avatar, newHireTint } from '@/components/avatar';
 import {
   TodoList,
@@ -23,7 +23,8 @@ import {
   type ToastInput,
   useAnimatedToastStack,
 } from '@/components/beui/motion/animated-toast-stack';
-import { Button } from '@/components/beui/motion/button/base';
+import { Button, ButtonLink } from '@/components/beui/motion/button/base';
+import { DemoIsland } from '@/components/demo-island';
 import { Notice } from '@/components/notice';
 import { NotificationBell } from '@/components/notifications';
 import { TaskBadge, waitsFor } from '@/components/task-status';
@@ -92,7 +93,14 @@ export function Portal({ me }: { me: Me }) {
 
   return (
     <div className="min-h-dvh text-sm">
-      <Header me={me} showToast={showToast} />
+      <Header
+        me={me}
+        done={data?.status === 'COMPLETED'}
+        showToast={showToast}
+      />
+      {me.organization.demo && (
+        <DemoIsland me={me} demo={me.organization.demo} />
+      )}
       <main className="px-4 pt-6 pb-12 sm:px-5 sm:pt-8 sm:pb-18">
         <div className="mx-auto flex max-w-260 flex-col gap-6">
           {data ? (
@@ -120,9 +128,12 @@ export function Portal({ me }: { me: Me }) {
 
 function Header({
   me,
+  done,
   showToast,
 }: {
   me: Me;
+  /** The onboarding is over: My tasks is where things happen now. */
+  done: boolean;
   showToast: (toast: ToastInput) => void;
 }) {
   const router = useRouter();
@@ -146,6 +157,19 @@ function Header({
           </span>
         </div>
         <nav aria-label="Account" className="flex items-center gap-1">
+          {/* From 1024 px: below, a sandbox's island in the middle of the header would meet
+              it, and the greeting has the same link. */}
+          {done && (
+            <ButtonLink
+              href="/tasks"
+              variant="ghost"
+              size="sm"
+              className="hidden hover:bg-foreground/5 active:bg-foreground/8 lg:inline-flex"
+            >
+              <ListCheck className="size-4" />
+              My tasks
+            </ButtonLink>
+          )}
           <NotificationBell
             timeZone={me.organization.timezone}
             showToast={showToast}
@@ -224,6 +248,7 @@ function Onboarding({
           timeZone={timeZone}
           settle={settle}
           refresh={refresh}
+          demo={Boolean(me.organization.demo)}
         />
       ) : (
         <ChecklistWork task={task} settle={settle} refresh={refresh} />
@@ -373,7 +398,7 @@ function Greeting({
   const finished = status === 'COMPLETED' && completedAt;
   return (
     <div className="flex flex-wrap items-end justify-between gap-x-5 gap-y-4">
-      <div className="flex flex-col gap-1.5">
+      <div className="flex w-full flex-col gap-1.5 sm:w-auto">
         <h1 className="text-[28px] leading-[34px] font-semibold tracking-tight sm:text-[32px] sm:leading-[38px]">
           {finished
             ? `You're all set, ${name}`
@@ -394,6 +419,16 @@ function Greeting({
                 .filter(Boolean)
                 .join(' · ')}
         </p>
+        {/* The portal stays their first page: from here on, the work is in My tasks. */}
+        {finished && (
+          <ButtonLink
+            href="/tasks"
+            className="mt-2.5 w-full bg-primary-strong hover:bg-primary-strong/90 sm:w-auto sm:self-start"
+          >
+            Go to My tasks
+            <ArrowRight className="size-4" />
+          </ButtonLink>
+        )}
       </div>
       <div className="flex flex-[1_1_100%] flex-col gap-2 sm:flex-[0_1_280px]">
         <span className="flex justify-between text-[13px] text-muted-foreground">

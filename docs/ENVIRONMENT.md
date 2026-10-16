@@ -18,6 +18,10 @@
   - ảnh `--full-page` trên Chrome headed hẹp hơn 15 px vì thanh cuộn, ảnh khung nhìn thì đủ. Kiểm tràn ngang bằng `eval` (`scrollWidth` so với `clientWidth`), không dựa vào ảnh;
   - CLI chặn URL `file:`: mở file local qua `python -m http.server <port> --bind 127.0.0.1 --directory <thư mục>` (M3.3a).
 - `eval` của Playwright CLI: hàm viết nhiều dòng, hoặc đối số có `"` lồng bên trong, bị Windows từ chối ("batch file arguments are invalid"). Viết hàm trên một dòng, bên trong dùng nháy đơn (M3.2b).
+- `click` nhận locator thay cho ref: `click "getByRole('button', { name: 'Lan Pham, HR' })"`, đỡ phải `snapshot` trước mỗi bước (M3.3d).
+  - Tên khớp theo chuỗi con, không phân biệt hoa thường: "Mock inbox" khớp cả "Open mock inbox", locator trùng hai phần tử thì không bấm gì. Thêm `exact: true`.
+  - Mở island xong thì pill biến mất khỏi DOM (thành dialog): `eval` tìm `button[aria-label^="Demo controls"]` lúc đó trả null.
+- Chrome headed trên Windows có thanh cuộn chiếm chỗ: ở cửa sổ 390 px, `clientWidth` là 375, trong khi `100vw` vẫn là 390. Phần tử rộng `calc(100vw-32px)` khi đó chỉ cách mép khoảng 8 px; điện thoại thật dùng thanh cuộn nổi, nên vẫn là 16 px. Đo bằng `clientWidth`, đừng đo theo kích thước cửa sổ (M3.3d).
 - Auto mode của Claude Code chặn thao tác ghi trên production (bấm Activate, `POST` thẳng vào API) dù kế hoạch đã có: xin user cho phép trong chat, liệt kê đúng từng thao tác; thao tác ngoài danh sách vẫn bị chặn. `vercel env add` (Secret-Store Writes) cũng vậy. Riêng `git push origin main` (Production Deploy) vẫn bị chặn dù user đã đồng ý trong chat: user tự gõ `! git push origin main` (M2.5).
 - Git Bash đổi đối số bắt đầu bằng `/` (vd `/tasks/mine`, `/entrypoint.sh`) thành đường dẫn Windows khi gọi chương trình native như `node`, `docker`: đặt `MSYS_NO_PATHCONV=1`.
 - Storage (từ M2.2): RustFS 1.0.1 trong compose, port 9000.

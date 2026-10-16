@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { homeFor } from '@/lib/nav';
+import { QueryProvider } from '@/components/query-provider';
 import { requireMe } from '@/lib/session';
 import { MockInbox } from './mock-inbox';
 
@@ -9,10 +9,8 @@ export const metadata: Metadata = { title: 'Mock inbox · Joinpath' };
 export default async function MockInboxPage() {
   const me = await requireMe();
   return (
-    <MockInbox
-      home={homeFor(me)}
-      orgName={me.organization.name}
-      timeZone={me.organization.timezone}
-    />
+    <QueryProvider>
+      <MockInbox me={me} />
+    </QueryProvider>
   );
 }

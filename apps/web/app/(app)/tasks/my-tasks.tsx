@@ -103,9 +103,12 @@ type Action = 'start' | 'complete';
 export function MyTasks({
   employeeId,
   timeZone,
+  demo,
 }: {
   employeeId: string;
   timeZone: string;
+  /** In a sandbox: a document says not to upload real ones. */
+  demo: boolean;
 }) {
   const queryClient = useQueryClient();
   const { toasts, showToast, dismissToast } = useAnimatedToastStack();
@@ -274,6 +277,7 @@ export function MyTasks({
                   today={data.today}
                   timeZone={timeZone}
                   employeeId={employeeId}
+                  demo={demo}
                   busy={work.isPending}
                   failure={
                     work.variables?.task.id === selected.id ? work.error : null
@@ -377,6 +381,7 @@ function Panel({
   today,
   timeZone,
   employeeId,
+  demo,
   busy,
   failure,
   failedAction,
@@ -390,6 +395,7 @@ function Panel({
   today: IsoDate;
   timeZone: string;
   employeeId: string;
+  demo: boolean;
   busy: boolean;
   failure: Error | null;
   failedAction: Action | undefined;
@@ -421,6 +427,7 @@ function Panel({
         refresh={refresh}
         className="p-0 sm:pl-0"
         level={3}
+        demo={demo}
       />
     ) : (
       review &&

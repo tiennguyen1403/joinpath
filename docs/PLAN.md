@@ -1,4 +1,4 @@
-# Joinpath — Kế hoạch triển khai v0.35
+# Joinpath — Kế hoạch triển khai v0.36
 
 > **Joinpath**: Employee Onboarding & Workflow Management Platform, dự án portfolio Full-stack.
 > Bản này tinh chỉnh SRS v0.4 trong thread ChatGPT "Thiết kế dự án onboarding" (14/10/2026).
@@ -33,6 +33,7 @@
 > **v0.33 (16/10/2026):** M3 chia thành 9 session: M3.3 tách thành API sandbox (M3.3a), mốc giờ theo ngày nghiệp vụ (M3.3b) và web (M3.3c) (§13). Trong sandbox, mọi mốc giờ hiện theo giờ nghiệp vụ, tính từ lịch sử tua ngày; thay đánh đổi "giờ thật" cũ (§4.6, làm ở M3.3b). `POST /demo/sandboxes`: org riêng trong 24 giờ, kèm onboarding A, B, C chạy bằng handler thật, đăng nhập luôn với vai HR; tối đa 5 sandbox mỗi giờ mỗi IP và 200 sandbox còn hạn. `switch-user`: thứ tự kiểm, mã lỗi (§8, §9, §11). Purge sandbox hết hạn chạy trong cron tick và mỗi lần tạo sandbox (§6.5). Production seed org cố định không kèm scenarios (§11).
 > **v0.34 (16/10/2026):** mốc giờ theo giờ nghiệp vụ (M3.3b, BR-D05 mới): lịch sử tua ngày lưu ở bảng `clock_advances` (§7), mỗi mốc giờ dời theo lần tua cuối cùng không muộn hơn nó, mốc trong tương lai (hạn lời mời) theo đồng hồ hiện tại; hạn của sandbox, của signed URL và session giữ giờ thật; hạn link trong email mời viết theo giờ nghiệp vụ (§4.6, §5, §8).
 > **v0.35 (16/10/2026):** M3 chia thành 10 session: web của demo tách thành M3.3c (Dynamic Island trong app shell, nút Try demo ở trang Sign in) và M3.3d (island trên portal và mock inbox, bản 390 px, đường từ portal sang My tasks, banner) (§13). `GET /auth/me` kèm `organization.demo` (expiresAt, nextStartDate, people) cho island (§8); `dynamic-island` sửa tại chỗ (§10.1, ADR 010); Try demo nằm ở trang Sign in tới khi có Landing (§11).
+> **v0.36 (16/10/2026):** island có trên portal và mock inbox; trên điện thoại, và trong app shell dưới 1024 px, island nằm ở một hàng riêng dưới header (§10, §10.1). Banner "dữ liệu giả" là một notice trên vùng upload, chỉ trong sandbox (§9). Người đã xong onboarding vẫn vào portal trước, có nút sang My tasks; sidebar có mục quay về portal (§10).
 
 ## TL;DR: 6 thay đổi lớn nhất
 
@@ -721,7 +722,7 @@ Lỗi luôn trả về dạng `{ code, message, details? }`:
 - **CSRF:** `SameSite=Lax`, đồng thời từ chối request thay đổi dữ liệu nếu header `Origin` khác origin của app.
 - **File:** kiểm tra magic bytes (`%PDF`, `\x89PNG`, `FF D8 FF`) bằng một hàm khoảng 10 dòng, không tin `Content-Type` hay đuôi file. Object key có dạng `orgs/{orgId}/tasks/{taskId}/{uuid}`. Signed URL sống tối đa 5 phút, kèm `Content-Disposition: attachment`. Không log signed URL hay token.
 - **Rate limit:** login và nhận invitation dùng guard tự viết (`ThrottleGuard`, 10 lần/phút/IP, đếm trong RAM của từng instance). Không dùng `@nestjs/throttler` vì gói này là CommonJS (ADR 011). Riêng tạo sandbox thì đếm theo IP hash lưu trong DB, vì trên serverless có nhiều instance nên đếm trong RAM không đáng tin: tối đa 5 sandbox mỗi giờ mỗi IP, và 200 sandbox còn hạn cho cả hệ thống, để chặn chi phí DB khi bị lạm dụng (M3.3a). Hash là SHA-256 của IP, không salt, mất cùng org khi purge. Đếm rồi mới tạo, nên các request đồng thời có thể vượt giới hạn vài cái.
-- **Khác:** `helmet` cho API; log kèm request id, không bao giờ log password hay token; banner trong demo ghi rõ "Dữ liệu giả, đừng upload giấy tờ thật".
+- **Khác:** `helmet` cho API; log kèm request id, không bao giờ log password hay token; trong sandbox, ngay trên vùng upload (portal và My tasks) có notice "Don't upload real documents" ("Dữ liệu giả, đừng upload giấy tờ thật", M3.3d).
 
 ---
 
@@ -739,12 +740,14 @@ Lỗi luôn trả về dạng `{ code, message, details? }`:
 | Portal nhân viên mới: tiến độ, task, lịch sử duyệt | Nhân viên mới | P0 | M2 |
 | Trung tâm thông báo + mock inbox | Tất cả | P0 | M2–M3 |
 | Dashboard HR: overdue, bị chặn, sắp tới hạn, đang chạy | HR | P0 | M3 → M4 |
-| Demo controls (Dynamic Island của beUI, nổi giữa đầu trang): đổi vai, ngày nghiệp vụ, "+1 ngày", "Tới ngày bắt đầu", "Demo mới", link inbox | Sandbox | P0 | M3 |
+| Demo controls (Dynamic Island của beUI, nổi giữa đầu trang; khi header không đủ chỗ thì ở một hàng riêng dưới header): đổi vai, ngày nghiệp vụ, "+1 ngày", "Tới ngày bắt đầu", "Demo mới", link inbox | Sandbox | P0 | M3 |
 | Template editor dạng form + validate tức thì + xem trước graph | HR | P0 | M4 |
 | Dependency graph (template và onboarding, tô màu theo trạng thái) | HR | P1 | M4 |
 | Landing page + checklist hướng dẫn demo | Khách | P1 | M5 |
 
-Portal nhân viên mới phải dùng tốt trên điện thoại, vì người mới thường mở link mời trên mobile. Portal là trang `/my-onboarding`, nằm ngoài app shell (không có sidebar). Đây là trang đầu của người có `onboardingId` (§8): `/`, đăng nhập và nhận lời mời đều đưa tới đây. Task đang mở của người mới (upload, submit, Mark complete) làm ngay trong danh sách theo phase.
+Portal nhân viên mới phải dùng tốt trên điện thoại, vì người mới thường mở link mời trên mobile. Portal là trang `/my-onboarding`, nằm ngoài app shell (không có sidebar). Đây là trang đầu của người có `onboardingId` (§8): `/`, đăng nhập và nhận lời mời đều đưa tới đây. Task đang mở của người mới (upload, submit, Mark complete) làm ngay trong danh sách theo phase. Onboarding đã xong thì portal có nút "Go to My tasks" dưới lời chào, và từ 1024 px có thêm link My tasks trên header; trong app shell, ai có `onboardingId` thấy mục "Your onboarding" ở nhóm You để quay về portal (M3.3d).
+
+Island của demo ở trên header, từ 768 px: giữa header với portal và mock inbox. Trong app shell, từ 1280 px nó ở giữa cột nội dung, từ 1024 tới 1279 px ở cuối header, vì breadcrumb dài chiếm phần giữa. Khi header không đủ chỗ (dưới 768 px; trong app shell, dưới 1024 px vì sidebar chiếm 256 px), island nằm ở một hàng riêng ngay dưới header. Trên điện thoại pill bỏ chữ "Demo" (chấm xanh vẫn còn), aria-label vẫn đọc đủ (M3.3d).
 
 Thiết kế chi tiết của 12 màn, cùng các bảng Foundations (token, icon), Motion và Components, nằm trên canvas "Joinpath Screens": https://claude.ai/artifact/Xr3pRZbd14D78pqUignjWV (bấm Play ở Landing để đi hết golden path).
 
@@ -755,7 +758,7 @@ Nguyên tắc (ADR 010): có component beUI thì dùng, không tự vẽ và kh�
 | Việc trong Joinpath | Component beUI | Màn hình |
 |---|---|---|
 | Điều hướng app | `animated-sidebar` | Mọi màn của HR / IT sau đăng nhập |
-| Điều khiển demo (ngày nghiệp vụ, đổi vai) | `dynamic-island` (sửa tại chỗ: không có live region, `compactClassName`, hộp đo không co, ADR 010) | Mọi màn trong sandbox: app shell (M3.3c), portal và mock inbox (M3.3d) |
+| Điều khiển demo (ngày nghiệp vụ, đổi vai) | `dynamic-island` (sửa tại chỗ: không có live region, `compactClassName`, hộp đo không co, ADR 010) | Mọi màn trong sandbox: app shell (M3.3c), portal và mock inbox (M3.3d); vị trí theo độ rộng ở §10 |
 | Đang ở đâu | `breadcrumb` | Header các trang |
 | Trạng thái task, onboarding và template | `animated-badge` | Danh sách, bảng, header |
 | Đổi chế độ xem, lọc danh sách | `tabs` | Onboarding detail và graph, My tasks, Mock inbox, Template editor, Review, Employees (People, Departments) |

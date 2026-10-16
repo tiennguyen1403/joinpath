@@ -5,6 +5,7 @@ import {
   Category,
   Layers,
   ListCheck,
+  Signpost,
   UserAdd,
   Users,
 } from 'reicon-react';
@@ -48,6 +49,15 @@ export const PORTAL = '/my-onboarding';
 /** Where someone lands: a new hire on their portal (PLAN §10), anyone else on their role's page. */
 export const homeFor = ({ role, onboardingId }: Me) =>
   onboardingId ? PORTAL : NAV[role].org[0].href;
+
+/** The user's own pages, the way back to their portal first for anyone who has one. */
+export const youNavFor = ({ role, onboardingId }: Me): NavItem[] =>
+  onboardingId
+    ? [
+        { href: PORTAL, label: 'Your onboarding', icon: Signpost },
+        ...NAV[role].you,
+      ]
+    : NAV[role].you;
 
 export const findNavItem = (role: Role, pathname: string) =>
   [...NAV[role].org, ...NAV[role].you].find((item) => item.href === pathname);

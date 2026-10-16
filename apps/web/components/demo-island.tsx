@@ -142,8 +142,18 @@ function resetsIn(expiresAt: string) {
 /**
  * The demo controls (PLAN §10) over the top of a sandbox's pages: the business date and who
  * the guest plays. Opened, they move the date on, play someone else, or start a new demo.
+ * Goes right after the page's header, 64 px tall from 768 px.
  */
-export function DemoIsland({ me, demo }: { me: Me; demo: Demo }) {
+export function DemoIsland({
+  me,
+  demo,
+  shell = false,
+}: {
+  me: Me;
+  demo: Demo;
+  /** In the app shell, whose header holds a breadcrumb beside a sidebar from 768 px. */
+  shell?: boolean;
+}) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
@@ -236,192 +246,217 @@ export function DemoIsland({ me, demo }: { me: Me; demo: Demo }) {
     );
 
   return (
-    // Over the header: in the middle of the page's column on a wide screen, at its end below
-    // 1280 px, where in the middle it covered a long breadcrumb. Phones get theirs in M3.3d.
-    <div className="pointer-events-none absolute inset-x-0 top-[13px] z-20 hidden justify-end px-8 md:flex xl:justify-center xl:px-4">
-      <div ref={island} className="pointer-events-auto">
-        <DynamicIsland
-          view={open ? 'controls' : null}
-          compactClassName="p-0"
-          compact={
-            <button
-              ref={pill}
-              type="button"
-              aria-haspopup="dialog"
-              aria-label={`Demo controls: ${formatDate(today)}${self ? `, viewing as ${spoken(self)}` : ''}`}
-              onClick={() => setOpen(true)}
-              className="flex min-h-[37px] items-center gap-2.5 rounded-full py-1.5 pr-2.5 pl-3.5 outline-none hover:bg-background/5 focus-visible:ring-2 focus-visible:ring-background/60 focus-visible:ring-inset active:bg-background/8"
-            >
-              <span className="size-1.5 rounded-full bg-accent" />
-              Demo
-              <span className="h-3.5 w-px bg-background/20" />
-              <span className="flex items-center gap-1.5 font-mono">
-                <Calendar className="size-[13px]" />
-                {formatDate(today)}
-              </span>
-              {self && (
-                <>
-                  <span className="h-3.5 w-px bg-background/20" />
-                  <span className="flex items-center gap-1.5">
-                    <Face person={self} className="size-[22px]" />
-                    {nameOf(self)}
-                  </span>
-                </>
-              )}
-              <ChevronDown className="size-3 opacity-70" />
-            </button>
-          }
-        >
-          <DynamicIslandView id="controls" className="p-0">
-            {/* Not modal: the page stays as it is, and the island closes when left. */}
-            <dialog
-              open
-              aria-label="Demo controls"
-              aria-busy={busy !== null}
-              className="static flex w-[540px] max-w-[calc(100vw-32px)] flex-col gap-[18px] bg-transparent px-6 pt-[18px] pb-[22px] text-background"
-            >
-              <div className="flex items-center justify-between gap-3">
-                <span className="flex items-center gap-2 text-sm font-semibold">
-                  <span className="size-1.5 rounded-full bg-accent" />
-                  {`Demo sandbox · ${me.organization.name}`}
+    // A row of its own under the header while the header has no room for it: on a phone, and
+    // in the app shell below 1024 px, where it covered the breadcrumb. Then over the header:
+    // in its middle, but in the app shell at its end until 1280 px, as a long breadcrumb fills
+    // its middle. Opened, it grows down over the page.
+    <div className={cn('relative h-[49px]', shell ? 'lg:h-0' : 'md:h-0')}>
+      <div
+        className={cn(
+          'pointer-events-none absolute inset-x-0 top-3 z-20 flex justify-center px-4',
+          shell
+            ? 'lg:-top-[51px] lg:justify-end lg:px-8 xl:justify-center xl:px-4'
+            : 'md:-top-[51px]',
+        )}
+      >
+        <div ref={island} className="pointer-events-auto">
+          <DynamicIsland
+            view={open ? 'controls' : null}
+            compactClassName="p-0"
+            compact={
+              <button
+                ref={pill}
+                type="button"
+                aria-haspopup="dialog"
+                aria-label={`Demo controls: ${formatDate(today)}${self ? `, viewing as ${spoken(self)}` : ''}`}
+                onClick={() => setOpen(true)}
+                className="flex min-h-[37px] items-center gap-2.5 rounded-full py-1.5 pr-2.5 pl-3.5 outline-none hover:bg-background/5 focus-visible:ring-2 focus-visible:ring-background/60 focus-visible:ring-inset active:bg-background/8"
+              >
+                <span className="size-1.5 rounded-full bg-accent" />
+                {/* Not on a phone, where the pill would not fit: the dot says it alone. */}
+                <span className="hidden md:inline">Demo</span>
+                <span className="hidden h-3.5 w-px bg-background/20 md:block" />
+                <span className="flex items-center gap-1.5 font-mono">
+                  <Calendar className="size-[13px]" />
+                  {formatDate(today)}
                 </span>
-                {demo.expiresAt && (
-                  <span className={CAPTION}>{resetsIn(demo.expiresAt)}</span>
+                {self && (
+                  <>
+                    <span className="h-3.5 w-px bg-background/20" />
+                    <span className="flex items-center gap-1.5">
+                      <Face person={self} className="size-[22px]" />
+                      {nameOf(self)}
+                    </span>
+                  </>
                 )}
-              </div>
-
-              <div className="flex flex-col gap-2">
-                <span className={CAPTION}>Business date</span>
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="flex-1 font-mono text-[15px] font-semibold tabular-nums">
-                    {formatDateLong(today)}
+                <ChevronDown className="size-3 opacity-70" />
+              </button>
+            }
+          >
+            <DynamicIslandView id="controls" className="p-0">
+              {/* Not modal: the page stays as it is, and the island closes when left. */}
+              <dialog
+                open
+                aria-label="Demo controls"
+                aria-busy={busy !== null}
+                className={cn(
+                  'static flex w-[540px] max-w-[calc(100vw-32px)] flex-col gap-[18px] bg-transparent px-6 pt-[18px] pb-[22px] text-background',
+                  // No wider than the page's column beside the 256 px sidebar.
+                  shell && 'md:max-w-[calc(100vw-288px)]',
+                )}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <span className="flex items-center gap-2 text-sm font-semibold">
+                    <span className="size-1.5 rounded-full bg-accent" />
+                    {`Demo sandbox · ${me.organization.name}`}
                   </span>
-                  <Control
-                    busy={busy === 'day'}
-                    idle={idle}
-                    icon={<ForwardStep className="size-3.5" />}
-                    onClick={() => run('day', moveClock(1))}
-                  >
-                    +1 day
-                  </Control>
-                  {/* To the next start date, if the demo clock can get there in one move. */}
-                  {jump && jump <= 30 ? (
-                    <Control
-                      busy={busy === 'jump'}
-                      idle={idle}
-                      icon={<FastForward className="size-3.5" />}
-                      onClick={() => run('jump', moveClock(jump))}
-                    >
-                      {`Jump to ${formatMonthDay(demo.nextStartDate!)}`}
-                    </Control>
-                  ) : null}
+                  {demo.expiresAt && (
+                    <span className={CAPTION}>{resetsIn(demo.expiresAt)}</span>
+                  )}
                 </div>
-              </div>
 
-              {/* Buttons, not radios: arrow keys in a radio group would play someone else, and
-                  load their page, at every press. */}
-              <fieldset className="min-w-0">
-                <legend className={cn(CAPTION, 'mb-2')}>Viewing as</legend>
-                <div className="flex flex-wrap gap-1.5">
-                  {demo.people.map((person) => {
-                    const current = person.employeeId === me.employee.id;
-                    const playing = busy === person.employeeId;
-                    // Oneself, and a new hire without an account yet, are there to read.
-                    const inert = current || !person.hasAccount;
-                    return (
-                      <Button
-                        key={person.employeeId}
-                        size="sm"
-                        variant="ghost"
-                        aria-label={spoken(person)}
-                        aria-pressed={current}
-                        aria-disabled={
-                          !person.hasAccount || (!idle && !current) || undefined
-                        }
-                        aria-describedby={
-                          person.hasAccount ? undefined : waitingId
-                        }
-                        aria-busy={playing || undefined}
-                        onClick={
-                          inert || !idle
-                            ? undefined
-                            : () =>
-                                run(person.employeeId, play(person.employeeId))
-                        }
-                        {...(inert ? STILL : {})}
-                        className={cn(
-                          'pl-1',
-                          current
-                            ? 'cursor-default bg-background text-foreground hover:bg-background hover:text-foreground'
-                            : CONTROL,
-                          !person.hasAccount &&
-                            'cursor-not-allowed opacity-50 hover:bg-background/15',
-                          !idle && !inert && 'cursor-wait',
-                          !idle && !inert && !playing && 'opacity-50',
-                        )}
+                <div className="flex flex-col gap-2">
+                  <span className={CAPTION}>Business date</span>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {/* A line of its own on a phone, its buttons below. */}
+                    <span className="w-full font-mono text-[15px] font-semibold tabular-nums md:w-auto md:flex-1">
+                      {formatDateLong(today)}
+                    </span>
+                    <Control
+                      busy={busy === 'day'}
+                      idle={idle}
+                      icon={<ForwardStep className="size-3.5" />}
+                      onClick={() => run('day', moveClock(1))}
+                    >
+                      +1 day
+                    </Control>
+                    {/* To the next start date, if the demo clock can get there in one move. */}
+                    {jump && jump <= 30 ? (
+                      <Control
+                        busy={busy === 'jump'}
+                        idle={idle}
+                        icon={<FastForward className="size-3.5" />}
+                        onClick={() => run('jump', moveClock(jump))}
                       >
-                        {playing ? (
-                          <span className="flex size-6 items-center justify-center rounded-full bg-background text-foreground">
-                            {spinner}
-                          </span>
-                        ) : (
-                          <Face person={person} className="size-6" />
-                        )}
-                        {nameOf(person)}
-                      </Button>
-                    );
-                  })}
+                        {`Jump to ${formatMonthDay(demo.nextStartDate!)}`}
+                      </Control>
+                    ) : null}
+                  </div>
                 </div>
-                {waiting.length > 0 && (
-                  <p id={waitingId} className="mt-2 text-xs text-background/60">
-                    {new Intl.ListFormat('en').format(
-                      waiting.map(({ fullName }) => fullName),
-                    )}{' '}
-                    {waiting.length === 1 ? 'has' : 'have'} no account yet: new
-                    hires get one by accepting their invitation.
+
+                {/* Buttons, not radios: arrow keys in a radio group would play someone else, and
+                  load their page, at every press. */}
+                <fieldset className="min-w-0">
+                  <legend className={cn(CAPTION, 'mb-2')}>Viewing as</legend>
+                  <div className="flex flex-wrap gap-1.5">
+                    {demo.people.map((person) => {
+                      const current = person.employeeId === me.employee.id;
+                      const playing = busy === person.employeeId;
+                      // Oneself, and a new hire without an account yet, are there to read.
+                      const inert = current || !person.hasAccount;
+                      return (
+                        <Button
+                          key={person.employeeId}
+                          size="sm"
+                          variant="ghost"
+                          aria-label={spoken(person)}
+                          aria-pressed={current}
+                          aria-disabled={
+                            !person.hasAccount ||
+                            (!idle && !current) ||
+                            undefined
+                          }
+                          aria-describedby={
+                            person.hasAccount ? undefined : waitingId
+                          }
+                          aria-busy={playing || undefined}
+                          onClick={
+                            inert || !idle
+                              ? undefined
+                              : () =>
+                                  run(
+                                    person.employeeId,
+                                    play(person.employeeId),
+                                  )
+                          }
+                          {...(inert ? STILL : {})}
+                          className={cn(
+                            'pl-1',
+                            current
+                              ? 'cursor-default bg-background text-foreground hover:bg-background hover:text-foreground'
+                              : CONTROL,
+                            !person.hasAccount &&
+                              'cursor-not-allowed opacity-50 hover:bg-background/15',
+                            !idle && !inert && 'cursor-wait',
+                            !idle && !inert && !playing && 'opacity-50',
+                          )}
+                        >
+                          {playing ? (
+                            <span className="flex size-6 items-center justify-center rounded-full bg-background text-foreground">
+                              {spinner}
+                            </span>
+                          ) : (
+                            <Face person={person} className="size-6" />
+                          )}
+                          {nameOf(person)}
+                        </Button>
+                      );
+                    })}
+                  </div>
+                  {waiting.length > 0 && (
+                    <p
+                      id={waitingId}
+                      className="mt-2 text-xs text-background/60"
+                    >
+                      {new Intl.ListFormat('en').format(
+                        waiting.map(({ fullName }) => fullName),
+                      )}{' '}
+                      {waiting.length === 1 ? 'has' : 'have'} no account yet:
+                      new hires get one by accepting their invitation.
+                    </p>
+                  )}
+                </fieldset>
+
+                {error && (
+                  <p
+                    role="alert"
+                    className="flex items-start gap-1.5 text-xs text-destructive"
+                  >
+                    <AlertCircle className="mt-px size-3.5 shrink-0" />
+                    {error}
                   </p>
                 )}
-              </fieldset>
 
-              {error && (
-                <p
-                  role="alert"
-                  className="flex items-start gap-1.5 text-xs text-destructive"
-                >
-                  <AlertCircle className="mt-px size-3.5 shrink-0" />
-                  {error}
-                </p>
-              )}
-
-              <div className="flex flex-wrap gap-2 border-t border-background/10 pt-3">
-                <ButtonLink
-                  href="/mock-inbox"
-                  size="sm"
-                  variant="ghost"
-                  aria-disabled={!idle || undefined}
-                  tabIndex={idle ? undefined : -1}
-                  className={cn(
-                    CONTROL,
-                    !idle && 'pointer-events-none opacity-50',
-                  )}
-                >
-                  <Envelope className="size-3.5" />
-                  Mock inbox
-                </ButtonLink>
-                <Control
-                  busy={busy === 'demo'}
-                  idle={idle}
-                  icon={<Restart className="size-3.5" />}
-                  onClick={() => run('demo', startDemo)}
-                >
-                  {busy === 'demo'
-                    ? 'Starting a new demo…'
-                    : 'Start a new demo'}
-                </Control>
-              </div>
-            </dialog>
-          </DynamicIslandView>
-        </DynamicIsland>
+                <div className="flex flex-wrap gap-2 border-t border-background/10 pt-3">
+                  <ButtonLink
+                    href="/mock-inbox"
+                    size="sm"
+                    variant="ghost"
+                    aria-disabled={!idle || undefined}
+                    tabIndex={idle ? undefined : -1}
+                    className={cn(
+                      CONTROL,
+                      !idle && 'pointer-events-none opacity-50',
+                    )}
+                  >
+                    <Envelope className="size-3.5" />
+                    Mock inbox
+                  </ButtonLink>
+                  <Control
+                    busy={busy === 'demo'}
+                    idle={idle}
+                    icon={<Restart className="size-3.5" />}
+                    onClick={() => run('demo', startDemo)}
+                  >
+                    {busy === 'demo'
+                      ? 'Starting a new demo…'
+                      : 'Start a new demo'}
+                  </Control>
+                </div>
+              </dialog>
+            </DynamicIslandView>
+          </DynamicIsland>
+        </div>
       </div>
     </div>
   );

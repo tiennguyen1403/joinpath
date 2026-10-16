@@ -10,7 +10,7 @@ import { type ReactNode, useState } from 'react';
 import { notificationsQuery } from '@/components/notifications';
 import { ApiError } from '@/lib/api';
 
-/** TanStack Query for the pages under it: the app shell's, and the portal's. */
+/** TanStack Query for the pages under it: the app shell's, the portal's and the mock inbox. */
 export function QueryProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const [queryClient] = useState(() => {

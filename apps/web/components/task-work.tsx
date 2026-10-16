@@ -134,6 +134,7 @@ export function DocumentWork({
   refresh,
   className,
   level,
+  demo,
 }: {
   task: Task;
   review: Task | undefined;
@@ -144,6 +145,8 @@ export function DocumentWork({
   /** Merged over the portal's indent under the task's row. */
   className?: string;
   level?: HeadingLevel;
+  /** In a sandbox, where nothing should be real (PLAN §9). */
+  demo?: boolean;
 }) {
   const [sending, setSending] = useState<Sending[]>([]);
   // Files removed and awaiting the API's answer, hidden meanwhile.
@@ -311,6 +314,13 @@ export function DocumentWork({
         <ChangesRequested submission={last} timeZone={timeZone} />
       )}
       <Steps text={task.description} />
+      {demo && (
+        <Notice
+          variant="info"
+          title="Don't upload real documents"
+          text="This is a demo and everyone in it is made up: any PDF, PNG or JPEG will do."
+        />
+      )}
       {failure && (
         <Notice
           variant="destructive"
