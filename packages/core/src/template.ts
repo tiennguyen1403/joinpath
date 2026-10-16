@@ -97,6 +97,10 @@ export const templateSchema = z.object({
       version: z.int(),
       status: versionStatusSchema,
       publishedAt: z.iso.datetime().nullable(),
+      // Onboardings activated on it: running counts the ACTIVE ones, used all of them,
+      // finished or canceled too. A draft onboarding has no version yet.
+      running: z.int(),
+      used: z.int(),
     }),
   ),
 });

@@ -7,6 +7,10 @@ import {
   type AlertVariant,
 } from '@/components/beui/motion/alert';
 
+/** A dialog's destructive button on a tint of red: Delete, Cancel onboarding, Discard draft. */
+export const TINTED_DANGER =
+  'bg-destructive/10 text-danger-strong hover:bg-destructive/15 active:bg-destructive/20';
+
 /** An alert on a tint of its color, its text in muted grey. */
 export function Notice({
   variant,

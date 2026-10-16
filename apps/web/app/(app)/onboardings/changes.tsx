@@ -45,7 +45,7 @@ import {
   SelectItem,
   SelectTrigger,
 } from '@/components/beui/motion/select';
-import { Notice } from '@/components/notice';
+import { Notice, TINTED_DANGER } from '@/components/notice';
 import { api, ApiError, messageOf } from '@/lib/api';
 import {
   daysBetween,
@@ -70,9 +70,6 @@ const listed = (names: string[]) =>
   names.length < 2
     ? names.join('')
     : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
-
-export const TINTED_DANGER =
-  'bg-destructive/10 text-danger-strong hover:bg-destructive/15 active:bg-destructive/20';
 
 /**
  * HR's ⋯ on a task not done: hand it to someone else, or move its deadline (BR-S03, BR-S04).

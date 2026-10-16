@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   Param,
@@ -76,6 +77,15 @@ export class TemplatesController {
     @Body() body: unknown,
   ): Promise<TemplateVersion & { issues: TemplateIssue[] }> {
     return this.templates.saveDraft(req.auth!, id, body);
+  }
+
+  // Discard draft: returns the template without it.
+  @Delete('template-versions/:id')
+  discardDraft(
+    @Req() req: Request,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<Template> {
+    return this.templates.discardDraft(req.auth!, id);
   }
 
   @Post('template-versions/:id/publish')

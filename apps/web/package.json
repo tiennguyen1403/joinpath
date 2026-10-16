@@ -8,6 +8,7 @@
     "typecheck": "next typegen && tsc --noEmit"
   },
   "dependencies": {
+    "@floating-ui/dom": "1.8.0",
     "@joinpath/core": "workspace:*",
     "@tanstack/react-query": "5.104.2",
     "clsx": "^2.1.1",

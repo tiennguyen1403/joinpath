@@ -39,7 +39,7 @@ const messageOf = (error: unknown) =>
     : 'Check your connection and try again.';
 
 /** The task's description, a step a line (My Tasks numbers them the same way). */
-function Steps({ text }: { text: string | null }) {
+export function Steps({ text }: { text: string | null }) {
   const steps = text?.split('\n').filter(Boolean) ?? [];
   if (steps.length < 2) return steps.length ? <p>{steps[0]}</p> : null;
   return (

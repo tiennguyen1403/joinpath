@@ -257,6 +257,60 @@ describe('onboardings', () => {
     });
   });
 
+  it('AT-34 FR-04 each version counts the onboardings running on it and all it started, finished or canceled; a draft counts nowhere', async () => {
+    const templateId = await publishedTemplate(checklists);
+    const start = async () =>
+      activate(await draftFor(await newHire(), templateId, day(0)));
+    await start();
+    const canceled = await start();
+    await hr
+      .post(`/onboardings/${canceled.id}/cancel`, { reason: 'Offer declined' })
+      .expect(200);
+    const finished = await start();
+    await others.manager
+      .post(`/tasks/${finished.tasks[0].id}/complete`)
+      .expect(200);
+    await hr.post(`/tasks/${finished.tasks[1].id}/complete`).expect(200);
+    // A draft gets its version when activated, so neither of these counts.
+    await draftFor(await newHire(), templateId);
+    const dropped = await draftFor(await newHire(), templateId);
+    await hr
+      .post(`/onboardings/${dropped.id}/cancel`, { reason: 'Hired elsewhere' })
+      .expect(200);
+    // v2 starts one more; draft v3 none.
+    const v2 = templateVersionSchema.parse(
+      (await hr.post(`/templates/${templateId}/versions`).expect(201)).body,
+    );
+    await hr.post(`/template-versions/${v2.id}/publish`).expect(200);
+    await start();
+    await hr.post(`/templates/${templateId}/versions`).expect(201);
+
+    const counts = ({ versions }: Template) =>
+      versions.map(({ version, running, used }) => ({
+        version,
+        running,
+        used,
+      }));
+    const expected = [
+      { version: 3, running: 0, used: 0 },
+      { version: 2, running: 1, used: 1 },
+      { version: 1, running: 1, used: 3 },
+    ];
+    const template = templateSchema.parse(
+      (await hr.get(`/templates/${templateId}`).expect(200)).body,
+    );
+    expect(counts(template)).toEqual(expected);
+    // The list counts the same, and so does what archiving returns.
+    const list = templateSchema
+      .array()
+      .parse((await hr.get('/templates').expect(200)).body);
+    expect(list.find(({ id }) => id === templateId)).toEqual(template);
+    const archived = await hr
+      .post(`/templates/${templateId}/archive`)
+      .expect(200);
+    expect(counts(templateSchema.parse(archived.body))).toEqual(expected);
+  });
+
   it('BR-T12 an archived template takes no new onboarding and activates no draft; a draft that has it can still change', async () => {
     const templateId = await publishedTemplate(definition);
     const draft = await draftFor(await newHire(), templateId);

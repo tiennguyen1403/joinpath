@@ -97,14 +97,16 @@ import {
   SortableListHandle,
   SortableListItem,
 } from '@/components/beui/motion/sortable-stack';
+import { TINTED_DANGER } from '@/components/notice';
 import { TASK_TYPES } from '@/components/task-status';
 import { ApiError, api } from '@/lib/api';
-import { Lines, TINTED_DANGER } from '../../onboardings/changes';
+import { Lines } from '../../onboardings/changes';
 import {
   ASSIGNEES,
   type AssigneeKey,
   assigneeKey,
   assigneeRule,
+  dayOf,
   signed,
   TaskSummary,
   titleOf,
@@ -126,7 +128,7 @@ const FIELD: Record<TemplateIssue['rule'], Field> = {
   'BR-T10': 'assignee',
 };
 
-const TYPE_HINTS: Record<TaskDef['type'], string> = {
+export const TYPE_HINTS: Record<TaskDef['type'], string> = {
   CHECKLIST: 'Someone marks it done',
   DOCUMENT: 'Files are uploaded',
   APPROVAL: 'Reviews a document',
@@ -150,12 +152,6 @@ const HINT = 'px-1 text-xs leading-4 text-muted-foreground';
 const STEP =
   'border-4 bg-background hover:bg-[color-mix(in_srgb,var(--foreground)_5%,var(--background))] disabled:bg-transparent';
 
-/** "day 3", or "4 days before day 1": the canvas counts from day 1, the start date. */
-const dayOf = (offset: number) =>
-  offset >= 0
-    ? `day ${offset + 1}`
-    : `${-offset} ${offset === -1 ? 'day' : 'days'} before day 1`;
-
 // From this width the panel sits beside the phases; below it, a task opens in a drawer.
 const WIDE = '(min-width: 1280px)';
 const subscribeWide = (onChange: () => void) => {
@@ -163,6 +159,12 @@ const subscribeWide = (onChange: () => void) => {
   query.addEventListener('change', onChange);
   return () => query.removeEventListener('change', onChange);
 };
+export const useWide = () =>
+  useSyncExternalStore(
+    subscribeWide,
+    () => window.matchMedia(WIDE).matches,
+    () => true,
+  );
 
 /** Focuses what the next render puts where the focused control was. */
 const focusSoon = (selector: string) =>
@@ -174,27 +176,12 @@ type Phase = TemplateDefinition['phases'][number];
 type Doomed = { kind: 'task' | 'phase'; key: string };
 
 /**
- * HR edits a draft (FR-04): its phases and their tasks, added, renamed, reordered and deleted
- * in place, and each task in the panel. core checks the whole definition after every change
+ * A draft as edited (FR-04): core checks the whole definition after every change
  * (BR-T04–T10), and the draft saves itself a moment later, problems and all: they only stop
- * publishing (BR-T03).
+ * publishing (BR-T03). It lives above the editor, so viewing another version keeps it.
  */
-export function Editor({ version }: { version: TemplateVersion }) {
+export function useDraft(version: TemplateVersion) {
   const [definition, setDefinition] = useState(version.definition);
-  const [selectedKey, setSelectedKey] = useState(definition.tasks[0]?.key);
-  // The phase whose Add task field is open.
-  const [adding, setAdding] = useState<string | null>(null);
-  const [doomed, setDoomed] = useState<Doomed | null>(null);
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  // What a dialog gives focus back to, and whether it hid the drawer to open.
-  const opener = useRef<HTMLElement | null>(null);
-  const reopen = useRef(false);
-  const emptyId = useId();
-  const wide = useSyncExternalStore(
-    subscribeWide,
-    () => window.matchMedia(WIDE).matches,
-    () => true,
-  );
   const { valid, issues } = useMemo(() => {
     // Checked as the API stores it, titles trimmed (BR-T04).
     const parsed = templateDefinitionSchema.safeParse(definition);
@@ -204,6 +191,32 @@ export function Editor({ version }: { version: TemplateVersion }) {
     };
   }, [definition]);
   const save = useAutosave(version.id, definition, valid);
+  return { definition, setDefinition, valid, issues, save };
+}
+export type Draft = ReturnType<typeof useDraft>;
+
+/**
+ * HR edits a draft (FR-04): its phases and their tasks, added, renamed, reordered and deleted
+ * in place, and each task in the panel.
+ */
+export function Editor({
+  version,
+  draft,
+}: {
+  version: TemplateVersion;
+  draft: Draft;
+}) {
+  const { definition, setDefinition, issues, save } = draft;
+  const [selectedKey, setSelectedKey] = useState(definition.tasks[0]?.key);
+  // The phase whose Add task field is open.
+  const [adding, setAdding] = useState<string | null>(null);
+  const [doomed, setDoomed] = useState<Doomed | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  // What a dialog gives focus back to, and whether it hid the drawer to open.
+  const opener = useRef<HTMLElement | null>(null);
+  const reopen = useRef(false);
+  const emptyId = useId();
+  const wide = useWide();
   const saveLine = (
     <SaveLine state={save.state} draft={version.version} onRetry={save.retry} />
   );
@@ -964,7 +977,7 @@ function consequences(
     : null;
 }
 
-/** Every problem in one alert, as the Publish button will count them (M4.2). */
+/** Every problem in one alert, as the Publish button counts them. */
 function Problems({ issues }: { issues: TemplateIssue[] }) {
   return (
     <Alert variant="destructive" className="text-danger-strong">
@@ -1421,8 +1434,8 @@ type SaveState =
 /**
  * Saves the draft a moment after each change (PLAN §8: PUT the whole definition), one request
  * at a time: changes made meanwhile go in the next. A definition the schema refuses, a task
- * with no title, waits until it is fixed. A 409 means the draft was published or archived
- * elsewhere, so saving stops. Leaving the page sends what is still unsent.
+ * with no title, waits until it is fixed. A 409, or a 404, means the draft was published,
+ * discarded or archived elsewhere, so saving stops. Leaving the page sends what is still unsent.
  */
 function useAutosave(
   versionId: string,
@@ -1461,7 +1474,10 @@ function useAutosave(
             queryClient.setQueryData(['template-version', versionId], version);
             setSaved({ definition: body, at: Date.now() });
           } catch (error) {
-            if (error instanceof ApiError && error.status === 409) {
+            if (
+              error instanceof ApiError &&
+              (error.status === 409 || error.status === 404)
+            ) {
               stopped.current = true;
               unsent.current = null;
               setConflict(true);
@@ -1523,7 +1539,26 @@ function useAutosave(
         : definition === failed
           ? { kind: 'failed' }
           : { kind: 'saving' };
-  return { state, retry: send };
+  return {
+    state,
+    retry: send,
+    // Publishing sends the last change first, and stops if it can't be saved.
+    flush: async () => {
+      send();
+      await sending.current;
+      if (stopped.current || unsent.current) throw new Error('Not saved');
+    },
+    // Discarding stops saving once the PUT on its way is answered; resume undoes it.
+    stop: () => {
+      stopped.current = true;
+      clearTimeout(timer.current);
+      return sending.current ?? Promise.resolve();
+    },
+    resume: () => {
+      stopped.current = false;
+      send();
+    },
+  };
 }
 
 function SaveLine({
@@ -1566,8 +1601,8 @@ function SaveLine({
       return (
         <p role="alert" className={cn(line, 'flex-wrap text-danger-strong')}>
           <XCircle aria-hidden className="size-3.5" />
-          Couldn&apos;t save: draft v{draft} was published or archived
-          elsewhere.
+          Couldn&apos;t save: draft v{draft} was published, discarded or
+          archived elsewhere.
           <button
             type="button"
             onClick={() => window.location.reload()}

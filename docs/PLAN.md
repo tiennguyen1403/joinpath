@@ -1,4 +1,4 @@
-# Joinpath — Kế hoạch triển khai v0.41
+# Joinpath — Kế hoạch triển khai v0.42
 
 > **Joinpath**: Employee Onboarding & Workflow Management Platform, dự án portfolio Full-stack.
 > Bản này tinh chỉnh SRS v0.4 trong thread ChatGPT "Thiết kế dự án onboarding" (14/10/2026).
@@ -39,6 +39,7 @@
 > **v0.39 (17/10/2026):** Vercel Cron chạy được với Services (kiểm ở M3.5): không cần GitHub Actions (§6.5). M3 xong sau 11 session, golden path chạy trên production (§13).
 > **v0.40 (17/10/2026):** M4 chia thành 5 session: M4.1 tách thành sửa task (M4.1a) và sửa cấu trúc template (M4.1b) (§13). Editor gợi ý, không chặn, khi APPROVAL và DOCUMENT mà nó duyệt cùng giao `DIRECT_MANAGER` (§4.2). Bỏ bản nháp template bằng `DELETE /template-versions/:id`: chỉ DRAFT của template đã có bản published, xóa hẳn và ghi audit; thêm một ngoại lệ vào quy tắc không xóa bản ghi nghiệp vụ (§7, §8). Template editor của M4.1a: trang của template, Edit tạo draft, panel sửa task, validate trên trình duyệt, tự lưu; `adaptive-stepper` và `multi-select` sửa tại chỗ (§10, §10.1).
 > **v0.41 (17/10/2026):** sửa cấu trúc template (M4.1b). Key của task và phase sinh từ title lúc thêm (`keyFor`); xóa task gỡ mọi link tới nó (`withoutTasks`), xóa phase kéo theo các task của nó (§4.2). Editor: thêm task, phase bằng ô nhập tại chỗ, menu ⋯ của phase (Rename, Move up, Move down, Delete), kéo thả task trong phase, hộp xác nhận xóa, New template từ trang Templates, draft rỗng, dưới 1280 px panel mở trong drawer, lưu bị 409 thì dừng (§10, §10.1).
+> **v0.42 (17/10/2026):** M4 chia thành 6 session: M4.2 tách thành Publish, Discard và tab version (M4.2a) và Archive (M4.2b) (§13). Mỗi version trong response template kèm `running` và `used`; `DELETE /template-versions/:id` trả template (§8); AT-33, AT-34 (§12). `tooltip` của beUI kéo theo `@floating-ui/dom` 1.8.0 (§6.2). Template editor: tab version, bản published chỉ đọc kèm chi tiết task, Publish kèm tooltip, Discard draft, lưu bị 404 (§10, §10.1).
 
 ## TL;DR: 6 thay đổi lớn nhất
 
@@ -443,8 +444,8 @@ Sơ đồ trên là ở local. Trên Vercel (ADR 011), router của Vercel chia 
 
 | Lớp | Lựa chọn | Ghi chú |
 |---|---|---|
-| Web | Next.js 16 (App Router), React, TypeScript, Tailwind 4, component beUI (cài qua shadcn registry `https://beui.dev/r`) | Dùng component beUI có sẵn trước, không dùng control mặc định của trình duyệt; chỉ tự dựng phần beUI không có (§10.1). Phần sau đăng nhập chủ yếu là client components; TanStack Query cho danh sách và mutation (từ M1.6a). TanStack Table (headless) chỉ thêm khi một màn cần sort, lọc hoặc phân trang (ứng viên: Employees M1.8, analytics M4.4) |
-| Icons | `reicon-react` 1.2.6 (MIT) | Bộ Outline: lưới 24, nét 1.5px, `currentColor`. reicon không có icon grip nên tay kéo dùng `menu`. Component beUI nào import `lucide-react` thì đổi sang icon reicon tương ứng |
+| Web | Next.js 16 (App Router), React, TypeScript, Tailwind 4, component beUI (cài qua shadcn registry `https://beui.dev/r`) | Dùng component beUI có sẵn trước, không dùng control mặc định của trình duyệt; chỉ tự dựng phần beUI không có (§10.1). Phần sau đăng nhập chủ yếu là client components; TanStack Query cho danh sách và mutation (từ M1.6a). TanStack Table (headless) chỉ thêm khi một màn cần sort, lọc hoặc phân trang (ứng viên: Employees M1.8, analytics M4.4). `tooltip` của beUI cần `@floating-ui/dom` 1.8.0 (MIT), thêm ở M4.2a |
+| Icons | `reicon-react` 1.2.6 (MIT) | Bộ Outline: lưới 24, nét 1.5px, `currentColor`. reicon không có icon grip nên tay kéo dùng `Reorder` (M4.1b). Component beUI nào import `lucide-react` thì đổi sang icon reicon tương ứng |
 | Design tokens | `theme.css` của beUI + `--primary-strong: #0067D1` + lớp hover + màu active nav | Ba chỗ lệch so với beUI: (1) chữ trắng trên `#0285F7` chỉ đạt 3.7:1 nên dùng `#0067D1`; (2) hover của mọi link điều hướng (sidebar, header) và dòng bảng/danh sách là lớp phủ foreground 5%, 8% khi nhấn, vì `muted/60` của beUI gần như không thấy; (3) active nav nền `#E3F0FC`, chữ `#0067D1`, icon `#0285F7` thay cho `muted/70`. Không shadow. Xem bảng Foundations trên canvas |
 | Motion | `motion/react` + `lib/ease.ts` của beUI, copy nguyên và giữ MIT notice | Các spring PRESS / SWAP / PANEL / LAYOUT; luôn có nhánh reduced motion |
 | Graph | React Flow + auto-layout (dagre) | Chỉ để xem, không phải builder |
@@ -615,11 +616,13 @@ GET  /employees?active=true&role=IT           # role tùy chọn; ô override tr
 
 # Templates (chỉ HR, kể cả GET)
 GET|POST /templates         GET /templates/:id           # POST {name, description?}: tạo kèm DRAFT v1 rỗng
+                                              # mọi response template: mỗi version kèm running (onboarding ACTIVE trên nó) và used (mọi onboarding
+                                              # đã activate trên nó, kể cả đã xong và đã hủy); onboarding DRAFT chưa có version nên không tính (M4.2a)
 POST /templates/:id/archive                   # không đảo ngược: sau đó không tạo version, sửa hay publish được nữa
 POST /templates/:id/versions                  # DRAFT mới, copy từ bản published mới nhất
 GET|PUT  /template-versions/:id               # PUT nguyên definition, chỉ khi DRAFT; trả về lỗi validate
 DELETE /template-versions/:id                 # Discard draft (M4.2): chỉ DRAFT, template chưa archive và đã có bản published (không thì 409);
-                                              # xóa hẳn (§7), ghi audit template.draft_discarded
+                                              # xóa hẳn (§7), ghi audit template.draft_discarded, trả template (200); draft đã bị bỏ → 404
 POST /template-versions/:id/publish
 
 # Onboardings
@@ -784,14 +787,19 @@ Activity trên trang chi tiết (M3.4b) là card ở cột phải, dưới Invit
 
 Template editor (M4.1a), mở từ một dòng của bảng Templates (`/templates/:id`):
 - Template chưa có draft: bản published mới nhất, chỉ đọc, kèm nút Edit tạo DRAFT kế tiếp (BR-T02). Đã archive: chỉ đọc, không có Edit.
-- Draft: các phase bên trái; bên phải là panel Edit task (title, loại, tài liệu mà APPROVAL duyệt, người làm, phase, ngày mở và hạn, Waits for, Instructions). Publish, Discard và tab version để M4.2.
+- Draft: các phase bên trái; bên phải là panel Edit task (title, loại, tài liệu mà APPROVAL duyệt, người làm, phase, ngày mở và hạn, Waits for, Instructions). Publish, Discard và tab version ở M4.2a, mục dưới.
 - Cấu trúc (M4.1b):
   - **Thêm:** Add task dưới mỗi phase và Add phase cuối danh sách là ô nhập tại chỗ. Enter thêm task và giữ ô cho task tiếp theo; Enter thêm phase rồi mở ô task đầu tiên của nó; bấm ra ngoài khi đã gõ cũng thêm; Esc bỏ. Task mới là Checklist cho New hire, ngày mở và hạn như task ngay trên nó (phase rỗng: day 1). Tối đa 20 phase và 100 task như schema.
   - **Menu ⋯ của phase:** Rename tại chỗ, Move up, Move down, Delete phase. Task kéo thả bằng tay nắm trong phase, hoặc bằng phím trên tay nắm; sang phase khác thì đổi field Phase.
   - **Xóa:** Delete task (nút thùng rác trên panel) luôn hỏi; phase có task thì hỏi, phase rỗng xóa ngay. Hộp xác nhận nêu các link sẽ mất.
   - **New template** trên trang Templates (tên, mô tả tùy chọn) tạo DRAFT v1 rồi mở editor. Draft rỗng chỉ có "Start with a phase", chưa hiện Alert.
   - **Dưới 1280 px:** panel Edit task mở trong `drawer` bên phải (480 px; điện thoại: hết chiều ngang), dòng trạng thái lưu hiện thêm dưới tiêu đề.
-  - **Lưu bị 409** (draft vừa được publish hoặc template bị archive ở nơi khác): dừng tự lưu, dòng trạng thái nói lý do kèm Reload.
+  - **Lưu bị 409** (draft vừa được publish hoặc template bị archive ở nơi khác), hoặc 404 (draft bị bỏ ở nơi khác, M4.2a): dừng tự lưu, dòng trạng thái nói lý do kèm Reload.
+- Version (M4.2a):
+  - **Tab version** (từ 2 version, mới nhất trước): `v3 · draft`, `v2 · current` (bản onboarding mới dùng, như chữ Current của bảng Templates), các bản cũ chỉ ghi số; kèm "N running" nếu có onboarding đang chạy, không thì "N used". Header theo tab đang chọn: tab draft có Discard draft và Publish; tab current khi chưa có draft có Edit; bản cũ không có nút, câu "Replaced by v…". Chuyển tab không mất phần đang sửa, draft vẫn tự lưu (trạng thái draft nằm trên editor, `useDraft`).
+  - **Bản đã publish chỉ đọc:** các phase bên trái; bấm một task thì chi tiết hiện ở panel bên phải (dưới 1280 px trong `drawer`): loại, người làm, ngày mở và hạn, Waits for, Instructions là các bước đánh số.
+  - **Publish** không hỏi xác nhận: gửi nốt thay đổi chưa lưu rồi mới publish, trong lúc chờ editor không nhận thao tác; xong thì trang đọc bản vừa publish, kèm toast. Nút khóa bằng `aria-disabled` (vẫn focus được) và `tooltip` nói lý do: "Fix N problems to publish", "Give every task a title to publish", "Add a phase and a task to publish" (draft rỗng). Publish bị 409/404: câu dưới nút kèm Reload, dừng tự lưu; lỗi mạng: thử lại được.
+  - **Discard draft** (chỉ khi template đã có bản published) hỏi trong `center-morph-modal`; dừng tự lưu trước khi xóa; xong thì trang đọc bản published mới nhất, kèm toast. Lỗi hiện trong hộp; lỗi mạng thì tự lưu chạy lại.
 - Mỗi thay đổi chạy `templateDefinitionSchema` rồi `validateTemplate` ngay trên trình duyệt: Alert "Fix N problems to publish" liệt kê câu của `core`, badge "N problems" trên task, câu đó dưới field sửa được nó. Vòng phụ thuộc dùng câu của canvas, viết từ phía task đang sửa, và tô đỏ link gây vòng; gợi ý BR-R01 ở §4.2.
 - Draft tự lưu 600 ms sau thay đổi cuối (PUT cả definition); title trống thì chưa lưu; rời trang thì gửi nốt phần chưa gửi.
 
@@ -821,12 +829,12 @@ Nguyên tắc (ADR 010): có component beUI thì dùng, không tự vẽ và kh�
 | Xem file đã nộp | `morphing-lightbox` cho ảnh; PDF tải về | Review |
 | Upload giấy tờ | `file-upload` (sửa tại chỗ: `note`, `queueLabel`, ADR 010) | New-hire portal |
 | Đặt mật khẩu | `input` (không dùng `signup-form`: bản này luôn có ô Name, Email sửa được và checkbox Terms; M2.1b) | Accept invitation |
-| Báo kết quả vừa xảy ra | `animated-toast-stack` | Sau khi activate, Landing |
+| Báo kết quả vừa xảy ra | `animated-toast-stack` | Sau khi activate, Landing; Publish, Discard draft (M4.2a) |
 | Chuông thông báo và danh sách mở từ nó | `popover-morph`, mọi độ rộng (M3.2b) | Header của New-hire portal |
 | Thao tác trên dòng task; ⋯ của phase (Rename, Move up, Move down, Delete) | `context-menu` (sửa tại chỗ: nút ⋯ mở bằng click, ADR 010) | Onboarding detail; Template editor (M4.1b) |
-| Đổi ngày bắt đầu, hủy, reassign, đổi hạn; xác nhận xóa task, phase; New template | `center-morph-modal` (sửa tại chỗ: Esc nhường `select` đang mở, ADR 010) | Onboarding detail, review của draft; Template editor, Templates (M4.1b) |
-| Panel Edit task dưới 1280 px | `drawer` (480 px, điện thoại hết chiều ngang) | Template editor (M4.1b) |
-| Giải thích vì sao nút bị khóa | `tooltip` | Nút Publish của Template editor |
+| Đổi ngày bắt đầu, hủy, reassign, đổi hạn; xác nhận xóa task, phase; New template; Discard draft | `center-morph-modal` (sửa tại chỗ: Esc nhường `select` đang mở, ADR 010) | Onboarding detail, review của draft; Template editor, Templates (M4.1b, M4.2a) |
+| Panel Edit task, chi tiết task của bản đã publish, dưới 1280 px | `drawer` (480 px, điện thoại hết chiều ngang) | Template editor (M4.1b, M4.2a) |
+| Giải thích vì sao nút bị khóa | `tooltip` (`side="bottom"`, có mũi tên; nút khóa bằng `aria-disabled`, M4.2a) | Nút Publish của Template editor |
 | Danh sách onboarding, nhân viên, phòng ban, template; bảng task theo phase | tự dựng (`components/table.tsx`), không dùng `table` của beUI | Dashboard, Onboardings, New onboarding, Employees, Templates |
 | Bề mặt, thông báo, công tắc, nút | `card`, `alert`, `switch`, `button-base` | Mọi nơi |
 
@@ -913,6 +921,8 @@ Tự dựng theo token vì beUI không có: thanh tiến độ onboarding, avata
 | AT-30 | Dùng lại invitation đã dùng, đã hết hạn, hoặc đã bị resend thay thế | 410 | P05 |
 | AT-31 | Đổi vai hoặc tua ngày ở org không phải sandbox | 403 | D02 |
 | AT-32 | Hai sandbox cùng tạo nhân viên "an", rồi cả hai nhận invitation | Hai email khác nhau, cả hai đăng nhập được | D04 |
+| AT-33 | Discard draft; discard version đã publish, draft của template chưa từng publish, draft của template đã archive; discard và publish cùng lúc | Draft bị xóa, draft kế tiếp copy lại bản published; còn lại 409, không đổi gì; đúng 1 request thành công | T02 |
+| AT-34 | Đếm onboarding mỗi version: đang chạy, đã xong, đã hủy, còn DRAFT | `running` chỉ đếm ACTIVE; `used` đếm mọi onboarding đã activate trên version; DRAFT không tính | FR-04 |
 
 ---
 
@@ -924,7 +934,7 @@ Tự dựng theo token vì beUI không có: thanh tiến độ onboarding, avata
 | **M1** Workflow engine | 1–2 | 11 (thực tế) | `core`: schema + `validateTemplate` + tính ngày + availability + activation plan, unit test kỹ. API template (tạo, `PUT` JSON, publish, archive; chưa có editor, template lấy từ seed). Nhân viên (CRUD tối thiểu). Draft → preview → activate. Checklist. Business clock + endpoint tua ngày (để tự test; UI demo bar làm ở M3). Ghi audit. Wizard, Onboarding detail, My Tasks | Activate được template seed; IT và Manager làm checklist; khóa theo ngày/dependency chạy đúng; onboarding tự COMPLETED; nhóm test T, A, E pass |
 | **M2** Tài liệu và duyệt | 3 | 7 (thực tế) | Invitation + mock inbox + nhận lời mời + resend; thêm RustFS vào docker compose và CI; upload (magic bytes → S3); submit revision; approve/reject/rework; signed download; need-to-know; portal nhân viên mới | Golden path (§11) chạy trọn vẹn ở local; nhóm test R, P pass |
 | **M3** Vận hành và demo | 4 | 11 (thực tế; chia ở M3.1; M3.3 tách ba ở M3.3a, M3.3c và M3.4 tách đôi) | Đổi ngày, reassign, override deadline, hủy; thông báo in-app; cron tick; sandbox + demo bar; dashboard HR cơ bản; timeline | **Mốc an toàn:** demo public chạy được end-to-end trên host |
-| **M4** Editor và trực quan | 5 | 5 (dự kiến; M4.1 tách đôi ở M4.1a) | Template editor dạng form (phases, tasks, chọn `dependsOn`, rule, offset) + validate tức thì bằng `core` + lịch sử version; dependency graph; analytics theo phòng ban | **MVP cut line:** đủ mọi FR mức Must |
+| **M4** Editor và trực quan | 5 | 6 (dự kiến; M4.1 tách đôi ở M4.1a, M4.2 ở M4.2a) | Template editor dạng form (phases, tasks, chọn `dependsOn`, rule, offset) + validate tức thì bằng `core` + lịch sử version; dependency graph; analytics theo phòng ban | **MVP cut line:** đủ mọi FR mức Must |
 | **M5** Hoàn thiện | 6 | 4 | Playwright golden path; rà lại ma trận quyền, cross-tenant, upload; trạng thái rỗng và lỗi; a11y; checklist hướng dẫn demo; landing page; README, ADR, sơ đồ, video demo | Sẵn sàng đưa vào portfolio |
 | Dự phòng | 7 | — | Dành cho phần bị trễ. Nếu đúng tiến độ: launch sớm, hoặc làm các mục Could | — |
 

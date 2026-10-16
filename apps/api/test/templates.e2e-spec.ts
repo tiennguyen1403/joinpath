@@ -250,6 +250,8 @@ describe('templates', () => {
         version: 1,
         status: 'PUBLISHED',
         publishedAt: published.publishedAt,
+        running: 0,
+        used: 0,
       },
     ]);
     // Publishing twice: the compare-and-set finds no draft.
@@ -335,6 +337,112 @@ describe('templates', () => {
     ).rejects.toMatchObject({ code: 'P2002' });
   });
 
+  // A template with published v1 and its draft v2.
+  const withNextDraft = async () => {
+    const { templateId, versionId } = await draftOf(
+      definitionOf(task('read-wiki')),
+    );
+    await hr.post(`/template-versions/${versionId}/publish`).expect(200);
+    const draft = templateVersionSchema.parse(
+      (await hr.post(`/templates/${templateId}/versions`).expect(201)).body,
+    );
+    return { templateId, publishedId: versionId, draftId: draft.id };
+  };
+
+  it('AT-33 BR-T02 discarding a draft deletes it and returns the template; the next draft copies the published version again', async () => {
+    const { templateId, publishedId, draftId } = await withNextDraft();
+    const draftPath = `/template-versions/${draftId}`;
+    await hr
+      .put(draftPath, definitionOf(task('read-wiki'), task('meet-the-team')))
+      .expect(200);
+
+    const res = await hr.delete(draftPath).expect(200);
+    const template = templateSchema.parse(res.body);
+    expect(template.versions.map(({ id, status }) => [id, status])).toEqual([
+      [publishedId, 'PUBLISHED'],
+    ]);
+    expect(
+      templateSchema.parse(
+        (await hr.get(`/templates/${templateId}`).expect(200)).body,
+      ),
+    ).toEqual(template);
+    // Gone, also for a second tab that still shows it.
+    for (const send of [() => hr.get(draftPath), () => hr.delete(draftPath)]) {
+      expect(errorOf(await send().expect(404)).code).toBe('NOT_FOUND');
+    }
+
+    const { id: actorUserId } = await prisma.user.findUniqueOrThrow({
+      where: { email: seeded.emails.hr },
+    });
+    expect(
+      await prisma.auditEvent.findMany({
+        where: { entityId: draftId, action: 'template.draft_discarded' },
+        select: { actorUserId: true, entityType: true, data: true },
+      }),
+    ).toEqual([
+      {
+        actorUserId,
+        entityType: 'template_version',
+        data: { templateId, version: 2 },
+      },
+    ]);
+
+    // The number comes back, and nothing of the discarded edits.
+    const next = await hr.post(`/templates/${templateId}/versions`).expect(201);
+    expect(templateVersionSchema.parse(next.body)).toMatchObject({
+      version: 2,
+      status: 'DRAFT',
+      definition: definitionOf(task('read-wiki')),
+    });
+  });
+
+  it('AT-33 BR-T02 a published version, a never-published draft and the draft of an archived template are not discarded: 409', async () => {
+    const published = await withNextDraft();
+    const unpublished = await draftOf(definitionOf(task('read-wiki')));
+    const archived = await withNextDraft();
+    await hr.post(`/templates/${archived.templateId}/archive`).expect(200);
+
+    const cases = {
+      'a published version': [published.publishedId, 'PUBLISHED'],
+      // Discarding it would leave the template with nothing.
+      'the draft of a template never published': [
+        unpublished.versionId,
+        'DRAFT',
+      ],
+      'the draft of an archived template': [archived.draftId, 'DRAFT'],
+    };
+    for (const [what, [versionId, status]] of Object.entries(cases)) {
+      const res = await hr.delete(`/template-versions/${versionId}`);
+      expect({ what, status: res.status }).toEqual({ what, status: 409 });
+      expect(errorOf(res).code).toBe('INVALID_STATE');
+      const kept = await hr.get(`/template-versions/${versionId}`).expect(200);
+      expect(templateVersionSchema.parse(kept.body).status).toBe(status);
+    }
+  });
+
+  it('AT-33 BR-T02 a discard and a publish of one draft at once: exactly one goes through', async () => {
+    const { templateId, draftId } = await withNextDraft();
+    const [discard, publish] = await Promise.all([
+      hr.delete(`/template-versions/${draftId}`),
+      hr.post(`/template-versions/${draftId}/publish`),
+    ]);
+
+    expect([discard.status, publish.status].filter((s) => s === 200)).toEqual([
+      200,
+    ]);
+    const { versions } = templateSchema.parse(
+      (await hr.get(`/templates/${templateId}`).expect(200)).body,
+    );
+    expect(versions.map(({ version, status }) => [version, status])).toEqual(
+      publish.status === 200
+        ? [
+            [2, 'PUBLISHED'],
+            [1, 'PUBLISHED'],
+          ]
+        : [[1, 'PUBLISHED']],
+    );
+  });
+
   it('AT-06 BR-T01 IT, the manager and a new hire get 403 from every template route', async () => {
     const { templateId, versionId } = await draftOf(
       definitionOf(task('read-wiki')),
@@ -354,6 +462,8 @@ describe('templates', () => {
         client.get(`/template-versions/${versionId}`),
       'PUT /template-versions/:id': () =>
         client.put(`/template-versions/${versionId}`, definitionOf(task('x'))),
+      'DELETE /template-versions/:id': () =>
+        client.delete(`/template-versions/${versionId}`),
       'POST /template-versions/:id/publish': () =>
         client.post(`/template-versions/${versionId}/publish`),
     });
@@ -405,6 +515,8 @@ describe('templates', () => {
           hr.get(`/template-versions/${versionId}`),
         'PUT /template-versions/:id': () =>
           hr.put(`/template-versions/${versionId}`, definitionOf(task('x'))),
+        'DELETE /template-versions/:id': () =>
+          hr.delete(`/template-versions/${versionId}`),
         'POST /template-versions/:id/publish': () =>
           hr.post(`/template-versions/${versionId}/publish`),
       };

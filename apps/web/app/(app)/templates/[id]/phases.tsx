@@ -22,6 +22,12 @@ export const assigneeRule = (key: AssigneeKey): AssigneeRule =>
 export const signed = (days: number) =>
   days > 0 ? `+${days}` : days < 0 ? `−${-days}` : '0';
 
+/** "day 3", or "4 days before day 1": the canvas counts from day 1, the start date. */
+export const dayOf = (offset: number) =>
+  offset >= 0
+    ? `day ${offset + 1}`
+    : `${-offset} ${offset === -1 ? 'day' : 'days'} before day 1`;
+
 /** What the editor and the lists call a task with no title yet. */
 export const titleOf = (task: TaskDef) => task.title.trim() || 'Untitled task';
 

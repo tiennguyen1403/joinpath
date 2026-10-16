@@ -43,16 +43,20 @@ type TemplateRow = Prisma.TemplateGetPayload<{ select: typeof templateSelect }>;
 type VersionRow = Prisma.TemplateVersionGetPayload<{
   select: typeof versionSelect;
 }>;
+// Per version id; a version no onboarding started is missing.
+type Usage = Map<string, { running: number; used: number }>;
 
 const toTemplate = (
   { archivedAt, versions, ...template }: TemplateRow,
   { at }: OrgClock,
+  usage: Usage = new Map(),
 ): Template => ({
   ...template,
   archivedAt: archivedAt && at(archivedAt),
   versions: versions.map(({ publishedAt, ...version }) => ({
     ...version,
     publishedAt: publishedAt && at(publishedAt),
+    ...(usage.get(version.id) ?? { running: 0, used: 0 }),
   })),
 });
 
@@ -79,13 +83,15 @@ export class TemplatesService {
       select: templateSelect,
     });
     const clock = await orgClock(this.prisma, organizationId);
-    return templates.map((template) => toTemplate(template, clock));
+    const usage = await usageOf(this.prisma, { organizationId });
+    return templates.map((template) => toTemplate(template, clock, usage));
   }
 
   async get({ organizationId }: AuthContext, id: string): Promise<Template> {
     return toTemplate(
       await findTemplate(this.prisma, organizationId, id),
       await orgClock(this.prisma, organizationId),
+      await usageOf(this.prisma, { templateId: id }),
     );
   }
 
@@ -238,6 +244,43 @@ export class TemplatesService {
     });
   }
 
+  /**
+   * Discard draft deletes the DRAFT outright (PLAN §7): no onboarding points at a draft,
+   * since activation takes a published version. Only while a published version is left.
+   */
+  discardDraft(auth: AuthContext, id: string): Promise<Template> {
+    const { organizationId } = auth;
+    return this.prisma.$transaction(async (tx) => {
+      const { templateId, version } = await findVersion(tx, organizationId, id);
+      const { count } = await tx.templateVersion.deleteMany({
+        where: {
+          id,
+          status: 'DRAFT',
+          template: {
+            archivedAt: null,
+            versions: { some: { status: 'PUBLISHED' } },
+          },
+        },
+      });
+      if (count === 0) {
+        throw new ConflictException(
+          'Only a draft of an active template with a published version can be discarded',
+        );
+      }
+      await recordAudit(tx, auth, {
+        action: 'template.draft_discarded',
+        entityType: 'template_version',
+        entityId: id,
+        data: { templateId, version },
+      });
+      return toTemplate(
+        await findTemplate(tx, organizationId, templateId),
+        await orgClock(tx, organizationId),
+        await usageOf(tx, { templateId }),
+      );
+    });
+  }
+
   /** Final: no new versions or edits, and no new onboardings (BR-T12). */
   archive(auth: AuthContext, id: string): Promise<Template> {
     return this.prisma.$transaction(async (tx) => {
@@ -258,9 +301,35 @@ export class TemplatesService {
       return toTemplate(
         { ...template, archivedAt },
         await orgClock(tx, auth.organizationId),
+        await usageOf(tx, { templateId: id }),
       );
     });
   }
+}
+
+// How many onboardings each version started (PLAN §8). A draft onboarding gets its version
+// when activated, so until then it counts nowhere.
+async function usageOf(
+  db: Prisma.TransactionClient,
+  where: Prisma.OnboardingWhereInput,
+): Promise<Usage> {
+  const groups = await db.onboarding.groupBy({
+    by: ['templateVersionId', 'status'],
+    where: { ...where, templateVersionId: { not: null } },
+    _count: true,
+  });
+  const usage: Usage = new Map();
+  for (const { templateVersionId, status, _count } of groups) {
+    const { running, used } = usage.get(templateVersionId!) ?? {
+      running: 0,
+      used: 0,
+    };
+    usage.set(templateVersionId!, {
+      running: running + (status === 'ACTIVE' ? _count : 0),
+      used: used + _count,
+    });
+  }
+  return usage;
 }
 
 // BR-P02: another org's template is a 404, as if it did not exist.

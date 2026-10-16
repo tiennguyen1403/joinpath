@@ -6,6 +6,7 @@ export type AuditAction =
   | 'template.created'
   | 'template.version_created'
   | 'template.published'
+  | 'template.draft_discarded'
   | 'template.archived'
   | 'onboarding.created'
   | 'onboarding.activated'

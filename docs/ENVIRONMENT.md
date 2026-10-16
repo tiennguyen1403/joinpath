@@ -20,9 +20,14 @@
 - `eval` của Playwright CLI: hàm viết nhiều dòng, hoặc đối số có `"` lồng bên trong, bị Windows từ chối ("batch file arguments are invalid"). Viết hàm trên một dòng, bên trong dùng nháy đơn (M3.2b).
   - Hàm dài thì ghi vào file rồi `run-code --filename <file>`. `page.waitForResponse` trong đó đo được một request, kể cả khi trang chuyển bằng `window.location.assign` (vd tạo sandbox, M3.5).
 - `getByRole('alert').first()` bắt trúng route announcer rỗng của Next (cũng `role="alert"`): tìm Alert của trang theo chữ (M4.1a).
+- Playwright với control của beUI (M4.2a):
+  - `click` coi nút `aria-disabled="true"` là đang khóa và chờ tới timeout: thử bấm nút khóa thì `click({ force: true })`;
+  - toast của `animated-toast-stack` là `ol[aria-live] li`, không có `role="status"`;
+  - `innerText` của tab trong `tabs` (pill) lặp nhãn hai lần, vì có lớp chữ trắng `data-tabs-label` vẽ trên indicator.
 - Tự kiểm bảng phương án trước khi đưa user duyệt (M4.1a): bảng `.dc.html` là HTML tĩnh, trình duyệt thường dựng được như canvas.
   - `python -m http.server <port> --bind 127.0.0.1 --directory <scratchpad>`, rồi `run-code --filename` một script: mỗi bảng đặt viewport bằng chiều rộng khung, chờ `document.fonts.ready`, ẩn thanh cuộn (`addStyleTag` `html{scrollbar-width:none}`), đo `scrollHeight`, `scrollWidth` so với `clientWidth`, chụp `fullPage`.
   - Đặt `h` của khung trong `canvas.json` và `$preview` của bảng bằng chiều cao đo được. Hướng dẫn của loại canvas Design bảo không tự kiểm khi user chưa yêu cầu: dự án này thì kiểm.
+  - Khung cố định chiều cao (vd 1024 × 768) có cột flex tràn thì header co lại: header thêm `flex-shrink: 0` (M4.2a).
 - Kéo thả của `sortable-stack` (motion `Reorder`) chạy với `page.mouse`: `down` trên tay nắm, `move` từng bước nhỏ (vd 8 px, chờ 16 ms), rồi `up`. Bàn phím: `focus` tay nắm rồi `ArrowUp`, `ArrowDown`, `Home`, `End` (M4.1b).
 - `click` nhận locator thay cho ref: `click "getByRole('button', { name: 'Lan Pham, HR' })"`, đỡ phải `snapshot` trước mỗi bước (M3.3d).
   - Tên khớp theo chuỗi con, không phân biệt hoa thường: "Mock inbox" khớp cả "Open mock inbox", locator trùng hai phần tử thì không bấm gì. Thêm `exact: true`.
