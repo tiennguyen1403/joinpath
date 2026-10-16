@@ -503,6 +503,7 @@ describe('onboardings', () => {
           dependsOn: planned.dependsOn.map(idOf),
           availableOn: planned.availableOn,
           dueOn: planned.dueOn,
+          dueOverridden: false,
           status: 'PENDING',
           startedAt: null,
           completedAt: null,

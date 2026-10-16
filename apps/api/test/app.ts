@@ -40,14 +40,18 @@ export const errorOf = (res: { body: unknown }) =>
 
 /** Requests sent as one person. */
 export async function signIn(app: INestApplication<App>, email: string) {
-  // A new agent per request: supertest starts the server for a request and stops it when
-  // that request ends.
-  const server = () => request(app.getHttpServer());
-  const res = await server()
+  const res = await request(app.getHttpServer())
     .post('/api/auth/login')
     .send({ email, password: PASSWORD })
     .expect(204);
-  const cookie = res.get('Set-Cookie')![0].split(';')[0];
+  return clientFor(app, res.get('Set-Cookie')![0].split(';')[0]);
+}
+
+/** Requests sent with a session cookie, from a sign-in or an accepted invitation. */
+export function clientFor(app: INestApplication<App>, cookie: string) {
+  // A new agent per request: supertest starts the server for a request and stops it when
+  // that request ends.
+  const server = () => request(app.getHttpServer());
   return {
     get: (path: string) => server().get(`/api${path}`).set('Cookie', cookie),
     post: (path: string, body: object = {}) =>
@@ -66,7 +70,7 @@ export async function signIn(app: INestApplication<App>, email: string) {
         .attach('file', bytes, fileName),
   };
 }
-export type Client = Awaited<ReturnType<typeof signIn>>;
+export type Client = ReturnType<typeof clientFor>;
 
 // Bytes that open as BR-P04's types, whatever comes after.
 export const pdf = (size = 64) =>

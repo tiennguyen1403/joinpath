@@ -1,4 +1,4 @@
-# Joinpath — Kế hoạch triển khai v0.28
+# Joinpath — Kế hoạch triển khai v0.29
 
 > **Joinpath**: Employee Onboarding & Workflow Management Platform, dự án portfolio Full-stack.
 > Bản này tinh chỉnh SRS v0.4 trong thread ChatGPT "Thiết kế dự án onboarding" (14/10/2026).
@@ -26,6 +26,7 @@
 > **v0.26 (16/10/2026):** `GET /auth/me` kèm `onboardingId`: onboarding ACTIVE của chính người đó, nếu không có thì bản COMPLETED mới nhất (§8). Có `onboardingId` thì `/`, đăng nhập và nhận lời mời đưa tới portal `/my-onboarding`, nằm ngoài app shell (§10). Portal dùng `todo-list` (sửa tại chỗ: `body` dưới dòng của task) và `file-upload` (sửa tại chỗ: `note`, `queueLabel`, thanh progress, nút Remove) (§10.1, ADR 010).
 > **v0.27 (16/10/2026):** xem file đã nộp bằng `morphing-lightbox`, thay `image-viewer` (không có trên registry): ảnh xem trước qua signed URL, PDF chỉ tải về vì link ký kèm `Content-Disposition: attachment`. Drawer review mở từ My Tasks; `drawer` render qua portal và giữ focus bằng `useModalScope`, `approval-card` có `meta` thay badge trạng thái (sửa tại chỗ). Task DOCUMENT làm ngay trong My Tasks bằng khối của portal (§10.1, ADR 010).
 > **v0.28 (16/10/2026):** storage của production là Cloudflare R2. Path-style URL không dùng được với mọi provider: Tigris bỏ path-style cho bucket tạo từ 19/02/2025 (§6.2, ADR 008). M2 xong sau 7 session (§13).
+> **v0.29 (16/10/2026):** M3 chia thành 8 session (§13). Hủy chỉ khóa tài khoản mà người mới có được qua lời mời; activate một onboarding mới cho người đó mở lại tài khoản (BR-C03). Assignee hiện tại của DOCUMENT xem được file và revision của nó (BR-P03, §9). Reschedule, cancel, reassign, due-date: thứ tự kiểm, mã lỗi, audit; task kèm `dueOverridden`; lệnh trên task kiểm lại assignee sau khi khóa (§8).
 
 ## TL;DR: 6 thay đổi lớn nhất
 
@@ -362,7 +363,7 @@ ID ổn định theo từng nhóm: thêm rule mới không làm đổi số củ
 |---|---|
 | BR-C01 | Task cuối cùng COMPLETED thì onboarding chuyển COMPLETED ngay trong cùng transaction |
 | BR-C02 | COMPLETED và CANCELED là trạng thái cuối (terminal) |
-| BR-C03 | Hủy (chỉ HR, bắt buộc có lý do): task chưa xong chuyển CANCELED; task đã xong, file và audit được giữ; thu hồi invitation; khóa account và xóa session của nhân viên mới |
+| BR-C03 | Hủy (chỉ HR, bắt buộc có lý do): task chưa xong chuyển CANCELED; task đã xong, file và audit được giữ; thu hồi invitation; nếu nhân viên mới có tài khoản nhờ một lời mời thì khóa tài khoản đó và xóa session. Ai có tài khoản từ trước (vd HR hay IT được tạo onboarding nhầm) thì giữ nguyên. Activate một onboarding mới cho người bị khóa thì mở lại tài khoản, giữ mật khẩu cũ, không gửi lời mời mới |
 | BR-C04 | Nhắc việc bỏ qua task và onboarding không còn ACTIVE |
 
 **N: Thông báo**
@@ -380,7 +381,7 @@ ID ổn định theo từng nhóm: thêm rule mới không làm đổi số củ
 |---|---|
 | BR-P01 | Mọi query đều lọc theo `organization_id` lấy từ session; không tin org hay role do client gửi lên |
 | BR-P02 | Tài nguyên ngoài phạm vi của user → 404 (không làm lộ việc nó tồn tại); thấy được nhưng không có quyền thao tác → 403 |
-| BR-P03 | Người được xem tài liệu: người upload, approver của APPROVAL review tài liệu đó, và HR. Manager và IT không được xem theo mặc định |
+| BR-P03 | Người được xem tài liệu: người upload, assignee hiện tại của DOCUMENT (sau reassign, người nhận thấy file chưa submit và các revision trước), approver của APPROVAL review tài liệu đó, và HR. Manager và IT không được xem theo mặc định |
 | BR-P04 | File chỉ nhận PDF/PNG/JPEG, xác định qua magic bytes; tối đa 4 MB/file, 5 file/submission; object key do server sinh; bucket private; tải về qua signed URL ngắn hạn |
 | BR-P05 | Invitation token: ngẫu nhiên, chỉ lưu hash, hạn 72h, dùng 1 lần; resend, hoặc đổi email của người mới, làm token cũ mất hiệu lực |
 | BR-P06 | Có rate limit cho login, nhận invitation, tạo sandbox |
@@ -569,15 +570,18 @@ POST /template-versions/:id/publish
 
 # Onboardings
 GET  /onboardings           GET /onboardings/:id         # theo phạm vi (§9); draft hiện bản published mới nhất, tức bản activate sẽ dùng
-                                              # /:id kèm today và task (availability, overdue tính theo today(org)); POST, PATCH, activate trả đúng shape này
+                                              # /:id kèm today và task (availability, overdue tính theo today(org); dueOverridden: hạn do HR đặt); POST, PATCH, activate trả đúng shape này
                                               # list: start date muộn nhất trước, cùng ngày thì mới tạo trước; mỗi dòng kèm progress {completed, total, overdue}
                                               # và nextTask {id, title} | null: task chưa xong có dueOn sớm nhất, hòa thì theo thứ tự template
 POST /onboardings                             {employeeId, templateId, startDate}
 PATCH /onboardings/:id                        {employeeId?, templateId?, startDate?}   # chỉ khi DRAFT; ít nhất 1 field
 GET  /onboardings/:id/activation-preview      # chỉ DRAFT, template chưa archive (không thì 409); {onboarding, today, tasks: PlannedTask[], people: [{id, fullName}]}
 POST /onboardings/:id/activate                {templateVersionId, assignees?: {[taskKey]: employeeId}}   # key không có trong template bị bỏ qua
-POST /onboardings/:id/reschedule              {startDate}
-POST /onboardings/:id/cancel                  {reason}
+POST /onboardings/:id/reschedule              {startDate}   # chỉ HR; ngoài org 404; khóa bằng compare-and-set DRAFT/ACTIVE, không thì 409; cùng ngày thì không đổi gì
+                                              # DRAFT chỉ nhận ngày, không audit (như PATCH); ACTIVE tính lại task chưa xong (BR-S01, S02)
+                                              # audit onboarding.rescheduled {from, to, dueReset: [{taskId, from, to}]}: các hạn HR đặt bị reset
+POST /onboardings/:id/cancel                  {reason}      # chỉ HR; reason 1–1000 ký tự sau khi trim; ngoài org 404; DRAFT/ACTIVE → CANCELED bằng
+                                              # compare-and-set, không thì 409; rồi các bước của BR-C03 trong cùng transaction; lý do lưu ở onboarding
 POST /onboardings/:id/resend-invitation      # HR; chỉ khi ACTIVE và người mới chưa có tài khoản (409); link cũ mất hiệu lực, link mới gửi tới email hiện tại
                                               # chi tiết onboarding (mọi lệnh trả shape này) kèm invitation mới nhất, chỉ HR thấy; preview kèm sendsInvitation (BR-A07)
 GET  /onboardings/:id/activity
@@ -586,7 +590,8 @@ GET  /onboardings/:id/activity
 GET  /tasks/mine                              # {today, tasks: [Task + onboarding]}: mọi task giao cho mình, theo dueOn; client chia tab theo availability
 POST /tasks/:id/start       POST /tasks/:id/complete   # chỉ CHECKLIST, chỉ assignee (mọi vai); trả chi tiết onboarding như activate
                                               # thứ tự kiểm: ngoài phạm vi 404 → không phải assignee 403 → không phải CHECKLIST 409
-                                              # → khóa (§6.4), onboarding không ACTIVE 409 → sai status 409 → chưa tới ngày, prerequisite chưa xong 409 TASK_NOT_ELIGIBLE
+                                              # → khóa (§6.4), onboarding không ACTIVE 409 → kiểm lại assignee, vì reassign có thể vừa đổi (403)
+                                              # → sai status 409 → chưa tới ngày, prerequisite chưa xong 409 TASK_NOT_ELIGIBLE. Upload, submit, approve, reject cũng vậy
 POST /tasks/:id/files       (multipart, field `file`, mỗi request 1 file)   DELETE /tasks/:id/files/:fileId   # chỉ file chưa submit
                                               # chỉ DOCUMENT, chỉ assignee; kiểm như start/complete (404 → 403 → không phải DOCUMENT 409 → khóa → sai status 409 → TASK_NOT_ELIGIBLE)
                                               # file (BR-P04): PDF/PNG/JPEG theo magic bytes, tối đa 4 MB, tối đa 5 file chưa submit; sai thì 400; lần upload đầu PENDING → IN_PROGRESS
@@ -601,8 +606,11 @@ POST /tasks/:id/reject      {submissionId, reason}   # reason 1–1000 ký tự 
                                               # reject: DOCUMENT về IN_PROGRESS, bản nháp chép từ revision đó (§4.5). Submit, approve, reject trả chi tiết onboarding (200)
                                               # mỗi DOCUMENT kèm submissions: các revision, mới nhất trước, kèm file và quyết định, chỉ cho người được xem file (BR-P03),
                                               # người khác nhận mảng rỗng; file kèm carriedOver: chép từ revision trước, không upload lại
-POST /tasks/:id/reassign    {employeeId}
-POST /tasks/:id/due-date    {dueOn | null}     # null = reset về giá trị template
+POST /tasks/:id/reassign    {employeeId}       # chỉ HR: ngoài org 404 → khóa, onboarding không ACTIVE 409 → task đã xong 409 → task của nhân viên mới 409
+                                              # → trùng assignee hiện tại thì không đổi gì → người nhận ngoài org 404 → là nhân viên mới, hoặc không có user ACTIVE 400
+                                              # → BR-R01 cả hai chiều (APPROVAL cho người làm DOCUMENT, DOCUMENT cho approver) 400; audit task.reassigned {from, to}
+POST /tasks/:id/due-date    {dueOn | null}     # null = reset về giá trị template; chỉ HR: ngoài org 404 → khóa 409 → task đã xong 409 → sớm hơn available_on 400
+                                              # đặt ngày thì task kèm dueOverridden = true (BR-S02, S03); audit task.due_changed hoặc task.due_reset {from, to}
 GET  /files/:id/download-url                  # {url, expiresAt}: signed URL sống 5 phút, Content-Disposition attachment kèm tên file; không được xem → 404 (BR-P03)
 
 # Thông báo, dashboard
@@ -644,7 +652,7 @@ Lỗi luôn trả về dạng `{ code, message, details? }`:
 | Reassign, chỉnh deadline | ✓ | — | — | — |
 | Làm task, approve/reject | khi được giao | khi được giao | khi được giao | khi được giao (không approve) |
 | Xem onboarding (DRAFT: chỉ HR) | mọi onboarding trong org | của direct reports | các onboarding mình có task | của mình |
-| Xem tài liệu, kể cả revision và quyết định | ✓ | chỉ khi là approver | chỉ khi là approver | của mình |
+| Xem tài liệu, kể cả revision và quyết định | ✓ | chỉ khi là approver hoặc assignee của DOCUMENT | chỉ khi là approver hoặc assignee của DOCUMENT | của mình |
 | Mock inbox | ✓ | trong sandbox | trong sandbox | trong sandbox |
 
 - **Xem onboarding:**
@@ -796,7 +804,7 @@ Tự dựng theo token vì beUI không có: thanh tiến độ onboarding, avata
 | **M0** Walking skeleton | 1 (2–3 ngày đầu) | 4 (thực tế) | pnpm workspace (`web`, `api`, `core`); docker compose (Postgres); Prisma: org, departments, employees, users, sessions; seed một org cố định (§11); login/logout/me; layout theo vai trò; rewrite proxy; CI; **chọn host và deploy** | Có URL public, đăng nhập được bằng user seed |
 | **M1** Workflow engine | 1–2 | 11 (thực tế) | `core`: schema + `validateTemplate` + tính ngày + availability + activation plan, unit test kỹ. API template (tạo, `PUT` JSON, publish, archive; chưa có editor, template lấy từ seed). Nhân viên (CRUD tối thiểu). Draft → preview → activate. Checklist. Business clock + endpoint tua ngày (để tự test; UI demo bar làm ở M3). Ghi audit. Wizard, Onboarding detail, My Tasks | Activate được template seed; IT và Manager làm checklist; khóa theo ngày/dependency chạy đúng; onboarding tự COMPLETED; nhóm test T, A, E pass |
 | **M2** Tài liệu và duyệt | 3 | 7 (thực tế) | Invitation + mock inbox + nhận lời mời + resend; thêm RustFS vào docker compose và CI; upload (magic bytes → S3); submit revision; approve/reject/rework; signed download; need-to-know; portal nhân viên mới | Golden path (§11) chạy trọn vẹn ở local; nhóm test R, P pass |
-| **M3** Vận hành và demo | 4 | ~7 | Đổi ngày, reassign, override deadline, hủy; thông báo in-app; cron tick; sandbox + demo bar; dashboard HR cơ bản; timeline | **Mốc an toàn:** demo public chạy được end-to-end trên host |
+| **M3** Vận hành và demo | 4 | 8 (chia ở M3.1) | Đổi ngày, reassign, override deadline, hủy; thông báo in-app; cron tick; sandbox + demo bar; dashboard HR cơ bản; timeline | **Mốc an toàn:** demo public chạy được end-to-end trên host |
 | **M4** Editor và trực quan | 5 | ~5 | Template editor dạng form (phases, tasks, chọn `dependsOn`, rule, offset) + validate tức thì bằng `core` + lịch sử version; dependency graph; analytics theo phòng ban | **MVP cut line:** đủ mọi FR mức Must |
 | **M5** Hoàn thiện | 6 | 4 | Playwright golden path; rà lại ma trận quyền, cross-tenant, upload; trạng thái rỗng và lỗi; a11y; checklist hướng dẫn demo; landing page; README, ADR, sơ đồ, video demo | Sẵn sàng đưa vào portfolio |
 | Dự phòng | 7 | — | Dành cho phần bị trễ. Nếu đúng tiến độ: launch sớm, hoặc làm các mục Could | — |

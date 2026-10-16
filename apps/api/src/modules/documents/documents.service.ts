@@ -218,7 +218,10 @@ export class DocumentsService {
         fileName: true,
         uploadedById: true,
         task: {
-          select: { reviewedBy: { select: { assigneeEmployeeId: true } } },
+          select: {
+            assigneeEmployeeId: true,
+            reviewedBy: { select: { assigneeEmployeeId: true } },
+          },
         },
       },
     });
@@ -226,6 +229,7 @@ export class DocumentsService {
       !file ||
       !canSeeFile(auth, {
         uploadedById: file.uploadedById,
+        assigneeId: file.task.assigneeEmployeeId,
         approverId: file.task.reviewedBy.at(0)?.assigneeEmployeeId,
       })
     ) {

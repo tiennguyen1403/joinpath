@@ -204,6 +204,51 @@ export function planActivation(input: ActivationInput): PlannedTask[] {
   return planned;
 }
 
+export type RescheduleInput = {
+  // The version the tasks were copied from, which keeps their offsets.
+  definition: TemplateDefinition;
+  startDate: IsoDate;
+  tasks: {
+    id: string;
+    definitionKey: string;
+    status: TaskStatus;
+    dueOn: IsoDate;
+    dueOverridden: boolean;
+  }[];
+};
+
+/**
+ * The new dates of the tasks a new start date moves: every task not finished, one in progress
+ * included, both dates worked out from the template again (BR-S01). A deadline HR set stays,
+ * unless the task would open after it: then it goes back to the template's (BR-S02).
+ */
+export function planReschedule({
+  definition,
+  startDate,
+  tasks,
+}: RescheduleInput) {
+  return tasks
+    .filter(
+      (task) => task.status === 'PENDING' || task.status === 'IN_PROGRESS',
+    )
+    .map((task) => {
+      // Copied from this version on activation, so its key is there (BR-A08).
+      const def = definition.tasks.find(
+        (each) => each.key === task.definitionKey,
+      )!;
+      const availableOn = addDays(startDate, def.availableOffsetDays);
+      const keeps = task.dueOverridden && task.dueOn >= availableOn;
+      return {
+        id: task.id,
+        availableOn,
+        dueOn: keeps ? task.dueOn : addDays(startDate, def.dueOffsetDays),
+        dueOverridden: keeps,
+        // HR's deadline gave way, which goes on record (BR-S02).
+        overrideReset: task.dueOverridden && !keeps,
+      };
+    });
+}
+
 // Onboarding API (PLAN §8). Only HR creates or edits one, and only while it is a draft.
 export const createOnboardingSchema = z.object({
   employeeId: z.uuid(),
@@ -275,6 +320,28 @@ export const unresolvedAssigneesSchema = z.array(
   z.object({ taskKey: z.string(), problem: assigneeProblemSchema }),
 );
 
+// POST /onboardings/:id/reschedule: a draft takes the date, an active onboarding's open tasks
+// are dated again from it (BR-S01, BR-S02).
+export const rescheduleOnboardingSchema = z.object({ startDate: z.iso.date() });
+export type RescheduleOnboarding = z.infer<typeof rescheduleOnboardingSchema>;
+
+// POST /onboardings/:id/cancel: HR says why (BR-C03).
+export const cancelOnboardingSchema = z.object({
+  reason: z.string().trim().min(1, 'Say why').max(1000),
+});
+export type CancelOnboarding = z.infer<typeof cancelOnboardingSchema>;
+
+// POST /tasks/:id/reassign: someone else with an active account (BR-S04).
+export const reassignTaskSchema = z.object({ employeeId: z.uuid() });
+export type ReassignTask = z.infer<typeof reassignTaskSchema>;
+
+// POST /tasks/:id/due-date: a day no sooner than the task opens, or null to put the template's
+// back (BR-S03).
+export const changeDueDateSchema = z.object({
+  dueOn: z.iso.date().nullable(),
+});
+export type ChangeDueDate = z.infer<typeof changeDueDateSchema>;
+
 // A task of an activated onboarding. The status is stored; availability and overdue are
 // worked out from the org's today (PLAN §4.4).
 export const taskSchema = z.object({
@@ -293,6 +360,8 @@ export const taskSchema = z.object({
   dependsOn: z.array(z.uuid()),
   availableOn: z.iso.date(),
   dueOn: z.iso.date(),
+  // HR set dueOn by hand (BR-S03), and a new start date keeps it (BR-S02).
+  dueOverridden: z.boolean(),
   status: taskStatusSchema,
   startedAt: z.iso.datetime().nullable(),
   completedAt: z.iso.datetime().nullable(),

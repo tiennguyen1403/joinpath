@@ -1,16 +1,21 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import {
+  addDays,
   type ApproveSubmission,
   availability,
+  type ChangeDueDate,
   type MyTasks,
   type OnboardingDetail,
+  type ReassignTask,
   type RejectSubmission,
   type TaskStatus,
+  type TemplateDefinition,
 } from '@joinpath/core';
 import type { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../prisma.js';
@@ -19,6 +24,7 @@ import type { AuthContext } from '../auth/session.js';
 import { orgToday } from '../org/org.service.js';
 import { canWorkOn, visibleOnboardings } from './onboarding.policy.js';
 import {
+  fromIsoDate,
   lockOnboarding,
   onboardingSelect,
   OnboardingService,
@@ -38,8 +44,9 @@ const myTaskSelect = {
   onboarding: { select: onboardingSelect },
 } satisfies Prisma.TaskSelect;
 
-// Only a task's assignee works on it (PLAN §9). The commands answer, as activate does, with the
-// onboarding, which a task done may ripple through: the tasks it unlocks, or the onboarding done.
+// Only a task's assignee works on it, and only HR hands it on or moves its deadline (PLAN §9).
+// The commands answer, as activate does, with the onboarding, which a task done may ripple
+// through: the tasks it unlocks, or the onboarding done.
 @Injectable()
 export class TaskService {
   constructor(
@@ -229,6 +236,177 @@ export class TaskService {
     });
     return this.onboardings.get(auth, onboardingId);
   }
+
+  /**
+   * HR hands a task not done to someone else with an active account (BR-S04), never an
+   * approval to whoever uploads the document it reviews, nor that document to its approver
+   * (BR-R01).
+   */
+  async reassign(
+    auth: AuthContext,
+    id: string,
+    { employeeId }: ReassignTask,
+  ): Promise<OnboardingDetail> {
+    const { organizationId } = auth;
+    const onboardingId = await this.prisma.$transaction(async (tx) => {
+      const task = await openTask(
+        tx,
+        organizationId,
+        id,
+        'A task done stays with whoever did it',
+      );
+      const { onboardingId, assigneeEmployeeId: from } = task;
+      const { employeeId: newHireId } = await tx.onboarding.findUniqueOrThrow({
+        where: { id: onboardingId },
+        select: { employeeId: true },
+      });
+      // Only a task of the new hire's own goes to them (PLAN §4.7), so theirs is one.
+      if (from === newHireId) {
+        throw new ConflictException("A new hire's own task stays theirs");
+      }
+      if (employeeId === from) return onboardingId;
+      const person = await tx.employee.findFirst({
+        where: { id: employeeId, organizationId },
+        select: { user: { select: { status: true } } },
+      });
+      if (!person) throw new NotFoundException('Employee not found');
+      if (employeeId === newHireId) {
+        throw new BadRequestException(
+          'The new hire only takes their own tasks',
+        );
+      }
+      if (person.user?.status !== 'ACTIVE') {
+        throw new BadRequestException('Pick someone with an active account');
+      }
+      // The approval and the document it reviews: whichever this task is not, if any.
+      const pair = await tx.task.findFirst({
+        where:
+          task.type === 'APPROVAL'
+            ? { id: task.reviewsTaskId! }
+            : { reviewsTaskId: id },
+        select: { assigneeEmployeeId: true },
+      });
+      if (pair?.assigneeEmployeeId === employeeId) {
+        throw new BadRequestException(
+          task.type === 'APPROVAL'
+            ? 'The approver cannot be whoever uploads the document'
+            : 'Whoever uploads the document cannot be its approver',
+        );
+      }
+      await tx.task.update({
+        where: { id },
+        data: { assigneeEmployeeId: employeeId },
+      });
+      await recordAudit(tx, auth, {
+        action: 'task.reassigned',
+        entityType: 'task',
+        entityId: id,
+        onboardingId,
+        data: { from, to: employeeId },
+      });
+      return onboardingId;
+    });
+    return this.onboardings.get(auth, onboardingId);
+  }
+
+  /**
+   * HR moves the deadline of a task not done, no sooner than it opens, or with null puts the
+   * template's back (BR-S03). A deadline set so stays when the start date moves (BR-S02).
+   */
+  async changeDueDate(
+    auth: AuthContext,
+    id: string,
+    { dueOn }: ChangeDueDate,
+  ): Promise<OnboardingDetail> {
+    const { organizationId } = auth;
+    const onboardingId = await this.prisma.$transaction(async (tx) => {
+      const task = await openTask(
+        tx,
+        organizationId,
+        id,
+        'A task done keeps its deadline',
+      );
+      const { onboardingId } = task;
+      let to = dueOn;
+      if (to === null) {
+        // Dated from the start date, as on activation, by the version it was copied from.
+        const { startDate, templateVersion } =
+          await tx.onboarding.findUniqueOrThrow({
+            where: { id: onboardingId },
+            select: {
+              startDate: true,
+              templateVersion: { select: { definition: true } },
+            },
+          });
+        const definition = templateVersion!.definition as TemplateDefinition;
+        const def = definition.tasks.find(
+          (each) => each.key === task.definitionKey,
+        )!;
+        to = addDays(toIsoDate(startDate), def.dueOffsetDays);
+      }
+      // The template's never comes sooner (BR-T06).
+      const opensOn = toIsoDate(task.availableOn);
+      if (to < opensOn) {
+        throw new BadRequestException(
+          `Pick ${opensOn} or later: the task opens then`,
+        );
+      }
+      const from = toIsoDate(task.dueOn);
+      const overridden = dueOn !== null;
+      if (to === from && overridden === task.dueOverridden) {
+        return onboardingId;
+      }
+      await tx.task.update({
+        where: { id },
+        data: { dueOn: fromIsoDate(to), dueOverridden: overridden },
+      });
+      await recordAudit(tx, auth, {
+        action: overridden ? 'task.due_changed' : 'task.due_reset',
+        entityType: 'task',
+        entityId: id,
+        onboardingId,
+        data: { from, to },
+      });
+      return onboardingId;
+    });
+    return this.onboardings.get(auth, onboardingId);
+  }
+}
+
+/**
+ * The task an HR command changes: in the org, its onboarding locked and active, and the task
+ * not done (BR-S03, BR-S04), read under the lock (PLAN §6.4). `done`: the refusal otherwise.
+ */
+async function openTask(
+  tx: Prisma.TransactionClient,
+  organizationId: string,
+  id: string,
+  done: string,
+) {
+  const found = await tx.task.findFirst({
+    where: { id, organizationId },
+    select: { onboardingId: true },
+  });
+  if (!found) throw new NotFoundException('Task not found');
+  await lockOnboarding(tx, organizationId, found.onboardingId);
+  const task = await tx.task.findUniqueOrThrow({
+    where: { id },
+    select: {
+      onboardingId: true,
+      definitionKey: true,
+      type: true,
+      status: true,
+      assigneeEmployeeId: true,
+      reviewsTaskId: true,
+      availableOn: true,
+      dueOn: true,
+      dueOverridden: true,
+    },
+  });
+  if (task.status !== 'PENDING' && task.status !== 'IN_PROGRESS') {
+    throw new ConflictException(done);
+  }
+  return task;
 }
 
 /** After a task completes: the last one completes its onboarding, in that transaction (BR-C01). */
@@ -352,14 +530,20 @@ export async function checkTask(
   const { organizationId } = auth;
   const task = await findTask(tx, auth, id, type);
   await lockOnboarding(tx, organizationId, task.onboardingId);
-  const { status, availableOn, dependsOn } = await tx.task.findUniqueOrThrow({
-    where: { id },
-    select: {
-      status: true,
-      availableOn: true,
-      dependsOn: { select: { dependsOn: { select: { status: true } } } },
-    },
-  });
+  const { assigneeEmployeeId, status, availableOn, dependsOn } =
+    await tx.task.findUniqueOrThrow({
+      where: { id },
+      select: {
+        assigneeEmployeeId: true,
+        status: true,
+        availableOn: true,
+        dependsOn: { select: { dependsOn: { select: { status: true } } } },
+      },
+    });
+  // Again under the lock: HR may have just handed the task to someone else (BR-S04).
+  if (!canWorkOn(auth, { assigneeEmployeeId })) {
+    throw new ForbiddenException('This task is assigned to someone else');
+  }
   if (!from.includes(status)) {
     throw new ConflictException(
       status === 'IN_PROGRESS' ? 'Task is already started' : DONE[type],

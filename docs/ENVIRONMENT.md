@@ -26,6 +26,9 @@
 - `seed.yml` chạy trên GitHub Actions, xa Neon: mỗi query mất vài trăm ms, nên transaction của `seedDemoOrg` để timeout 30 s. Seed xóa org `acme` trước, ngoài transaction: seed fail là prod mất org demo tới lần chạy sau.
 - Đừng `pnpm build` khi `pnpm dev` đang chạy (`nest build` xóa `dist`, api dev chết). Dừng `pnpm dev` chạy nền không tắt node của next và nest: `Stop-Process` theo command line.
 - Script Python sửa file repo: đọc, ghi với `newline=""` (không thì thành CRLF); in output vitest cần `PYTHONIOENCODING=utf-8` (`python -I` bỏ qua biến này: dùng `sys.stdout.reconfigure(encoding='utf-8')`).
+  - Heredoc `python - <<'EOF'` dài, có nhiều dấu nháy đơn, có lúc bị Bash tool báo "unexpected EOF while looking for matching `''": ghi script vào scratchpad bằng Write rồi chạy `python -I <file>` (M3.1a).
+  - `$TMP` của Git Bash không phải scratchpad của session: file tạm, bản sao lưu thì dùng đường dẫn scratchpad tuyệt đối.
+- Việc cần Linux (vd kiểm TZ có DST): image `node:20-alpine` có sẵn trong Docker của máy; mount `packages/core` read-only rồi chạy script import `core/dist` (handoff 023).
 - Sửa `packages/core` khi `pnpm dev` đang chạy: web có thể giữ bản core cũ, nên build core rồi restart `pnpm dev`. Sửa `app-shell.tsx` lúc dev đang chạy cũng vậy: SSR giữ bản cũ, gây lỗi hydration (handoff 013).
 - Vercel CLI 62.2.0 (global, đã đăng nhập; hook đầu session báo "not installed" là sai). MCP Vercel trả 403 với team này: dùng `vercel api`, `vercel logs`, `vercel inspect --logs`. Không chạy `vercel deploy` từ máy (CLI upload cả `apps/api/.env`).
 - Secret không bao giờ in ra transcript. Đặt secret qua file tạm trong scratchpad rồi xóa ngay, hoặc để user tự gõ trong terminal riêng.

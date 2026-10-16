@@ -10,14 +10,18 @@ import {
 } from '@nestjs/common';
 import {
   approveSubmissionSchema,
+  changeDueDateSchema,
   type MyTasks,
   type OnboardingDetail,
+  reassignTaskSchema,
   rejectSubmissionSchema,
 } from '@joinpath/core';
 import type { Request } from 'express';
+import { Roles } from '../auth/session.js';
 import { TaskService } from './task.service.js';
 
-// PLAN §8. Anyone works on the tasks assigned to them (PLAN §9), so no route names a role.
+// PLAN §8. Anyone works on the tasks assigned to them (PLAN §9), so those routes name no role;
+// only HR hands a task on or moves its deadline.
 @Controller()
 export class TaskController {
   constructor(private readonly tasks: TaskService) {}
@@ -67,5 +71,32 @@ export class TaskController {
     @Body() body: unknown,
   ): Promise<OnboardingDetail> {
     return this.tasks.reject(req.auth!, id, rejectSubmissionSchema.parse(body));
+  }
+
+  @Roles('HR')
+  @Post('tasks/:id/reassign')
+  @HttpCode(200)
+  reassign(
+    @Req() req: Request,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: unknown,
+  ): Promise<OnboardingDetail> {
+    return this.tasks.reassign(req.auth!, id, reassignTaskSchema.parse(body));
+  }
+
+  // A day, or null to put the template's back.
+  @Roles('HR')
+  @Post('tasks/:id/due-date')
+  @HttpCode(200)
+  changeDueDate(
+    @Req() req: Request,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: unknown,
+  ): Promise<OnboardingDetail> {
+    return this.tasks.changeDueDate(
+      req.auth!,
+      id,
+      changeDueDateSchema.parse(body),
+    );
   }
 }

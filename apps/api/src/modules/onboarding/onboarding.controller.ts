@@ -12,9 +12,11 @@ import {
 import {
   activateOnboardingSchema,
   type ActivationPreview,
+  cancelOnboardingSchema,
   createOnboardingSchema,
   type OnboardingDetail,
   type OnboardingSummary,
+  rescheduleOnboardingSchema,
   updateOnboardingSchema,
 } from '@joinpath/core';
 import type { Request } from 'express';
@@ -87,6 +89,36 @@ export class OnboardingController {
       req.auth!,
       id,
       activateOnboardingSchema.parse(body),
+    );
+  }
+
+  @Roles('HR')
+  @Post('onboardings/:id/reschedule')
+  @HttpCode(200)
+  reschedule(
+    @Req() req: Request,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: unknown,
+  ): Promise<OnboardingDetail> {
+    return this.onboardings.reschedule(
+      req.auth!,
+      id,
+      rescheduleOnboardingSchema.parse(body),
+    );
+  }
+
+  @Roles('HR')
+  @Post('onboardings/:id/cancel')
+  @HttpCode(200)
+  cancel(
+    @Req() req: Request,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: unknown,
+  ): Promise<OnboardingDetail> {
+    return this.onboardings.cancel(
+      req.auth!,
+      id,
+      cancelOnboardingSchema.parse(body),
     );
   }
 

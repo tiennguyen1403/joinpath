@@ -2,14 +2,12 @@
 
 > File này được nạp vào mọi session qua `CLAUDE.md`. Giữ ngắn: chỉ trạng thái hiện tại. Lịch sử chi tiết nằm trong `docs/sessions/`.
 
-**Cập nhật:** 2026-10-16 · session 022 (M2.5 · Golden path, push)
-**Mốc hiện tại:** M3 · Vận hành và demo, chưa bắt đầu.
+**Cập nhật:** 2026-10-16 · session 023 (M3.1a · Đổi ngày, hủy, reassign, deadline: API)
+**Mốc hiện tại:** M3 · Vận hành và demo, xong 1/8 session.
 
-M2 · Tài liệu và duyệt đã xong sau 7 session, đã push tới M2.4b (commit `M2.5: …` còn ở local): lời mời qua mock inbox; upload và signed download (RustFS ở local và CI, Cloudflare R2 trên production); submit, approve, reject; portal của nhân viên mới; drawer review. Golden path (PLAN §11) bước 2–9 chạy trọn ở local qua UI; nhóm test R, P pass ở local và CI.
+M0, M1, M2 đã xong; demo public tại https://joinpath.vercel.app, đã push tới M2.4b (commit `M2.5`, `M3.1a` còn ở local). Golden path (PLAN §11) bước 2–9 chạy trọn ở local qua UI (M2.5). M3.1a: API đổi ngày, hủy, reassign, override deadline; chưa có UI.
 
-M1 · Workflow engine đã xong: tiêu chí PLAN §13 đạt trên production; onboarding tự COMPLETED khi nhân viên mới làm task cuối đã kiểm ở local (M2.5). M0 · Walking skeleton đã xong: CI trên GitHub Actions, demo public tại https://joinpath.vercel.app.
-
-**Session kế tiếp:** **M3.1 · Đổi ngày, reassign, override deadline, hủy** (xem bảng). Session đầu của M3: chi tiết hóa lại các session M3 trong bảng trước khi code (quy ước session), rồi đọc PLAN §4.3, §5 nhóm S và C, §8. Handoff mới nhất: `docs/sessions/022-M2.5-golden-path-push.md`; dữ liệu đọc từ canvas nằm ở handoff 005, 008, 009, 016 và 019.
+**Session kế tiếp:** **M3.1b · Web cho 4 thao tác đó ở onboarding detail** (xem bảng). Bước đầu: đọc canvas phần OnboardingDetail (nút header, menu ⋯, dialog). Handoff mới nhất: `docs/sessions/023-M3.1a-hr-changes-api.md`; dữ liệu đọc từ canvas nằm ở handoff 005, 008, 009, 016 và 019.
 
 ## Quy ước session
 
@@ -18,26 +16,13 @@ M1 · Workflow engine đã xong: tiêu chí PLAN §13 đạt trên production; o
 
 ## Bảng session
 
-Trạng thái: ✅ xong · ▶ kế tiếp · ⏳ chưa làm. Mốc M3–M5 mới ở mức khung.
+Trạng thái: ✅ xong · ▶ kế tiếp · ⏳ chưa làm. Mốc M4–M5 mới ở mức khung.
 
 | ID | Nội dung | Xong khi | TT |
 |---|---|---|---|
 | S0 | Kế hoạch, canvas 15 bảng, khung handoff | Có PLAN, canvas, STATUS | ✅ |
-| M0.1 | Khung repo: pnpm workspace (web, api, `core`), TS 6.0, oxlint, Postgres qua Docker | Build, test, lint, typecheck xanh | ✅ |
-| M0.2 | Prisma, seed org `acme`, login / logout / me bằng cookie session, Origin check, throttle, helmet | Test Supertest pass | ✅ |
-| M0.3 | Web shell: Tailwind 4 + beUI, reicon, trang login, layout theo vai | Đăng nhập qua UI, khớp canvas | ✅ |
-| M0.4 | GitHub + CI, deploy Vercel Services + Neon (ADR 011) | URL public đăng nhập được; CI xanh | ✅ |
-| M1.1 | `core`: schema template + `validateTemplate` | BR-T04…T11 pass | ✅ |
-| M1.2 | `core`: ngày, availability, overdue, `planActivation` | Unit test nhóm A, E, R pass | ✅ |
-| M1.3 | API template (chỉ HR), seed template, audit | AT-01…AT-04, BR-T02 pass | ✅ |
-| M1.4a | API draft onboarding, employees, departments, phạm vi xem | AT-11, BR-P01, P02 pass | ✅ |
-| M1.4b | API `today(org)`, preview, activate; task trong detail | AT-05, AT-07…AT-10 pass | ✅ |
-| M1.5 | API task `start`/`complete`, onboarding tự COMPLETED, My Tasks, đồng hồ demo | AT-12…AT-14, AT-23, AT-31 pass | ✅ |
-| M1.6a | Web: TanStack Query, bảng Onboardings (`/onboardings`, Dashboard); `GET /onboardings` kèm progress, next task | HR, IT, Manager thấy đúng danh sách qua UI | ✅ |
-| M1.6b | Web: wizard 3 bước, chọn và override assignee, activate; header + toast; `today` của org trong `/auth/me` | Activate template seed qua UI; khớp màn NewOnboarding | ✅ |
-| M1.7 | Web: onboarding detail (task theo phase, badge availability) + My Tasks | IT và Manager complete checklist qua UI; khóa theo ngày/dependency đúng; onboarding tự COMPLETED | ✅ |
-| M1.8 | Employees: API tạo, sửa (email lowercase khi ghi), thêm và đổi tên phòng ban + màn danh sách và form | Integration test employees pass; HR tạo, sửa nhân viên qua UI | ✅ |
-| M1.9 | Templates: danh sách, mỗi template kèm các version (chỉ xem); chốt tiêu chí M1; push + deploy | Tiêu chí M1 (PLAN §13) đạt trên production, trừ "onboarding tự COMPLETED" (task của nhân viên mới chờ M2; M1.7 đã kiểm ở local); nhóm test T, A, E pass (trừ A07, E04 thuộc M2) | ✅ |
+| M0.1–M0.4 | Walking skeleton: khung repo, Prisma + đăng nhập bằng cookie session, web shell (beUI, reicon), CI + deploy Vercel Services + Neon | URL public đăng nhập được; CI xanh (handoff 001–004) | ✅ |
+| M1.1–M1.9 | Workflow engine: `core` (validate template, ngày, availability, `planActivation`); API template, onboarding, task, employees; web Onboardings, wizard, detail, My Tasks, Employees, Templates | Tiêu chí M1 (PLAN §13) đạt trên production; nhóm test T, A, E pass (handoff 005–015) | ✅ |
 | M2.1a | API lời mời: bảng `invitations`, `mock_emails`; activate gửi lời mời; tra cứu và nhận lời mời, resend, `GET /mock-inbox` | AT-10 (phần invitation), AT-30, AT-32 pass; có throttle khi tra cứu và nhận lời mời | ✅ |
 | M2.1b | Web: Mock inbox, trang nhận lời mời, khung Invitation (Resend) ở detail, dòng lời mời ở wizard và toast | Qua UI: HR activate → mở email → đặt mật khẩu → An đăng nhập, thấy task của mình; sau Resend, link cũ hết hiệu lực | ✅ |
 | M2.2 | RustFS (compose + CI), upload (magic bytes, 4 MB, 5 file), xóa file chưa submit, signed download, need-to-know | AT-26, AT-27, AT-29 pass; lần upload đầu chuyển DOCUMENT sang IN_PROGRESS | ✅ |
@@ -45,11 +30,14 @@ Trạng thái: ✅ xong · ▶ kế tiếp · ⏳ chưa làm. Mốc M3–M5 mớ
 | M2.4a | Web: portal nhân viên mới, upload, submit, lịch sử duyệt | An upload, submit qua UI ở 390 px và desktop | ✅ |
 | M2.4b | Web: drawer review (xem file), approve / reject kèm lý do; nút cho DOCUMENT, APPROVAL trong My Tasks | Qua UI: Lan reject → An nộp revision 2 → Lan approve | ✅ |
 | M2.5 | Golden path ở local, rà nhóm test P, push | Golden path bước 2–9 chạy trọn ở local (đăng nhập từng vai thay cho đổi vai, tua ngày bằng API); nhóm R, P pass | ✅ |
-| **M3.1** | Đổi ngày, reassign, override deadline, hủy; phần cancel của AT-06 | | ▶ |
-| M3.2 | Thông báo in-app + cron tick; báo approver khi có submit, báo nhân viên mới khi bị reject (kèm lý do) hay được approve (BR-N02, chốt ở M2.3); chuông trên header của portal | | ⏳ |
-| M3.3 | Sandbox mỗi khách + Dynamic Island (đổi vai, ngày nghiệp vụ), cả trên portal; phần đổi vai của AT-31; đường từ portal sang My tasks cho người đã xong onboarding (handoff 020); `scenarios` A/B/C của seed (PLAN §11; A để start ≤ hôm nay + 5); ngày "Finished" theo ngày nghiệp vụ (handoff 022) | | ⏳ |
-| M3.4 | Dashboard HR + timeline | | ⏳ |
-| M3.5 | Demo public end-to-end trên host | **Mốc an toàn** | ⏳ |
+| M3.1a | API: `planReschedule` trong `core`; reschedule, cancel, reassign, due-date; lệnh trên task kiểm lại assignee sau khi khóa | AT-06 (phần cancel), AT-19, AT-20 (dời muộn và dời sớm), AT-21, AT-22 pass; có test BR-S03, BR-S04 | ✅ |
+| **M3.1b** | Web: Change start date, Cancel onboarding ở header của detail; nút ⋯ trên dòng task (reassign, đổi và reset deadline); badge Canceled, Next step trống; nhãn riêng ở khung Invitation khi hủy | Qua UI, HR làm đủ 4 thao tác; khớp canvas | ▶ |
+| M3.2a | API: `notifications`, `notify(tx)` cho các sự kiện BR-N02 (submit, reject kèm lý do, approve, reassign, đổi deadline, hủy…); cron tick (due-soon, overdue, READY theo ngày, dọn session và lời mời hết hạn); tua ngày chạy tick (BR-D03); chốt người gọi cron | AT-24, AT-25 pass; mỗi sự kiện có test | ⏳ |
+| M3.2b | Web: chuông và danh sách thông báo (app shell và header của portal), "N overdue" ở sidebar, các email mới trong mock inbox | Qua UI, mỗi vai thấy thông báo của mình và đánh dấu đã đọc | ⏳ |
+| M3.3a | API sandbox: `POST /demo/sandboxes` (throttle theo IP hash lưu trong DB), `scenarios` A/B/C của seed (PLAN §11; A để start ≤ hôm nay + 5), purge sandbox hết hạn, `switch-user`; ngày "Finished" theo ngày nghiệp vụ (handoff 022) | AT-31 (phần đổi vai) pass; có test BR-D01, BR-P06 (phần sandbox) | ⏳ |
+| M3.3b | Web: Dynamic Island (đổi vai, ngày nghiệp vụ, +1 ngày, tới ngày bắt đầu, demo mới, inbox), cả trên portal; nút Try demo; đường từ portal sang My tasks cho người đã xong onboarding (handoff 020) | Golden path bước 1–9 chạy ở local chỉ bằng UI | ⏳ |
+| M3.4 | Dashboard HR + tab Activity (`GET /dashboard`, `GET /onboardings/:id/activity`); có thể tách a/b | Golden path bước 10 ở local | ⏳ |
+| M3.5 | Demo public end-to-end trên host; upload và xem file thật trên production (hoãn từ M2.5) | **Mốc an toàn:** golden path 1–10 chạy trên production | ⏳ |
 | M4.1 | Template editor dạng form + validate tức thì bằng `core` | | ⏳ |
 | M4.2 | Lịch sử version + luồng publish trên UI | | ⏳ |
 | M4.3 | Dependency graph (React Flow + dagre) | | ⏳ |
@@ -66,6 +54,8 @@ Trạng thái: ✅ xong · ▶ kế tiếp · ⏳ chưa làm. Mốc M3–M5 mớ
 - Swagger `/api/docs` (PLAN §8) chưa thuộc session nào; khi thêm phải chỉnh CSP của `helmet`. Gắn vào session nào?
 - BR-R01 ở mức template: M1.4a chốt không thêm rule chặn publish. Còn mở cho M4.1: editor có gợi ý (không chặn) khi DOCUMENT và APPROVAL của nó cùng giao `DIRECT_MANAGER` không?
 - Nút "Discard draft" (canvas, editor) cần xóa DRAFT, trái PLAN §7 (không xóa bản ghi nghiệp vụ) và §8 (không có endpoint): chốt ở M4.1.
+- Ai thấy lý do hủy (`cancel_reason`, API chưa trả): chỉ HR hay mọi người xem được onboarding. Chốt ở M3.1b theo canvas.
+
 ## Chạy dự án
 
 ```sh

@@ -4,8 +4,10 @@ import {
   availability,
   isOverdue,
   planActivation,
+  planReschedule,
   type ActivationInput,
   type PlannedTask,
+  type RescheduleInput,
   type TaskStatus,
 } from './onboarding.js';
 import type { AssigneeRule } from './template.js';
@@ -372,5 +374,71 @@ describe('planActivation', () => {
       ),
     });
     expect(review.dependsOn).toEqual(['doc']);
+  });
+});
+
+describe('planReschedule', () => {
+  // Engineering Onboarding activated for a start on Mon Oct 26, then moved. Keys stand in for ids.
+  const row = (
+    key: string,
+    status: TaskStatus,
+    dueOn: IsoDate,
+    dueOverridden = false,
+  ) => ({ id: key, definitionKey: key, status, dueOn, dueOverridden });
+  const moveTo = (startDate: IsoDate, tasks: RescheduleInput['tasks']) =>
+    planReschedule({ definition: engineering, startDate, tasks });
+  const moved = (id: string, availableOn: IsoDate, dueOn: IsoDate) => ({
+    id,
+    availableOn,
+    dueOn,
+    dueOverridden: false,
+    overrideReset: false,
+  });
+
+  it('BR-S01 a later or an earlier start date moves both dates of every task not finished, one in progress included', () => {
+    const tasks = [
+      row('upload-id', 'COMPLETED', '2026-10-21'),
+      row('review-id', 'CANCELED', '2026-10-23'),
+      row('prepare-laptop', 'IN_PROGRESS', '2026-10-23'),
+      row('ship-first-pr', 'PENDING', '2026-10-30'),
+    ];
+    // A week later. The finished tasks stay as they are.
+    expect(moveTo('2026-11-02', tasks)).toEqual([
+      moved('prepare-laptop', '2026-10-26', '2026-10-30'),
+      moved('ship-first-pr', '2026-11-03', '2026-11-06'),
+    ]);
+    // Five days sooner: both dates come forward, so each task still opens before it is due.
+    expect(moveTo('2026-10-21', tasks)).toEqual([
+      moved('prepare-laptop', '2026-10-14', '2026-10-18'),
+      moved('ship-first-pr', '2026-10-22', '2026-10-25'),
+    ]);
+  });
+
+  it('BR-S02 a deadline HR set stays when the start date moves, unless the task would open after it', () => {
+    // Due Oct 30 by the template, four days after the start; HR gave until Nov 6.
+    const tasks = [
+      row('security-training', 'PENDING', '2026-11-06', true),
+      row('welcome-meeting', 'PENDING', '2026-10-26'),
+    ];
+    expect(moveTo('2026-10-21', tasks)).toEqual([
+      {
+        ...moved('security-training', '2026-10-21', '2026-11-06'),
+        dueOverridden: true,
+      },
+      moved('welcome-meeting', '2026-10-21', '2026-10-21'),
+    ]);
+    // Opening on the day it is due still keeps it.
+    expect(moveTo('2026-11-06', tasks)[0]).toEqual({
+      ...moved('security-training', '2026-11-06', '2026-11-06'),
+      dueOverridden: true,
+    });
+    // Opening after it: back to the template's.
+    expect(moveTo('2026-11-09', tasks)).toEqual([
+      {
+        ...moved('security-training', '2026-11-09', '2026-11-13'),
+        overrideReset: true,
+      },
+      moved('welcome-meeting', '2026-11-09', '2026-11-09'),
+    ]);
   });
 });

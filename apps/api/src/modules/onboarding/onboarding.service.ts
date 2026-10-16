@@ -8,6 +8,7 @@ import {
   type ActivateOnboarding,
   type ActivationPreview,
   availability,
+  type CancelOnboarding,
   type CreateOnboarding,
   type DocumentMimeType,
   type IsoDate,
@@ -17,6 +18,8 @@ import {
   type OnboardingStatus,
   type OnboardingSummary,
   planActivation,
+  planReschedule,
+  type RescheduleOnboarding,
   type Task,
   type TaskStatus,
   type TemplateDefinition,
@@ -34,7 +37,7 @@ import { visibleOnboardings } from './onboarding.policy.js';
 // DATE columns travel as midnight UTC; the API speaks 'YYYY-MM-DD' (PLAN §4.6).
 export const toIsoDate = (date: Date): IsoDate =>
   date.toISOString().slice(0, 10);
-const fromIsoDate = (date: IsoDate) => new Date(`${date}T00:00:00Z`);
+export const fromIsoDate = (date: IsoDate) => new Date(`${date}T00:00:00Z`);
 
 export const onboardingSelect = {
   id: true,
@@ -90,6 +93,7 @@ export const taskSelect = {
   },
   availableOn: true,
   dueOn: true,
+  dueOverridden: true,
   status: true,
   startedAt: true,
   completedAt: true,
@@ -207,7 +211,11 @@ export function toTask(
   };
   const approverId = reviewedBy.at(0)?.assigneeEmployeeId;
   const sees = (uploadedById: string) =>
-    canSeeFile(viewer, { uploadedById, approverId });
+    canSeeFile(viewer, {
+      uploadedById,
+      assigneeId: task.assignee.id,
+      approverId,
+    });
   // `before`: the files of the revision before, from which a rejection carried some over.
   const toFiles = (list: FileRow[], before: FileRow[] = []) => {
     const carried = new Set(before.map((file) => file.storageKey));
@@ -520,6 +528,12 @@ export class OnboardingService {
         where: { id },
         data: { templateVersionId },
       });
+      // A new hire whose account a canceled onboarding locked gets back in, with the password
+      // they had (BR-C03); nothing else locks one.
+      await tx.user.updateMany({
+        where: { employeeId: draft.employeeId, status: 'DISABLED' },
+        data: { status: 'ACTIVE' },
+      });
       // HR's picks go on record with the activation: the version is immutable, so they
       // still say which tasks they were for.
       await recordAudit(tx, auth, {
@@ -533,6 +547,153 @@ export class OnboardingService {
       if (sendsInvitation) {
         await sendInvitation(tx, auth, id, 'invitation.sent');
       }
+    });
+    return this.get(auth, id);
+  }
+
+  /**
+   * A new start date. A draft only takes it; an active onboarding's open tasks are dated again
+   * from it, and a deadline HR set may give way (BR-S01, BR-S02).
+   */
+  async reschedule(
+    auth: AuthContext,
+    id: string,
+    { startDate }: RescheduleOnboarding,
+  ): Promise<OnboardingDetail> {
+    const { organizationId } = auth;
+    await this.prisma.$transaction(async (tx) => {
+      const found = await tx.onboarding.count({
+        where: { id, organizationId },
+      });
+      if (!found) throw new NotFoundException('Onboarding not found');
+      // Compare-and-set, which locks the row: no activation or task command crosses it, and
+      // the tasks below are read under the lock (PLAN §6.4).
+      const [onboarding] = await tx.onboarding.updateManyAndReturn({
+        where: { id, organizationId, status: { in: ['DRAFT', 'ACTIVE'] } },
+        data: { version: { increment: 1 } },
+        select: { status: true, startDate: true, templateVersionId: true },
+      });
+      if (!onboarding) {
+        throw new ConflictException('A finished onboarding keeps its dates');
+      }
+      const from = toIsoDate(onboarding.startDate);
+      if (from === startDate) return;
+      await tx.onboarding.update({
+        where: { id },
+        data: { startDate: fromIsoDate(startDate) },
+      });
+      // A draft has no tasks yet, and is still being prepared: like PATCH, not audited.
+      if (onboarding.status === 'DRAFT') return;
+
+      const version = await tx.templateVersion.findUniqueOrThrow({
+        where: { id: onboarding.templateVersionId! },
+        select: { definition: true },
+      });
+      const tasks = (
+        await tx.task.findMany({
+          where: { onboardingId: id },
+          select: {
+            id: true,
+            definitionKey: true,
+            status: true,
+            dueOn: true,
+            dueOverridden: true,
+          },
+        })
+      ).map((task) => ({ ...task, dueOn: toIsoDate(task.dueOn) }));
+      const plan = planReschedule({
+        definition: version.definition as TemplateDefinition,
+        startDate,
+        tasks,
+      });
+      for (const task of plan) {
+        await tx.task.update({
+          where: { id: task.id },
+          data: {
+            availableOn: fromIsoDate(task.availableOn),
+            dueOn: fromIsoDate(task.dueOn),
+            dueOverridden: task.dueOverridden,
+          },
+        });
+      }
+      await recordAudit(tx, auth, {
+        action: 'onboarding.rescheduled',
+        entityType: 'onboarding',
+        entityId: id,
+        onboardingId: id,
+        // The deadlines HR set that gave way go on record with it (BR-S02).
+        data: {
+          from,
+          to: startDate,
+          dueReset: plan
+            .filter((task) => task.overrideReset)
+            .map((task) => ({
+              taskId: task.id,
+              from: tasks.find((each) => each.id === task.id)!.dueOn,
+              to: task.dueOn,
+            })),
+        },
+      });
+    });
+    return this.get(auth, id);
+  }
+
+  /**
+   * DRAFT or ACTIVE → CANCELED, with HR's reason (BR-C03). Open tasks are canceled; what was
+   * done stays: tasks completed, files, the audit trail. The invitation stops working, and an
+   * account the new hire got through an invitation is locked and signed out.
+   */
+  async cancel(
+    auth: AuthContext,
+    id: string,
+    { reason }: CancelOnboarding,
+  ): Promise<OnboardingDetail> {
+    const { organizationId } = auth;
+    await this.prisma.$transaction(async (tx) => {
+      const onboarding = await tx.onboarding.findFirst({
+        where: { id, organizationId },
+        select: { employeeId: true },
+      });
+      if (!onboarding) throw new NotFoundException('Onboarding not found');
+      const { employeeId } = onboarding;
+      const canceledAt = new Date();
+      // Compare-and-set, which locks the row: a task command waits, then finds the onboarding
+      // no longer active (PLAN §6.4).
+      const { count } = await tx.onboarding.updateMany({
+        where: { id, organizationId, status: { in: ['DRAFT', 'ACTIVE'] } },
+        data: { status: 'CANCELED', canceledAt, cancelReason: reason },
+      });
+      if (count === 0) {
+        throw new ConflictException('This onboarding is already finished');
+      }
+      await tx.task.updateMany({
+        where: { onboardingId: id, status: { in: ['PENDING', 'IN_PROGRESS'] } },
+        data: { status: 'CANCELED' },
+      });
+      // Revoked first: that waits for an acceptance under way, so the count below sees it.
+      await tx.invitation.updateMany({
+        where: { onboardingId: id, acceptedAt: null, revokedAt: null },
+        data: { revokedAt: canceledAt },
+      });
+      // Only an account that came through an invitation: whoever had one before, such as HR
+      // or IT onboarded by mistake, keeps it.
+      const invited = await tx.invitation.count({
+        where: { onboarding: { employeeId }, acceptedAt: { not: null } },
+      });
+      if (invited > 0) {
+        await tx.user.updateMany({
+          where: { employeeId },
+          data: { status: 'DISABLED' },
+        });
+        await tx.session.deleteMany({ where: { user: { employeeId } } });
+      }
+      // The reason stays on the onboarding.
+      await recordAudit(tx, auth, {
+        action: 'onboarding.canceled',
+        entityType: 'onboarding',
+        entityId: id,
+        onboardingId: id,
+      });
     });
     return this.get(auth, id);
   }
