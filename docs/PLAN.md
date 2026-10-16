@@ -578,7 +578,7 @@ Mọi bảng nghiệp vụ đều có `organization_id` và `created_at`. Không
 
 ## 8. API
 
-Prefix `/api` (đi qua rewrite). API thiết kế theo command chứ không cho PATCH status tùy ý. Swagger đặt tại `/api/docs`. Mọi mốc giờ trả về theo giờ nghiệp vụ (§4.6, BR-D05), trừ `expiresAt` của signed URL.
+Prefix `/api` (đi qua rewrite). API thiết kế theo command chứ không cho PATCH status tùy ý. Swagger đặt tại `/api/docs`. Mọi mốc giờ trả về theo giờ nghiệp vụ (§4.6, BR-D05), trừ `expiresAt` của signed URL và của sandbox (`organization.demo.expiresAt`).
 
 ```http
 # Auth

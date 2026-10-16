@@ -37,3 +37,5 @@
 - Vercel CLI 62.2.0 (global, đã đăng nhập; hook đầu session báo "not installed" là sai). MCP Vercel trả 403 với team này: dùng `vercel api`, `vercel logs`, `vercel inspect --logs`. Không chạy `vercel deploy` từ máy (CLI upload cả `apps/api/.env`).
 - Secret không bao giờ in ra transcript. Đặt secret qua file tạm trong scratchpad rồi xóa ngay, hoặc để user tự gõ trong terminal riêng.
 - Neon (Postgres 18.6) ngủ sau 5 phút không có truy vấn; request đầu tiên khi đó chậm thêm khoảng 0,9 s.
+- Proxy dev của Next (rewrite `/api` → :3001) đôi khi trả 500 "Failed to proxy … read ECONNRESET": API đóng socket keep-alive (Node mặc định 5 s) đúng lúc proxy dùng lại, hay gặp khi nhiều query refetch cùng lúc (vd sau +1 day). Request sau thì bình thường; chỉ có ở dev (M3.3c).
+- Thử trạng thái chờ và lỗi mạng trên UI: Playwright `eval` thay `window.fetch` bằng một promise reject sau vài giây (một dòng, nháy đơn). Thử 429 của Try demo: chèn org giả có `created_ip_hash = encode(sha256('::1'::bytea), 'hex')` (IP local qua proxy dev là `::1`), thử xong thì xóa (M3.3c).
