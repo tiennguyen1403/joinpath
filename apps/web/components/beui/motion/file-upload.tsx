@@ -122,7 +122,8 @@ function clampProgress(value: number | undefined, status: FileUploadStatus) {
   return Math.max(0, Math.min(100, value));
 }
 
-function formatBytes(bytes: number) {
+// Joinpath: exported, so the review drawer sizes files the same way.
+export function formatBytes(bytes: number) {
   if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
 
   const units = ["B", "KB", "MB", "GB", "TB"];

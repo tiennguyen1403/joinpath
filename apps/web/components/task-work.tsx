@@ -132,6 +132,8 @@ export function DocumentWork({
   timeZone,
   settle,
   refresh,
+  className,
+  level,
 }: {
   task: Task;
   review: Task | undefined;
@@ -139,6 +141,9 @@ export function DocumentWork({
   timeZone: string;
   settle: Settle;
   refresh: () => void;
+  /** Merged over the portal's indent under the task's row. */
+  className?: string;
+  level?: HeadingLevel;
 }) {
   const [sending, setSending] = useState<Sending[]>([]);
   // Files removed and awaiting the API's answer, hidden meanwhile.
@@ -301,7 +306,7 @@ export function DocumentWork({
   const busy = inFlight.length > 0 || removing.length > 0 || submit.isPending;
 
   return (
-    <div className={BODY}>
+    <div className={cn(BODY, className)}>
       {last?.decision && (
         <ChangesRequested submission={last} timeZone={timeZone} />
       )}
@@ -362,6 +367,7 @@ export function DocumentWork({
       <History
         events={eventsOf(task.submissions, viewerId).slice(1)}
         timeZone={timeZone}
+        level={level}
       />
     </div>
   );
@@ -399,15 +405,19 @@ export function InReview({
   review,
   viewerId,
   timeZone,
+  className,
+  level,
 }: {
   task: Task;
   review: Task;
   viewerId: string;
   timeZone: string;
+  className?: string;
+  level?: HeadingLevel;
 }) {
   const [last] = task.submissions;
   return (
-    <div className={BODY}>
+    <div className={cn(BODY, className)}>
       {last && (
         <div className="flex flex-col gap-1">
           <span className="text-[13px] font-medium">
@@ -427,6 +437,7 @@ export function InReview({
       <History
         events={eventsOf(task.submissions, viewerId).slice(1)}
         timeZone={timeZone}
+        level={level}
       />
     </div>
   );
@@ -443,9 +454,11 @@ type Event = {
 
 const LIST = new Intl.ListFormat('en-US');
 
-// Each revision's submission and the decision on it, newest first, as the review drawer tells
-// them: "You" is whoever reads it.
-function eventsOf(submissions: DocumentSubmission[], viewerId: string) {
+/**
+ * Each revision's submission and the decision on it, newest first, as the review drawer tells
+ * them: "You" is whoever reads it.
+ */
+export function eventsOf(submissions: DocumentSubmission[], viewerId: string) {
   const name = ({ id, fullName }: { id: string; fullName: string }) =>
     id === viewerId ? 'You' : fullName;
   return submissions.flatMap(
@@ -485,17 +498,29 @@ const DOT: Record<Event['tone'], string> = {
   approved: 'bg-success',
 };
 
-function History({ events, timeZone }: { events: Event[]; timeZone: string }) {
+// Under the task's title: an h3 where that title is an h2, as in My Tasks and the drawer.
+type HeadingLevel = 3 | 4;
+
+export function History({
+  events,
+  timeZone,
+  level = 4,
+}: {
+  events: Event[];
+  timeZone: string;
+  level?: HeadingLevel;
+}) {
   const heading = useId();
+  const Heading = level === 3 ? 'h3' : 'h4';
   if (!events.length) return null;
   return (
     <section
       aria-labelledby={heading}
       className="flex flex-col gap-2.5 border-t border-border pt-4"
     >
-      <h4 id={heading} className="text-[13px] leading-5 font-medium">
+      <Heading id={heading} className="text-[13px] leading-5 font-medium">
         History
-      </h4>
+      </Heading>
       <ol className="flex flex-col gap-3">
         {events.map(({ key, tone, who, what, reason, at }) => (
           <li key={key} className="flex gap-3">

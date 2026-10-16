@@ -1,4 +1,4 @@
-# Joinpath — Kế hoạch triển khai v0.26
+# Joinpath — Kế hoạch triển khai v0.27
 
 > **Joinpath**: Employee Onboarding & Workflow Management Platform, dự án portfolio Full-stack.
 > Bản này tinh chỉnh SRS v0.4 trong thread ChatGPT "Thiết kế dự án onboarding" (14/10/2026).
@@ -24,6 +24,7 @@
 > **v0.24 (16/10/2026):** local và CI chạy RustFS thay cho MinIO: MinIO ngừng phát hành image từ 10/2025, image cũ không còn tải được (kiểm ở M2.2); client S3 là `aws4fetch`; provider cho production chốt ở M2.5 (§6.2, §6.3, §6.6, §12, §13). Upload một file mỗi request, trả chi tiết onboarding; mỗi task kèm `files`, các file chưa submit mà người xem được xem (BR-P03); `GET /files/:id/download-url` trả `{url, expiresAt}` (§8).
 > **v0.25 (16/10/2026):** reject chép các file của revision bị reject sang bản nháp của revision mới: dòng mới, dùng chung object, nên object chỉ bị xóa khi không còn dòng nào trỏ tới (§4.5, §7). Submit, approve, reject: thứ tự kiểm, mã lỗi, trả chi tiết onboarding; mỗi DOCUMENT kèm `submissions` (revision, file, quyết định) theo quyền xem file, file kèm `carriedOver` (§8, §9).
 > **v0.26 (16/10/2026):** `GET /auth/me` kèm `onboardingId`: onboarding ACTIVE của chính người đó, nếu không có thì bản COMPLETED mới nhất (§8). Có `onboardingId` thì `/`, đăng nhập và nhận lời mời đưa tới portal `/my-onboarding`, nằm ngoài app shell (§10). Portal dùng `todo-list` (sửa tại chỗ: `body` dưới dòng của task) và `file-upload` (sửa tại chỗ: `note`, `queueLabel`, thanh progress, nút Remove) (§10.1, ADR 010).
+> **v0.27 (16/10/2026):** xem file đã nộp bằng `morphing-lightbox`, thay `image-viewer` (không có trên registry): ảnh xem trước qua signed URL, PDF chỉ tải về vì link ký kèm `Content-Disposition: attachment`. Drawer review mở từ My Tasks; `drawer` render qua portal và giữ focus bằng `useModalScope`, `approval-card` có `meta` thay badge trạng thái (sửa tại chỗ). Task DOCUMENT làm ngay trong My Tasks bằng khối của portal (§10.1, ADR 010).
 
 ## TL;DR: 6 thay đổi lớn nhất
 
@@ -684,7 +685,7 @@ Thiết kế chi tiết của 12 màn, cùng các bảng Foundations (token, ico
 
 ### 10.1 Component beUI dùng ở đâu
 
-Nguyên tắc (ADR 010): có component beUI thì dùng, không tự vẽ và không dùng control mặc định của trình duyệt. Mọi slug dưới đây đều có trong registry `https://beui.dev/r`, trừ `image-viewer` (registry trả 404; ứng viên thay thế là `morphing-lightbox`, chốt ở M2.4). Cài bằng shadcn CLI vào `apps/web/components/beui/` (xem README trong thư mục đó).
+Nguyên tắc (ADR 010): có component beUI thì dùng, không tự vẽ và không dùng control mặc định của trình duyệt. Mọi slug dưới đây đều có trong registry `https://beui.dev/r`. Registry không có `image-viewer` (trả 404): xem file dùng `morphing-lightbox` (M2.4b). Cài bằng shadcn CLI vào `apps/web/components/beui/` (xem README trong thư mục đó).
 
 | Việc trong Joinpath | Component beUI | Màn hình |
 |---|---|---|
@@ -702,8 +703,8 @@ Nguyên tắc (ADR 010): có component beUI thì dùng, không tự vẽ và kh�
 | Sắp xếp task | `sortable-stack` | Template editor |
 | Loại task | `radio` | Template editor |
 | Checklist của một phase | `todo-list` (sửa tại chỗ: `meta`, `body`, ADR 010) | Onboarding detail, New-hire portal, Landing |
-| Duyệt hoặc yêu cầu sửa | `approval-card` + `drawer` | Review |
-| Xem file đã nộp | `image-viewer` | Review |
+| Duyệt hoặc yêu cầu sửa | `approval-card` (sửa tại chỗ: `meta`, ADR 010) + `drawer` (sửa tại chỗ: portal, giữ focus, ADR 010) | Review (drawer mở từ My tasks) |
+| Xem file đã nộp | `morphing-lightbox` cho ảnh; PDF tải về | Review |
 | Upload giấy tờ | `file-upload` (sửa tại chỗ: `note`, `queueLabel`, ADR 010) | New-hire portal |
 | Đặt mật khẩu | `input` (không dùng `signup-form`: bản này luôn có ô Name, Email sửa được và checkbox Terms; M2.1b) | Accept invitation |
 | Báo kết quả vừa xảy ra | `animated-toast-stack` | Sau khi activate, Landing |

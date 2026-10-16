@@ -6,6 +6,7 @@ import {
   type MyTask,
   type MyTasks as MyTasksData,
   myTasksSchema,
+  type OnboardingDetail,
   onboardingDetailSchema,
   type Task,
 } from '@joinpath/core';
@@ -16,10 +17,11 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 import { useState } from 'react';
-import { Check } from 'reicon-react';
+import { Check, Eye } from 'reicon-react';
 import { cn } from '@/components/beui/lib/utils';
 import {
   AnimatedToastStack,
+  type ToastInput,
   useAnimatedToastStack,
 } from '@/components/beui/motion/animated-toast-stack';
 import { Button } from '@/components/beui/motion/button/base';
@@ -27,6 +29,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/beui/motion/tabs';
 import { EmptyState } from '@/components/empty-state';
 import { Notice } from '@/components/notice';
 import { TaskBadge, waitsFor } from '@/components/task-status';
+import { DocumentWork, InReview, type Settle } from '@/components/task-work';
 import { api, ApiError } from '@/lib/api';
 import {
   capitalized,
@@ -35,6 +38,7 @@ import {
   formatFromToday,
   inWords,
 } from '@/lib/format';
+import { ReviewDrawer } from './review-drawer';
 
 /** Every task assigned to the signed-in person; the sidebar counts from it too. */
 export const myTasksQuery = {
@@ -93,7 +97,8 @@ type Action = 'start' | 'complete';
 
 /**
  * My Tasks (PLAN §10): tabs by availability, the tasks as cards, the one picked in full. A
- * checklist starts and completes here; documents and approvals get their screens in M2.
+ * checklist starts and completes here, a document takes its files as on the portal, and an
+ * approval opens the review drawer.
  */
 export function MyTasks({
   employeeId,
@@ -106,6 +111,8 @@ export function MyTasks({
   const { toasts, showToast, dismissToast } = useAnimatedToastStack();
   const [tab, setTab] = useState<Tab>('todo');
   const [picked, setPicked] = useState<string>();
+  // The approval under review, kept while the drawer closes so it leaves with its content.
+  const [review, setReview] = useState<{ id: string; open: boolean }>();
   const mine = useQuery(myTasksQuery);
   // Each task's onboarding, for what it waits for and unlocks; the detail page shares the cache.
   const onboardings = useQueries({
@@ -120,50 +127,63 @@ export function MyTasks({
     onboardings.flatMap(({ data }) => (data ? [[data.id, data.tasks]] : [])),
   );
 
+  // Puts a command's answer on the page, with its toast; the last task's says so instead.
+  const settle: Settle = (onboarding: OnboardingDetail, toast?: ToastInput) => {
+    queryClient.setQueryData(['onboarding', onboarding.id], onboarding);
+    // The answer moves my tasks at once; the refetch then settles the rest.
+    queryClient.setQueryData<MyTasksData>(
+      myTasksQuery.queryKey,
+      (old) =>
+        old && {
+          ...old,
+          tasks: old.tasks.map((t) => ({
+            ...t,
+            ...onboarding.tasks.find(({ id }) => id === t.id),
+          })),
+        },
+    );
+    void queryClient.invalidateQueries({ queryKey: myTasksQuery.queryKey });
+    void queryClient.invalidateQueries({ queryKey: ['onboardings'] });
+    if (!toast) return;
+    showToast(
+      onboarding.status === 'COMPLETED'
+        ? {
+            status: 'success',
+            title: 'Onboarding complete',
+            description: `That was the last of ${onboarding.employee.fullName}'s ${onboarding.tasks.length} tasks.`,
+          }
+        : toast,
+    );
+  };
+  // A refusal means the page is behind: catch it up.
+  const refresh = (onboardingId: string) => {
+    void queryClient.invalidateQueries({ queryKey: myTasksQuery.queryKey });
+    void queryClient.invalidateQueries({
+      queryKey: ['onboarding', onboardingId],
+    });
+  };
+
   const work = useMutation({
     mutationFn: ({ task, action }: { task: MyTask; action: Action }) =>
       api(`/tasks/${task.id}/${action}`, onboardingDetailSchema, {
         method: 'POST',
         body: {},
       }),
-    onSuccess: (onboarding, { task, action }) => {
-      queryClient.setQueryData(['onboarding', onboarding.id], onboarding);
-      // The answer moves my tasks at once; the refetch then settles the rest.
-      queryClient.setQueryData<MyTasksData>(
-        myTasksQuery.queryKey,
-        (old) =>
-          old && {
-            ...old,
-            tasks: old.tasks.map((t) => ({
-              ...t,
-              ...onboarding.tasks.find(({ id }) => id === t.id),
-            })),
-          },
-      );
-      void queryClient.invalidateQueries({ queryKey: myTasksQuery.queryKey });
-      void queryClient.invalidateQueries({ queryKey: ['onboardings'] });
-      if (action === 'start') return;
-      showToast(
-        onboarding.status === 'COMPLETED'
-          ? {
-              status: 'success',
-              title: 'Onboarding complete',
-              description: `That was the last of ${onboarding.employee.fullName}'s ${onboarding.tasks.length} tasks.`,
-            }
+    onSuccess: (onboarding, { task, action }) =>
+      settle(
+        onboarding,
+        action === 'start'
+          ? undefined
           : {
               status: 'success',
               title: 'Marked complete',
               description: task.title,
             },
-      );
-    },
+      ),
     onError: (error, { task }) => {
-      // The buttons follow availability, so a 409 means the page is behind: catch it up.
+      // The buttons follow availability, so a 409 means the page is behind.
       if (error instanceof ApiError && error.status === 409) {
-        void queryClient.invalidateQueries({ queryKey: myTasksQuery.queryKey });
-        void queryClient.invalidateQueries({
-          queryKey: ['onboarding', task.onboarding.id],
-        });
+        refresh(task.onboarding.id);
       }
     },
   });
@@ -183,6 +203,7 @@ export function MyTasks({
   };
   const list = lists[tab];
   const selected = list.find(({ id }) => id === picked) ?? list[0];
+  const reviewed = data?.tasks.find(({ id }) => id === review?.id);
   const toDo = lists.todo.length;
   const openedToday = lists.todo.filter(
     ({ availableOn }) => availableOn === data?.today,
@@ -259,6 +280,9 @@ export function MyTasks({
                   }
                   failedAction={work.variables?.action}
                   onAction={(action) => work.mutate({ task: selected, action })}
+                  onReview={() => setReview({ id: selected.id, open: true })}
+                  settle={settle}
+                  refresh={() => refresh(selected.onboarding.id)}
                 />
               </div>
             ) : (
@@ -266,6 +290,19 @@ export function MyTasks({
             )}
           </div>
         )
+      )}
+      {data && (
+        <ReviewDrawer
+          open={Boolean(review?.open)}
+          onOpenChange={(open) => setReview((now) => now && { ...now, open })}
+          approval={reviewed}
+          tasks={(reviewed && tasksOf.get(reviewed.onboarding.id)) || []}
+          today={data.today}
+          viewerId={employeeId}
+          timeZone={timeZone}
+          settle={settle}
+          refresh={() => reviewed && refresh(reviewed.onboarding.id)}
+        />
       )}
       <AnimatedToastStack toasts={toasts} onDismiss={dismissToast} fixed />
     </>
@@ -344,6 +381,9 @@ function Panel({
   failure,
   failedAction,
   onAction,
+  onReview,
+  settle,
+  refresh,
 }: {
   task: MyTask;
   tasks: Task[];
@@ -354,6 +394,9 @@ function Panel({
   failure: Error | null;
   failedAction: Action | undefined;
   onAction: (action: Action) => void;
+  onReview: () => void;
+  settle: Settle;
+  refresh: () => void;
 }) {
   const { onboarding } = task;
   const hire = onboarding.employee;
@@ -361,8 +404,38 @@ function Panel({
   const open = waitedFor.filter(({ status }) => status !== 'COMPLETED');
   const unlocks = tasks.filter(({ dependsOn }) => dependsOn.includes(task.id));
   const steps = task.description?.split('\n').filter(Boolean) ?? [];
-  // Only a checklist is worked here (PLAN §8), and only once it is open.
-  const workable = task.type === 'CHECKLIST' && task.availability === 'READY';
+  const ready = task.availability === 'READY';
+  // Started and completed here: a checklist (PLAN §8), once it is open.
+  const workable = task.type === 'CHECKLIST' && ready;
+  // A document is worked as on the portal: the same block stands for "What to do".
+  const review = tasks.find(({ reviewsTaskId }) => reviewsTaskId === task.id);
+  const documentBlock =
+    task.type !== 'DOCUMENT' ? null : ready ? (
+      <DocumentWork
+        key={task.id}
+        task={task}
+        review={review}
+        viewerId={employeeId}
+        timeZone={timeZone}
+        settle={settle}
+        refresh={refresh}
+        className="p-0 sm:pl-0"
+        level={3}
+      />
+    ) : (
+      review &&
+      task.status === 'COMPLETED' &&
+      review.status === 'PENDING' && (
+        <InReview
+          task={task}
+          review={review}
+          viewerId={employeeId}
+          timeZone={timeZone}
+          className="p-0 sm:pl-0"
+          level={3}
+        />
+      )
+    );
 
   return (
     <section
@@ -410,30 +483,31 @@ function Panel({
         timeZone={timeZone}
       />
 
-      {steps.length > 0 && (
-        <div className="flex flex-col gap-2.5">
-          <h3 className="text-[15px] leading-[21px] font-semibold">
-            What to do
-          </h3>
-          {steps.length === 1 ? (
-            <p>{steps[0]}</p>
-          ) : (
-            <ol className="flex flex-col gap-2">
-              {steps.map((step, i) => (
-                <li
-                  key={step}
-                  className="flex gap-3 rounded-xl bg-card px-3.5 py-3"
-                >
-                  <span className="pt-px font-mono text-xs text-muted-foreground">
-                    {i + 1}
-                  </span>
-                  {step}
-                </li>
-              ))}
-            </ol>
-          )}
-        </div>
-      )}
+      {documentBlock ||
+        (steps.length > 0 && (
+          <div className="flex flex-col gap-2.5">
+            <h3 className="text-[15px] leading-[21px] font-semibold">
+              What to do
+            </h3>
+            {steps.length === 1 ? (
+              <p>{steps[0]}</p>
+            ) : (
+              <ol className="flex flex-col gap-2">
+                {steps.map((step, i) => (
+                  <li
+                    key={step}
+                    className="flex gap-3 rounded-xl bg-card px-3.5 py-3"
+                  >
+                    <span className="pt-px font-mono text-xs text-muted-foreground">
+                      {i + 1}
+                    </span>
+                    {step}
+                  </li>
+                ))}
+              </ol>
+            )}
+          </div>
+        ))}
 
       <dl className="grid grid-cols-[auto_1fr] gap-x-5 gap-y-3">
         <dt className="text-muted-foreground">Due</dt>
@@ -499,6 +573,16 @@ function Panel({
         <a href={`/onboardings/${onboarding.id}`} className={LINK}>
           See where it sits in {firstName(hire.fullName)}&apos;s onboarding
         </a>
+        {task.type === 'APPROVAL' && ready && (
+          <Button
+            // White on the strong primary (ADR 009), as Mark complete.
+            className="bg-primary-strong hover:bg-primary-strong/90"
+            onClick={onReview}
+          >
+            <Eye aria-hidden className="size-4" />
+            Review documents
+          </Button>
+        )}
         {workable && (
           <div className="flex flex-wrap gap-2">
             {task.status === 'PENDING' && (

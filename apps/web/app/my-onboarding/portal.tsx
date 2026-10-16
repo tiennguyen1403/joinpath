@@ -26,6 +26,7 @@ import {
 import { Button } from '@/components/beui/motion/button/base';
 import { Notice } from '@/components/notice';
 import { TaskBadge, waitsFor } from '@/components/task-status';
+import { ChecklistWork, DocumentWork, InReview } from '@/components/task-work';
 import { api } from '@/lib/api';
 import {
   firstName,
@@ -34,7 +35,6 @@ import {
   formatDateInFull,
   formatFromToday,
 } from '@/lib/format';
-import { ChecklistWork, DocumentWork, InReview } from './task-work';
 
 // The approval that reviews a document, if one does.
 const reviewOf = (task: Task, tasks: Task[]) =>
