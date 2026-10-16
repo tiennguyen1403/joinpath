@@ -68,6 +68,31 @@ export function isOverdue(
   );
 }
 
+/**
+ * What a blocked task waits on in the end: the open tasks at the start of its chains of
+ * prerequisites, each once. `open` holds its onboarding's tasks not yet done, so a
+ * prerequisite missing from it is done. One blocked too is followed back; any other (ready,
+ * under way, or waiting for its date) ends the chain.
+ */
+export function blockersOf<
+  T extends { id: string; dependsOn: string[]; availability: Availability },
+>(task: T, open: T[]): T[] {
+  const byId = new Map(open.map((each) => [each.id, each]));
+  const seen = new Set<string>();
+  const roots: T[] = [];
+  const walk = ({ dependsOn }: T) => {
+    for (const id of dependsOn) {
+      const prerequisite = byId.get(id);
+      if (!prerequisite || seen.has(id)) continue;
+      seen.add(id);
+      if (prerequisite.availability === 'BLOCKED') walk(prerequisite);
+      else roots.push(prerequisite);
+    }
+  };
+  walk(task);
+  return roots;
+}
+
 // Why a task has no assignee, or can't keep the one it has. Activation needs none (BR-A04).
 export const assigneeProblemSchema = z.enum([
   // The rule finds nobody and HR picked nobody: no manager, a manager with no active account,

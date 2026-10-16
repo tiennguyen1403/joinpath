@@ -1,11 +1,9 @@
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
+import { firstName } from '@/lib/format';
 import { homeFor } from '@/lib/nav';
 import { requireMe } from '@/lib/session';
-import {
-  NewOnboardingButton,
-  OnboardingsTable,
-} from '../onboardings/onboardings-table';
+import { Dashboard } from './dashboard';
 
 export const metadata: Metadata = { title: 'Dashboard · Joinpath' };
 
@@ -21,28 +19,15 @@ function partOfDay(timeZone: string) {
   return hour < 12 ? 'morning' : hour < 18 ? 'afternoon' : 'evening';
 }
 
-// HR's home. The stats, the attention and due-soon lists and the activity arrive in M3.4.
+// HR's home.
 export default async function DashboardPage() {
   const me = await requireMe();
   if (me.role !== 'HR') redirect(homeFor(me));
   return (
-    <>
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <h1 className="text-3xl font-semibold tracking-tight">
-          Good {partOfDay(me.organization.timezone)},{' '}
-          {me.employee.fullName.split(' ')[0]}
-        </h1>
-        <NewOnboardingButton />
-      </div>
-      <OnboardingsTable
-        heading="Onboardings"
-        timeZone={me.organization.timezone}
-        empty={{
-          title: 'No onboardings yet',
-          description:
-            'Onboardings you start show up here, along with anything that needs your attention.',
-        }}
-      />
-    </>
+    <Dashboard
+      greeting={`Good ${partOfDay(me.organization.timezone)}, ${firstName(me.employee.fullName)}`}
+      employeeId={me.employee.id}
+      timeZone={me.organization.timezone}
+    />
   );
 }

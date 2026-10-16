@@ -11,6 +11,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { type ReactNode, useRef, useState } from 'react';
 import { Calendar, Envelope } from 'reicon-react';
+import { ActivityCard } from '@/components/activity';
 import { Avatar, newHireTint } from '@/components/avatar';
 import {
   TodoList,
@@ -170,13 +171,13 @@ export function OnboardingView({
               )
             }
           />
-          {data.invitation ? (
-            // HR's view: the invitation beside the tasks, as the canvas lays it out.
-            <div className="flex flex-wrap items-start gap-5">
-              <div className="min-w-0 flex-[999_1_560px]">
-                <Phases onboarding={data} timeZone={timeZone} menu={menu} />
-              </div>
-              <div className="flex min-w-0 flex-[1_1_300px] flex-col gap-3">
+          {/* Beside the tasks, as the canvas lays them out: HR's invitation, then the timeline. */}
+          <div className="flex flex-wrap items-start gap-5">
+            <div className="min-w-0 flex-[999_1_560px]">
+              <Phases onboarding={data} timeZone={timeZone} menu={menu} />
+            </div>
+            <div className="flex min-w-0 flex-[1_1_300px] flex-col gap-3">
+              {data.invitation && (
                 <InvitationCard
                   onboarding={data}
                   invitation={data.invitation}
@@ -184,11 +185,14 @@ export function OnboardingView({
                   showToast={showToast}
                   seeInvitation={seeInvitation}
                 />
-              </div>
+              )}
+              <ActivityCard
+                onboardingId={id}
+                today={data.today}
+                timeZone={timeZone}
+              />
             </div>
-          ) : (
-            <Phases onboarding={data} timeZone={timeZone} menu={menu} />
-          )}
+          </div>
         </>
       );
   } else if (
@@ -238,8 +242,8 @@ export function OnboardingView({
   );
 }
 
-// The canvas's header, with HR's actions while it runs; tabs come with a second view
-// (Activity in M3.4, Graph in M4.3).
+// The canvas's header, with HR's actions while it runs; tabs come with a second view (the
+// graph, M4.3).
 function Header({
   onboarding,
   timeZone,

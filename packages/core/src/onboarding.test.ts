@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest';
 import type { IsoDate } from './dates.js';
 import {
   availability,
+  blockersOf,
   isOverdue,
   planActivation,
   planReschedule,
   type ActivationInput,
+  type Availability,
   type PlannedTask,
   type RescheduleInput,
   type TaskStatus,
@@ -98,6 +100,46 @@ describe('isOverdue', () => {
       'BLOCKED',
     );
     expect(isOverdue(late, '2026-10-24')).toBe(true);
+  });
+});
+
+describe('blockersOf', () => {
+  // Bao's open tasks in the seed, two days in: HR's review of the ID holds up IT's accounts,
+  // and through them the new hire's first tasks. The laptop is done, so it isn't here.
+  const open = (
+    id: string,
+    availability: Availability,
+    dependsOn: string[],
+  ) => ({
+    id,
+    availability,
+    dependsOn,
+  });
+  const review = open('review-id', 'READY', ['upload-id']);
+  const accounts = open('create-accounts', 'BLOCKED', ['review-id']);
+  const devEnv = open('set-up-dev-env', 'BLOCKED', [
+    'prepare-laptop',
+    'create-accounts',
+  ]);
+  const firstPr = open('ship-first-pr', 'BLOCKED', ['set-up-dev-env']);
+  const checkIn = open('week-one-check-in', 'LOCKED_BY_DATE', [
+    'welcome-meeting',
+  ]);
+  const tasks = [review, accounts, devEnv, firstPr, checkIn];
+
+  it('FR-19 a blocked task waits on the open task at the start of its chain', () => {
+    expect(blockersOf(accounts, tasks)).toEqual([review]);
+    expect(blockersOf(devEnv, tasks)).toEqual([review]);
+    expect(blockersOf(firstPr, tasks)).toEqual([review]);
+  });
+
+  it('FR-19 each chain ends once, at a task ready, under way or waiting for its date', () => {
+    const late = open('late', 'BLOCKED', [
+      'week-one-check-in',
+      'create-accounts',
+      'ship-first-pr',
+    ]);
+    expect(blockersOf(late, [...tasks, late])).toEqual([checkIn, review]);
   });
 });
 

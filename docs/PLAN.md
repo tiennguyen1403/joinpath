@@ -1,4 +1,4 @@
-# Joinpath — Kế hoạch triển khai v0.37
+# Joinpath — Kế hoạch triển khai v0.38
 
 > **Joinpath**: Employee Onboarding & Workflow Management Platform, dự án portfolio Full-stack.
 > Bản này tinh chỉnh SRS v0.4 trong thread ChatGPT "Thiết kế dự án onboarding" (14/10/2026).
@@ -35,6 +35,7 @@
 > **v0.35 (16/10/2026):** M3 chia thành 10 session: web của demo tách thành M3.3c (Dynamic Island trong app shell, nút Try demo ở trang Sign in) và M3.3d (island trên portal và mock inbox, bản 390 px, đường từ portal sang My tasks, banner) (§13). `GET /auth/me` kèm `organization.demo` (expiresAt, nextStartDate, people) cho island (§8); `dynamic-island` sửa tại chỗ (§10.1, ADR 010); Try demo nằm ở trang Sign in tới khi có Landing (§11).
 > **v0.36 (16/10/2026):** island có trên portal và mock inbox; trên điện thoại, và trong app shell dưới 1024 px, island nằm ở một hàng riêng dưới header (§10, §10.1). Banner "dữ liệu giả" là một notice trên vùng upload, chỉ trong sandbox (§9). Người đã xong onboarding vẫn vào portal trước, có nút sang My tasks; sidebar có mục quay về portal (§10).
 > **v0.37 (17/10/2026):** M3 chia thành 11 session: M3.4 tách thành API (M3.4a) và web (M3.4b) (§13). `GET /onboardings/:id/activity` và `GET /dashboard`: shape, quyền, thứ tự (§8). Activity theo phạm vi của onboarding; không có upload và xóa file; revision và quyết định chỉ cho người xem được file (§9, BR-P03).
+> **v0.38 (17/10/2026):** web của dashboard HR và Activity (M3.4b). Activity là card ở cột phải trang chi tiết, cho mọi người xem được onboarding, chưa có tab tới khi có graph. Dashboard tự đếm, viết câu và chọn việc cần chú ý từ `GET /dashboard`; task bị chặn quy về task gốc bằng `blockersOf` trong `core` (§10, §10.1).
 
 ## TL;DR: 6 thay đổi lớn nhất
 
@@ -760,6 +761,20 @@ Portal nhân viên mới phải dùng tốt trên điện thoại, vì người 
 
 Island của demo ở trên header, từ 768 px: giữa header với portal và mock inbox. Trong app shell, từ 1280 px nó ở giữa cột nội dung, từ 1024 tới 1279 px ở cuối header, vì breadcrumb dài chiếm phần giữa. Khi header không đủ chỗ (dưới 768 px; trong app shell, dưới 1024 px vì sidebar chiếm 256 px), island nằm ở một hàng riêng ngay dưới header. Trên điện thoại pill bỏ chữ "Demo" (chấm xanh vẫn còn), aria-label vẫn đọc đủ (M3.3d).
 
+Dashboard HR (M3.4b), từ `GET /dashboard`, web tự đếm và viết câu:
+- **Bốn thẻ số:** Active onboardings, Drafts ready to activate, Overdue tasks, Blocked tasks. Câu dưới số đổi theo số lượng ("Bao Ho, day 3", "Both in Bao Ho's onboarding", "All waiting on one review"); bằng 0 thì nhãn chuyển xám.
+- **Câu dưới lời chào:** điều đầu tiên đúng trong: task quá hạn đang chặn task khác, task quá hạn, draft, onboarding đang chạy, không có gì.
+- **Needs your attention:** mỗi task quá hạn hiện thành task gốc nó chờ (`blockersOf` trong `core`; chính nó nếu không bị chặn), hạn sớm nhất trước, rồi tới các draft. Task của chính người xem mở My tasks, của người khác mở trang onboarding.
+- **Due in the next 7 days:** task đang mở có hạn từ hôm nay tới hôm nay + 6; mỗi dòng mở trang onboarding.
+- **Rồi bảng Onboardings** (`GET /onboardings`) và **Recent activity** (10 event).
+- Org chưa có onboarding nào: chỉ còn empty state của bảng. Tải lỗi: một Alert, bảng tải riêng.
+
+Activity trên trang chi tiết (M3.4b) là card ở cột phải, dưới Invitation (chỉ HR thấy Invitation), cho mọi người xem được onboarding; màn hẹp thì xuống dưới các phase. Chưa có tab tới khi có graph (M4.3). Câu chữ:
+- tên người đậm; trên dashboard thêm "for <người mới>", trừ khi chính người mới làm;
+- revision và quyết định nêu tên task: "submitted revision 1 of Upload ID documents", "approved revision 2 in Review ID documents";
+- người HR chọn lúc activate thành dòng phụ dưới dòng activated;
+- mốc giờ "today, 09:41" trong ngày nghiệp vụ hôm nay, còn lại "Oct 13, 17:05".
+
 Thiết kế chi tiết của 12 màn, cùng các bảng Foundations (token, icon), Motion và Components, nằm trên canvas "Joinpath Screens": https://claude.ai/artifact/Xr3pRZbd14D78pqUignjWV (bấm Play ở Landing để đi hết golden path).
 
 ### 10.1 Component beUI dùng ở đâu
@@ -794,7 +809,7 @@ Nguyên tắc (ADR 010): có component beUI thì dùng, không tự vẽ và kh�
 | Danh sách onboarding, nhân viên, phòng ban, template; bảng task theo phase | tự dựng (`components/table.tsx`), không dùng `table` của beUI | Dashboard, Onboardings, New onboarding, Employees, Templates |
 | Bề mặt, thông báo, công tắc, nút | `card`, `alert`, `switch`, `button-base` | Mọi nơi |
 
-Tự dựng theo token vì beUI không có: thanh tiến độ onboarding, avatar chữ cái đầu, các bước của wizard, textarea, canvas dependency graph (React Flow), thanh độ mạnh mật khẩu (chép cách chấm điểm và thanh 4 nấc của `signup-form`, MIT), danh sách thông báo (M3.2b: `notification-stack` của beUI là một nút duy nhất xổ ra 3 thẻ không bấm được, không mở được từng thông báo). Bảng cũng tự dựng (M1.6a, ADR 010): `table` của beUI là data grid ảo hóa, khung cuộn cao cố định, mọi dòng cao bằng nhau và cần `@tanstack/react-virtual`, trong khi bảng của Joinpath ngắn và các dòng cao khác nhau.
+Tự dựng theo token vì beUI không có: thanh tiến độ onboarding, avatar chữ cái đầu, các bước của wizard, textarea, canvas dependency graph (React Flow), thanh độ mạnh mật khẩu (chép cách chấm điểm và thanh 4 nấc của `signup-form`, MIT), danh sách thông báo (M3.2b: `notification-stack` của beUI là một nút duy nhất xổ ra 3 thẻ không bấm được, không mở được từng thông báo), timeline Activity và các khối của dashboard: thẻ số, Needs your attention, Due in the next 7 days, Recent activity (M3.4b). Bảng cũng tự dựng (M1.6a, ADR 010): `table` của beUI là data grid ảo hóa, khung cuộn cao cố định, mọi dòng cao bằng nhau và cần `@tanstack/react-virtual`, trong khi bảng của Joinpath ngắn và các dòng cao khác nhau.
 
 ---
 

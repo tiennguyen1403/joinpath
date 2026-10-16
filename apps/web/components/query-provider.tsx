@@ -16,14 +16,16 @@ export function QueryProvider({ children }: { children: ReactNode }) {
   const [queryClient] = useState(() => {
     const client: QueryClient = new QueryClient({
       // Any change can bring the one who made it a notification, a task of theirs that opens
-      // (BR-N02), so the sidebar and the bell ask again. Not awaited: the change's own
-      // callbacks don't wait for it. The server's part of the page renders again too, for a
-      // fresh `me`: in a sandbox, an activation moves the demo island's next start date.
+      // (BR-N02), so the sidebar and the bell ask again; and it goes on its onboarding's
+      // timeline, which asks again too. Not awaited: the change's own callbacks don't wait for
+      // it. The server's part of the page renders again too, for a fresh `me`: in a sandbox,
+      // an activation moves the demo island's next start date.
       mutationCache: new MutationCache({
         onSuccess: () => {
           void client.invalidateQueries({
             queryKey: notificationsQuery.queryKey,
           });
+          void client.invalidateQueries({ queryKey: ['activity'] });
           router.refresh();
         },
       }),
