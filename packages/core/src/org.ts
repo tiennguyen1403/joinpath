@@ -68,3 +68,7 @@ export type AdvanceClock = z.infer<typeof advanceClockSchema>;
 // The org's business date once moved.
 export const clockSchema = z.object({ today: z.iso.date() });
 export type Clock = z.infer<typeof clockSchema>;
+
+// POST /demo/switch-user: in a sandbox, the guest plays anyone with an account (BR-D02).
+export const switchUserSchema = z.object({ employeeId: z.uuid() });
+export type SwitchUser = z.infer<typeof switchUserSchema>;

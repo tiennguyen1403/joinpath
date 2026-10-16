@@ -9,6 +9,7 @@ import type { MockEmail, Notifications } from '@joinpath/core';
 import { env } from '../../env.js';
 import { PrismaService } from '../../prisma.js';
 import type { AuthContext } from '../auth/session.js';
+import { purgeExpiredSandboxes } from '../demo/sandbox.js';
 import { tickOrg } from './tick.js';
 
 @Injectable()
@@ -72,8 +73,9 @@ export class NotificationsService {
   }
 
   /**
-   * The cron's call (PLAN §6.5): Vercel Cron sends the secret as a bearer token. Every org
-   * ticks on its own business date; sessions past their date go, since nothing reads them.
+   * The cron's call (PLAN §6.5): Vercel Cron sends the secret as a bearer token. Sandboxes
+   * past their 24 hours go (BR-D01), then every org ticks on its own business date; sessions
+   * past their date go, since nothing reads them.
    */
   async tick(authorization: string | undefined) {
     const expected = Buffer.from(`Bearer ${env.CRON_SECRET}`);
@@ -85,6 +87,7 @@ export class NotificationsService {
     ) {
       throw new UnauthorizedException('Only the cron runs the tick');
     }
+    await purgeExpiredSandboxes(this.prisma);
     const orgs = await this.prisma.organization.findMany({
       select: { id: true },
     });

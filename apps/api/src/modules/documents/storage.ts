@@ -3,7 +3,8 @@ import { required } from '../../env.js';
 
 // Documents sit in one private bucket on an S3-compatible service (PLAN §6.2): RustFS locally
 // and in CI, Cloudflare R2 in production. Path-style URLs, which both accept. Read at startup,
-// like env.ts, but apart from it: the seed never touches storage.
+// like env.ts, but apart from it: a seed without scenarios never loads this file, so
+// production's seed needs no storage keys (src/seed.ts).
 const bucketUrl = `${new URL(required('S3_ENDPOINT')).origin}/${required('S3_BUCKET')}`;
 const s3 = new AwsClient({
   accessKeyId: required('S3_ACCESS_KEY_ID'),
@@ -12,7 +13,11 @@ const s3 = new AwsClient({
   region: required('S3_REGION'),
 });
 
-async function send(method: 'PUT' | 'DELETE', url: string, init?: RequestInit) {
+async function send(
+  method: 'GET' | 'PUT' | 'DELETE',
+  url: string,
+  init?: RequestInit,
+) {
   const res = await s3.fetch(url, { ...init, method });
   // An S3 error names itself in XML, e.g. <Code>NoSuchBucket</Code>.
   const text = await res.text();
@@ -35,6 +40,28 @@ export const putObject = (
 // S3 answers 204 for a missing object too.
 export const deleteObject = (key: string) =>
   send('DELETE', `${bucketUrl}/${key}`);
+
+/** Every key under `prefix`, a page of 1000 at a time (ListObjectsV2). */
+export async function keysUnder(prefix: string): Promise<string[]> {
+  const keys: string[] = [];
+  let token: string | undefined;
+  do {
+    const url = new URL(bucketUrl);
+    url.searchParams.set('list-type', '2');
+    url.searchParams.set('prefix', prefix);
+    if (token) url.searchParams.set('continuation-token', token);
+    const xml = await send('GET', url.toString());
+    // The server names every object (orgs/{uuid}/tasks/{uuid}/{uuid}): no key needs unescaping.
+    for (const [, key] of xml.matchAll(/<Key>([^<]+)<\/Key>/g)) keys.push(key);
+    token = /<NextContinuationToken>([^<]+)</.exec(xml)?.[1];
+  } while (token);
+  return keys;
+}
+
+/** An org's files, once the org goes (PLAN §6.5). */
+export async function deletePrefix(prefix: string) {
+  for (const key of await keysUnder(prefix)) await deleteObject(key);
+}
 
 /** For `pnpm storage:init`, locally and in CI. Production's bucket is made by hand. */
 export const createBucket = () => send('PUT', bucketUrl);

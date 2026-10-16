@@ -7,6 +7,7 @@ import {
   sandboxEmailDomain,
 } from '@joinpath/core';
 import type { App } from 'supertest/types.js';
+import { purgeOrg } from '../src/modules/demo/sandbox.js';
 import { seedDemoOrg } from '../src/modules/demo/seed.js';
 import { PrismaService } from '../src/prisma.js';
 import {
@@ -82,9 +83,9 @@ describe('org', () => {
   });
 
   afterAll(async () => {
-    await prisma.organization.deleteMany({
-      where: { id: { in: [seeded.organization.id, other.organization.id] } },
-    });
+    for (const { organization } of [seeded, other]) {
+      await purgeOrg(prisma, organization.id);
+    }
     await app.close();
   });
 

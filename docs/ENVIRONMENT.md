@@ -15,7 +15,8 @@
 - Playwright với file (M2.4a):
   - bấm vùng thả file rồi chạy `upload <file…>` để trả lời hộp chọn file đang mở;
   - `drop <ref> --path <đường dẫn tuyệt đối>` để thả file;
-  - ảnh `--full-page` trên Chrome headed hẹp hơn 15 px vì thanh cuộn, ảnh khung nhìn thì đủ. Kiểm tràn ngang bằng `eval` (`scrollWidth` so với `clientWidth`), không dựa vào ảnh.
+  - ảnh `--full-page` trên Chrome headed hẹp hơn 15 px vì thanh cuộn, ảnh khung nhìn thì đủ. Kiểm tràn ngang bằng `eval` (`scrollWidth` so với `clientWidth`), không dựa vào ảnh;
+  - CLI chặn URL `file:`: mở file local qua `python -m http.server <port> --bind 127.0.0.1 --directory <thư mục>` (M3.3a).
 - `eval` của Playwright CLI: hàm viết nhiều dòng, hoặc đối số có `"` lồng bên trong, bị Windows từ chối ("batch file arguments are invalid"). Viết hàm trên một dòng, bên trong dùng nháy đơn (M3.2b).
 - Auto mode của Claude Code chặn thao tác ghi trên production (bấm Activate, `POST` thẳng vào API) dù kế hoạch đã có: xin user cho phép trong chat, liệt kê đúng từng thao tác; thao tác ngoài danh sách vẫn bị chặn. `vercel env add` (Secret-Store Writes) cũng vậy. Riêng `git push origin main` (Production Deploy) vẫn bị chặn dù user đã đồng ý trong chat: user tự gõ `! git push origin main` (M2.5).
 - Git Bash đổi đối số bắt đầu bằng `/` (vd `/tasks/mine`, `/entrypoint.sh`) thành đường dẫn Windows khi gọi chương trình native như `node`, `docker`: đặt `MSYS_NO_PATHCONV=1`.
@@ -23,7 +24,8 @@
   - MinIO không còn image để pull: Quay báo "no such manifest", Docker Hub từ chối. Máy còn bản cache `quay.io/minio/minio` và `quay.io/minio/mc` của 2025, không dùng nữa.
   - RustFS đọc key từ `RUSTFS_ACCESS_KEY`, `RUSTFS_SECRET_KEY` (mặc định `rustfsadmin`). `GET /health` trả 200; trong image có `curl`. Chỉ nhận path-style URL, trừ khi đặt `RUSTFS_SERVER_DOMAINS`.
   - Volume mới (lần đầu, hoặc sau khi xóa volume `joinpath_s3data`) chưa có bucket: chạy `pnpm storage:init` sau `pnpm build`, trước khi chạy test hay upload ở dev.
-  - Dev và test dùng chung bucket `joinpath`. Test xóa org trong DB nhưng để lại object (vài KB mỗi lần chạy) cho tới khi xóa volume hoặc có purge theo prefix (M3.3). `docker compose down -v` xóa cả volume của Postgres.
+  - Dev và test dùng chung bucket `joinpath`. Từ M3.3a test dọn org bằng `purgeOrg` (xóa cả object theo prefix `orgs/{orgId}/`); object do các lần chạy trước đó để lại nằm tới khi xóa volume. `docker compose down -v` xóa cả volume của Postgres.
+  - `pnpm db:seed` cần `S3_*` và bucket (onboarding B, C upload file), trừ khi chạy `--no-scenarios`. Giả lập thiếu một biến của `.env` bằng cách đặt nó rỗng trước lệnh (`S3_ENDPOINT= pnpm …`): biến rỗng trong môi trường thắng `--env-file` (M3.3a).
 - `seed.yml` chạy trên GitHub Actions, xa Neon: mỗi query mất vài trăm ms, nên transaction của `seedDemoOrg` để timeout 30 s. Seed xóa org `acme` trước, ngoài transaction: seed fail là prod mất org demo tới lần chạy sau.
 - Đừng `pnpm build` khi `pnpm dev` đang chạy (`nest build` xóa `dist`, api dev chết). Dừng `pnpm dev` chạy nền không tắt node của next và nest: `Stop-Process` theo command line.
 - Script Python sửa file repo: đọc, ghi với `newline=""` (không thì thành CRLF); in output vitest cần `PYTHONIOENCODING=utf-8` (`python -I` bỏ qua biến này: dùng `sys.stdout.reconfigure(encoding='utf-8')`).

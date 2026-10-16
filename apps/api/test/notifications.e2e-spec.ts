@@ -13,6 +13,7 @@ import {
 import request from 'supertest';
 import type { App } from 'supertest/types.js';
 import { env } from '../src/env.js';
+import { purgeOrg } from '../src/modules/demo/sandbox.js';
 import { notify } from '../src/modules/notifications/notify.js';
 import { tickOrg } from '../src/modules/notifications/tick.js';
 import {
@@ -189,7 +190,7 @@ describe('notifications', () => {
   });
 
   afterAll(async () => {
-    await org.prisma.organization.delete({ where: { id: org.organizationId } });
+    await purgeOrg(org.prisma, org.organizationId);
     await app.close();
   });
 

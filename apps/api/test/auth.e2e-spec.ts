@@ -3,6 +3,7 @@ import type { INestApplication } from '@nestjs/common';
 import { apiErrorSchema, meSchema, today } from '@joinpath/core';
 import request from 'supertest';
 import type { App } from 'supertest/types.js';
+import { purgeOrg } from '../src/modules/demo/sandbox.js';
 import { seedDemoOrg } from '../src/modules/demo/seed.js';
 import { PrismaService } from '../src/prisma.js';
 import { createApp } from './app.js';
@@ -38,7 +39,7 @@ describe('auth', () => {
   });
 
   afterAll(async () => {
-    await prisma.organization.delete({ where: { id: seeded.organization.id } });
+    await purgeOrg(prisma, seeded.organization.id);
     await app.close();
   });
 

@@ -2,6 +2,7 @@ name: Seed production
 
 # Recreates the fixed demo org (PLAN §11) in the production database. Run it by hand:
 # gh workflow run seed.yml. Secrets: DATABASE_URL (Neon, direct connection), SEED_PASSWORD.
+# Without onboardings A, B and C, whose ID uploads need storage keys the runner lacks.
 on: workflow_dispatch
 
 jobs:
@@ -20,4 +21,4 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter '@joinpath/api...' build
-      - run: pnpm db:seed
+      - run: pnpm db:seed --no-scenarios

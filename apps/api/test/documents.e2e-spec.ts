@@ -10,6 +10,7 @@ import {
 } from '@joinpath/core';
 import { AwsClient } from 'aws4fetch';
 import type { App } from 'supertest/types.js';
+import { purgeOrg } from '../src/modules/demo/sandbox.js';
 import {
   type Client,
   createApp,
@@ -117,7 +118,7 @@ describe('documents', () => {
   });
 
   afterAll(async () => {
-    await org.prisma.organization.delete({ where: { id: org.organizationId } });
+    await purgeOrg(org.prisma, org.organizationId);
     await app.close();
   });
 

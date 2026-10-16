@@ -14,6 +14,7 @@ import {
   today,
 } from '@joinpath/core';
 import type { App } from 'supertest/types.js';
+import { purgeOrg } from '../src/modules/demo/sandbox.js';
 import { seedDemoOrg } from '../src/modules/demo/seed.js';
 import type { PrismaService } from '../src/prisma.js';
 import {
@@ -104,7 +105,7 @@ describe('onboardings', () => {
   });
 
   afterAll(async () => {
-    await prisma.organization.delete({ where: { id: organizationId } });
+    await purgeOrg(prisma, organizationId);
     await app.close();
   });
 

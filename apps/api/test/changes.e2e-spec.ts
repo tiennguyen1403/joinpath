@@ -9,6 +9,7 @@ import {
 } from '@joinpath/core';
 import request from 'supertest';
 import type { App } from 'supertest/types.js';
+import { purgeOrg } from '../src/modules/demo/sandbox.js';
 import {
   type Client,
   clientFor,
@@ -140,7 +141,7 @@ describe('changes', () => {
   });
 
   afterAll(async () => {
-    await org.prisma.organization.delete({ where: { id: org.organizationId } });
+    await purgeOrg(org.prisma, org.organizationId);
     await app.close();
   });
 

@@ -22,7 +22,10 @@ import {
 } from './session.js';
 
 /** Returns the new session's token, which only the cookie holds. */
-async function createSession(db: Prisma.TransactionClient, userId: string) {
+export async function createSession(
+  db: Prisma.TransactionClient,
+  userId: string,
+) {
   const token = newToken();
   await db.session.create({
     data: {

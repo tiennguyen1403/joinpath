@@ -7,6 +7,7 @@ import {
   validateTemplate,
 } from '@joinpath/core';
 import type { App } from 'supertest/types.js';
+import { purgeOrg } from '../src/modules/demo/sandbox.js';
 import { seedDemoOrg } from '../src/modules/demo/seed.js';
 import { PrismaService } from '../src/prisma.js';
 import {
@@ -75,7 +76,7 @@ describe('templates', () => {
   });
 
   afterAll(async () => {
-    await prisma.organization.delete({ where: { id: seeded.organization.id } });
+    await purgeOrg(prisma, seeded.organization.id);
     await app.close();
   });
 

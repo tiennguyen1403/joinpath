@@ -1,4 +1,4 @@
-# Joinpath — Kế hoạch triển khai v0.32
+# Joinpath — Kế hoạch triển khai v0.33
 
 > **Joinpath**: Employee Onboarding & Workflow Management Platform, dự án portfolio Full-stack.
 > Bản này tinh chỉnh SRS v0.4 trong thread ChatGPT "Thiết kế dự án onboarding" (14/10/2026).
@@ -30,6 +30,7 @@
 > **v0.30 (16/10/2026):** onboarding kèm `canceledAt`; chi tiết kèm `cancelReason`, chỉ HR thấy (BR-C03, §8, §9). Onboarding detail: nút ⋯ trên dòng task mở `context-menu` bằng click, các dialog đổi ngày, hủy, reassign, đổi hạn dùng `center-morph-modal`; draft hủy được từ bước review của wizard (§10.1, ADR 010).
 > **v0.31 (16/10/2026):** người gọi cron là Vercel Cron, mỗi ngày 01:00 UTC, bằng `GET /internal/cron/tick` kèm `Authorization: Bearer` (§6.1, §6.2, §6.5, §8). Người nhận và email của từng sự kiện (§6.5); đổi ngày bắt đầu cũng báo (BR-N02). Nhắc việc bỏ qua task đang bị chặn (BR-N03); task mở theo ngày xét `available_on ≤ today`, để tua nhiều ngày không sót (§6.5); dedupe key theo task (BR-N04). Tick chỉ xóa session hết hạn, giữ lời mời (§6.5, §7). Route thông báo trả `{unread, notifications}` (§8).
 > **v0.32 (16/10/2026):** thông báo trên web (M3.2b): trang Notifications mở từ sidebar, số chưa đọc nằm cạnh mục; trên portal là chuông mở `popover-morph` ở mọi độ rộng; danh sách tự dựng theo token, không dùng `notification-stack`. Cạnh My tasks: số task quá hạn màu đỏ, nếu không có thì số task READY (§10.1).
+> **v0.33 (16/10/2026):** M3 chia thành 9 session: M3.3 tách thành API sandbox (M3.3a), mốc giờ theo ngày nghiệp vụ (M3.3b) và web (M3.3c) (§13). Trong sandbox, mọi mốc giờ hiện theo giờ nghiệp vụ, tính từ lịch sử tua ngày; thay đánh đổi "giờ thật" cũ (§4.6, làm ở M3.3b). `POST /demo/sandboxes`: org riêng trong 24 giờ, kèm onboarding A, B, C chạy bằng handler thật, đăng nhập luôn với vai HR; tối đa 5 sandbox mỗi giờ mỗi IP và 200 sandbox còn hạn. `switch-user`: thứ tự kiểm, mã lỗi (§8, §9, §11). Purge sandbox hết hạn chạy trong cron tick và mỗi lần tạo sandbox (§6.5). Production seed org cố định không kèm scenarios (§11).
 
 ## TL;DR: 6 thay đổi lớn nhất
 
@@ -274,7 +275,12 @@ Mỗi bước là một transaction. Revision, file và quyết định cũ khô
 - `available_on = start_date + availableOffsetDays`; `due_on = start_date + dueOffsetDays`. Tính theo calendar days, không trừ cuối tuần.
 - **Chỉ có một hàm:** `today(org)` = ngày hiện tại theo `org.timezone` cộng `org.clock_offset_days`. Mọi command, query và cron đều dùng hàm này. `clock_offset_days` chỉ khác 0 trong sandbox, và chỉ được tăng, không được lùi.
 - Các hàm logic thuần nhận `today` làm tham số, nhờ vậy unit test không cần mock đồng hồ.
-- Đánh đổi chấp nhận được: timestamp của audit và notification là giờ thật. Do đó trong sandbox, timeline sẽ hiện giờ thật nằm cạnh ngày nghiệp vụ đã được tua.
+- **Mốc giờ (timestamp) theo giờ nghiệp vụ** (chốt ở M3.3a, làm ở M3.3b):
+  - DB lưu giờ thật. Mỗi lần tua ngày ghi một dòng lịch sử (lúc tua, số ngày lệch mới), trong cùng transaction với lần tua và trước tick.
+  - API trả mọi mốc giờ để hiển thị (xong, hủy, bắt đầu, nộp, duyệt, gửi lời mời, thông báo, email, timeline) đã dời: giờ thật cộng số ngày lệch đang áp dụng lúc đó, tính bằng hàm thuần trong `core`. Web không phải tính.
+  - Ngoài sandbox số ngày lệch luôn là 0, nên không có gì đổi.
+  - Thay đánh đổi cũ ("audit và notification hiện giờ thật"), vì canvas vẽ mọi mốc giờ theo ngày nghiệp vụ, và chỉ sửa vài chỗ thì detail sẽ ghi "Finished Oct 25" cạnh task "done Oct 16".
+  - Giới hạn: lịch sử của onboarding B, C trong seed (§11) nằm ở lúc tạo sandbox.
 
 ### 4.7 Resolve assignee (trong preview và activate)
 
@@ -494,11 +500,14 @@ joinpath/
   | Hủy | Người có task bị hủy, trừ người mới (tài khoản đã bị khóa); không kèm lý do | |
   | Due-soon, overdue (tick) | Assignee | Overdue ✓ |
 
-- `GET /internal/cron/tick`: Vercel Cron gọi mỗi ngày lúc 01:00 UTC (khoảng 08:00 giờ VN), kèm `Authorization: Bearer <CRON_SECRET>` (env của API; không đặt thì route từ chối mọi lần gọi). Với từng org, theo `today(org)`:
+- `GET /internal/cron/tick`: Vercel Cron gọi mỗi ngày lúc 01:00 UTC (khoảng 08:00 giờ VN), kèm `Authorization: Bearer <CRON_SECRET>` (env của API; không đặt thì route từ chối mọi lần gọi). Trước hết purge sandbox hết hạn (BR-D01, xem dưới). Sau đó, với từng org, theo `today(org)`:
   - Báo task mở theo ngày: task PENDING có `available_on ≤ today` và prerequisite đã xong. Xét `≤` chứ không phải `=`, nên tua nhiều ngày một lúc không sót task nào; dedupe key giữ mỗi task một lần.
   - Nhắc due-soon (`due_on = today + 1`) và overdue (`today > due_on`), chỉ cho task READY (BR-N03). Due-soon rơi vào ngày bị tua qua thì bỏ: task đó đã thành overdue.
   - Sau các org: xóa session hết hạn. Lời mời hết hạn giữ nguyên: khung Invitation cần trạng thái Expired, và §7 không xóa bản ghi nghiệp vụ.
-  - Purge sandbox hết hạn (cascade trong DB + xóa prefix `orgs/{orgId}/`): M3.3a.
+- **Purge sandbox hết hạn** (`expires_at ≤ now`, M3.3a):
+  - Xóa object theo prefix `orgs/{orgId}/` (ListObjectsV2, có phân trang), rồi xóa org (cascade). Storage trước DB, để lỗi giữa chừng thì lần sau làm lại; org nào lỗi thì để tới lần sau.
+  - Org có `expires_at` null (acme, org của test) không bao giờ bị purge.
+  - Chạy trong cron tick, và mỗi lần tạo sandbox (tối đa 3 org hết hạn lâu nhất): cron của Hobby chỉ chạy mỗi ngày, và Vercel Cron với Services chưa được kiểm.
 - Tua ngày (`POST /demo/clock/advance`, nút "+1 ngày" trong sandbox) chạy tick của org đó ngay (BR-D03).
 - Vercel Hobby chỉ cho cron chạy mỗi ngày một lần; ngày nghiệp vụ tính theo ngày nên vậy là đủ. Chưa kiểm được cron có chạy với Vercel Services không: kiểm ở lần push đầu, không chạy thì chuyển sang GitHub Actions `schedule` (nhược điểm: GitHub tự tắt lịch chạy sau 60 ngày repo không có hoạt động).
 
@@ -642,8 +651,16 @@ GET /mock-inbox             GET /dashboard
 
 # Demo (chỉ sandbox) và internal
 POST /demo/sandboxes        POST /demo/switch-user {employeeId}   POST /demo/clock/advance {days}
+                                              # sandboxes: public, không body; purge tối đa 3 sandbox hết hạn (§6.5); IP này đã tạo 5 trong 1 giờ,
+                                              # hoặc đã có 200 sandbox còn hạn → 429 kèm Retry-After (BR-P06); tạo org slug demo-<10 hex>, hết hạn sau 24h,
+                                              # seed kèm scenarios (§11); đăng nhập luôn với HR (cookie như login), xóa session mà request mang theo;
+                                              # 201 trả shape như /auth/me; lỗi giữa chừng → purge org vừa tạo
+                                              # switch-user: mọi vai; body sai 400 → ngoài sandbox 403 → người ngoài org 404 → chưa có tài khoản,
+                                              # hoặc tài khoản bị khóa 409; chính mình → không đổi gì, không set cookie; còn lại: session mới cho người đó,
+                                              # xóa session cũ; 200 trả shape như /auth/me
                                               # clock/advance: days nguyên 1–30, mọi vai; ngoài sandbox 403; chạy tick của org ngay (BR-D03); trả {today}
-GET  /internal/cron/tick                      # Vercel Cron; Authorization: Bearer <CRON_SECRET>, sai hoặc thiếu → 401; tick mọi org → 204
+GET  /internal/cron/tick                      # Vercel Cron; Authorization: Bearer <CRON_SECRET>, sai hoặc thiếu → 401; purge sandbox hết hạn,
+                                              # rồi tick mọi org → 204
 ```
 
 Lỗi luôn trả về dạng `{ code, message, details? }`:
@@ -686,7 +703,7 @@ Lỗi luôn trả về dạng `{ code, message, details? }`:
 - **Session:** token ngẫu nhiên 32 byte, đặt trong cookie `HttpOnly; Secure; SameSite=Lax`. **Không** đặt thuộc tính `Domain`: nếu đặt, cookie sẽ gắn với host của API, và cách sửa F4 hỏng mà không báo lỗi gì. DB chỉ lưu SHA-256 của token, nhờ vậy logout hoặc hủy onboarding là thu hồi được ngay. Không dùng JWT.
 - **CSRF:** `SameSite=Lax`, đồng thời từ chối request thay đổi dữ liệu nếu header `Origin` khác origin của app.
 - **File:** kiểm tra magic bytes (`%PDF`, `\x89PNG`, `FF D8 FF`) bằng một hàm khoảng 10 dòng, không tin `Content-Type` hay đuôi file. Object key có dạng `orgs/{orgId}/tasks/{taskId}/{uuid}`. Signed URL sống tối đa 5 phút, kèm `Content-Disposition: attachment`. Không log signed URL hay token.
-- **Rate limit:** login và nhận invitation dùng guard tự viết (`ThrottleGuard`, 10 lần/phút/IP, đếm trong RAM của từng instance). Không dùng `@nestjs/throttler` vì gói này là CommonJS (ADR 011). Riêng tạo sandbox thì đếm theo IP hash lưu trong DB, vì trên serverless có nhiều instance nên đếm trong RAM không đáng tin.
+- **Rate limit:** login và nhận invitation dùng guard tự viết (`ThrottleGuard`, 10 lần/phút/IP, đếm trong RAM của từng instance). Không dùng `@nestjs/throttler` vì gói này là CommonJS (ADR 011). Riêng tạo sandbox thì đếm theo IP hash lưu trong DB, vì trên serverless có nhiều instance nên đếm trong RAM không đáng tin: tối đa 5 sandbox mỗi giờ mỗi IP, và 200 sandbox còn hạn cho cả hệ thống, để chặn chi phí DB khi bị lạm dụng (M3.3a). Hash là SHA-256 của IP, không salt, mất cùng org khi purge. Đếm rồi mới tạo, nên các request đồng thời có thể vượt giới hạn vài cái.
 - **Khác:** `helmet` cho API; log kèm request id, không bao giờ log password hay token; banner trong demo ghi rõ "Dữ liệu giả, đừng upload giấy tờ thật".
 
 ---
@@ -753,14 +770,25 @@ Tự dựng theo token vì beUI không có: thanh tiến độ onboarding, avata
 ## 11. Chiến lược demo
 
 - **Landing `/`:** một màn giới thiệu, nút "Try live demo", link tới GitHub và tài liệu.
-- **`POST /demo/sandboxes`:** tạo org `is_sandbox` với `expires_at = now + 24h` qua `seedDemoOrg`, rồi đăng nhập luôn với vai HR.
+- **`POST /demo/sandboxes`:** tạo org `is_sandbox` với `expires_at = now + 24h` qua `seedDemoOrg`, kèm scenarios, rồi đăng nhập luôn với vai HR (M3.3a). Mật khẩu của sandbox là chuỗi ngẫu nhiên không ai biết: khách đổi vai bằng `switch-user`, người mới tự đặt mật khẩu qua lời mời.
 - **Org cố định trước M3:** local dev và bản prod ở M0–M2 dùng một org sandbox không hết hạn (`expires_at = null`), nên có thể tua ngày khi tự test. Từ M3, landing chuyển sang "Try demo"; org này giữ lại để chụp ảnh cho tài liệu, hoặc xóa đi.
-- **`seedDemoOrg(db, { slug, password, scenarios? })`** (`apps/api/src/modules/demo/seed.ts`) là một hàm dùng cho cả ba nơi: local dev, test fixture và sandbox. Hàm tự tạo org (slug quyết định đuôi email, BR-D04) và trả về org kèm email đăng nhập của từng vai. Phần nhân sự và template luôn được seed; ba onboarding A, B, C chỉ được seed khi `scenarios: true` (dùng cho sandbox, local dev và test E2E). Org cố định dùng slug `acme`, mật khẩu lấy từ env `SEED_PASSWORD`. Hàm này seed:
+- **`seedDemoOrg(db, { slug, password, expiresAt?, createdIpHash?, scenarios? })`** (`apps/api/src/modules/demo/seed.ts`) là một hàm dùng cho cả ba nơi: local dev, test fixture và sandbox. Hàm tự tạo org (slug quyết định đuôi email, BR-D04) và trả về org kèm email đăng nhập của từng vai.
+  - Phần nhân sự và template luôn được seed. Ba onboarding A, B, C chỉ được seed khi truyền `scenarios`: các command handler (onboarding, task, document, auth) để chạy chúng (`scenarios.ts`).
+  - Dùng scenarios: sandbox và `pnpm db:seed` ở local. Không dùng: test (cho nhanh), và seed production (`seed.yml` chạy `--no-scenarios`, vì runner không có khóa storage, mà B, C phải upload file).
+  - Org cố định dùng slug `acme`, mật khẩu lấy từ env `SEED_PASSWORD`.
+
+  Hàm này seed:
   - Org "Acme Tech" với timezone Asia/Ho_Chi_Minh; các phòng ban Engineering, People Operations, IT. Tên người lấy theo canvas.
   - 1 HR, **2 IT** (để thấy bước chọn assignee khi role có nhiều người), 1 Engineering Manager, 3 nhân viên mới; toàn bộ là tên giả.
   - Template "Engineering Onboarding" (có 2 version, để thấy versioning) và "General Onboarding".
-  - Onboarding **A** ở DRAFT (start date = hôm nay + 7) chờ khách activate; **B** đang ACTIVE với một approval chờ duyệt; **C** đã COMPLETED, làm dữ liệu lịch sử cho dashboard.
-  - B và C được tạo bằng **chính các command handler thật** (kèm một file PDF mẫu rất nhỏ), nên trạng thái luôn hợp lệ, và việc seed cũng đóng vai trò một smoke test.
+  - Ba onboarding theo bảng Dashboard của canvas, ngày tính từ ngày nghiệp vụ (M3.3a):
+    - **A:** An Vo ở DRAFT, start date = hôm nay + 5, chờ khách activate. Create work accounts của IT mở từ 5 ngày trước start date, nên READY ngay khi HR approve (golden path bước 7).
+    - **B:** Bao Ho ACTIVE trên Engineering v1, start date = hôm nay − 2, xong 5/10: ID documents đã nộp revision 1, handbook, Prepare laptop (Huy), buddy, Welcome meeting. Review ID documents chờ Lan và đã quá hạn; 2 task quá hạn, 3 task bị chặn.
+    - **C:** Chi Dang COMPLETED trên v1, start date = hôm nay − 11, ID được duyệt ngay lần đầu; làm dữ liệu lịch sử cho dashboard. Thông báo của C được đánh dấu đã đọc.
+  - Engineering v2 chỉ publish sau khi B, C đã activate, vì activate luôn lấy bản mới nhất (BR-A03). Không có scenarios thì publish mọi version ngay.
+  - B và C được tạo bằng **chính các command handler thật**, nên trạng thái luôn hợp lệ, và việc seed cũng đóng vai trò một smoke test.
+    - Người mới nhận lời mời bằng token trong link của mock email.
+    - File nộp là một PDF một trang cỡ thẻ ID, ghi tên người mới cùng dòng "Sample ID for the Joinpath demo / Not a real document".
 - **Kịch bản chính (golden path):**
   1. Bấm Try demo → vào dashboard HR.
   2. Mở onboarding A → Preview: xem task theo phase, ngày, assignee; chọn 1 trong 2 người IT → Activate.
@@ -779,7 +807,7 @@ Tự dựng theo token vì beUI không có: thanh tiến độ onboarding, avata
 ## 12. Kiểm thử
 
 - **Unit** cho `packages/core`: `validateTemplate` (BR-T04–T10) và schema template (BR-T11), tính ngày, availability, activation plan, reschedule plan. Không cần mock gì, vì các hàm thuần nhận `today` làm tham số.
-- **Integration** chạy với Postgres và RustFS thật (docker compose ở local, service container trong CI), gọi qua HTTP bằng Supertest. Mỗi file test tự tạo một org bằng `seedDemoOrg` với slug ngẫu nhiên, không bật `scenarios` (chỉ seed nhân sự và template, cho nhanh), và xóa org đó khi chạy xong (cascade), nên các test độc lập và chạy song song an toàn: cô lập tenant cho ta cô lập test miễn phí. Test concurrency gửi 2 request cùng lúc bằng `Promise.all` và kiểm tra đúng 1 request thành công.
+- **Integration** chạy với Postgres và RustFS thật (docker compose ở local, service container trong CI), gọi qua HTTP bằng Supertest. Mỗi file test tự tạo một org bằng `seedDemoOrg` với slug ngẫu nhiên, không bật `scenarios` (chỉ seed nhân sự và template, cho nhanh), và purge org đó khi chạy xong (`purgeOrg`: file trong storage, rồi cascade), nên các test độc lập và chạy song song an toàn: cô lập tenant cho ta cô lập test miễn phí. Test concurrency gửi 2 request cùng lúc bằng `Promise.all` và kiểm tra đúng 1 request thành công.
 - **E2E (Playwright):** 1 spec cho golden path, 1 spec kiểm tra quyền xem file.
 - **CI (GitHub Actions):** lint, typecheck, unit, integration (service container cho Postgres và RustFS); Playwright chạy khi merge vào main.
 - **Traceability:** tên test chứa ID của BR; README có bảng ánh xạ BR → test.
@@ -828,7 +856,7 @@ Tự dựng theo token vì beUI không có: thanh tiến độ onboarding, avata
 | **M0** Walking skeleton | 1 (2–3 ngày đầu) | 4 (thực tế) | pnpm workspace (`web`, `api`, `core`); docker compose (Postgres); Prisma: org, departments, employees, users, sessions; seed một org cố định (§11); login/logout/me; layout theo vai trò; rewrite proxy; CI; **chọn host và deploy** | Có URL public, đăng nhập được bằng user seed |
 | **M1** Workflow engine | 1–2 | 11 (thực tế) | `core`: schema + `validateTemplate` + tính ngày + availability + activation plan, unit test kỹ. API template (tạo, `PUT` JSON, publish, archive; chưa có editor, template lấy từ seed). Nhân viên (CRUD tối thiểu). Draft → preview → activate. Checklist. Business clock + endpoint tua ngày (để tự test; UI demo bar làm ở M3). Ghi audit. Wizard, Onboarding detail, My Tasks | Activate được template seed; IT và Manager làm checklist; khóa theo ngày/dependency chạy đúng; onboarding tự COMPLETED; nhóm test T, A, E pass |
 | **M2** Tài liệu và duyệt | 3 | 7 (thực tế) | Invitation + mock inbox + nhận lời mời + resend; thêm RustFS vào docker compose và CI; upload (magic bytes → S3); submit revision; approve/reject/rework; signed download; need-to-know; portal nhân viên mới | Golden path (§11) chạy trọn vẹn ở local; nhóm test R, P pass |
-| **M3** Vận hành và demo | 4 | 8 (chia ở M3.1) | Đổi ngày, reassign, override deadline, hủy; thông báo in-app; cron tick; sandbox + demo bar; dashboard HR cơ bản; timeline | **Mốc an toàn:** demo public chạy được end-to-end trên host |
+| **M3** Vận hành và demo | 4 | 9 (chia ở M3.1; M3.3 tách ba ở M3.3a) | Đổi ngày, reassign, override deadline, hủy; thông báo in-app; cron tick; sandbox + demo bar; dashboard HR cơ bản; timeline | **Mốc an toàn:** demo public chạy được end-to-end trên host |
 | **M4** Editor và trực quan | 5 | ~5 | Template editor dạng form (phases, tasks, chọn `dependsOn`, rule, offset) + validate tức thì bằng `core` + lịch sử version; dependency graph; analytics theo phòng ban | **MVP cut line:** đủ mọi FR mức Must |
 | **M5** Hoàn thiện | 6 | 4 | Playwright golden path; rà lại ma trận quyền, cross-tenant, upload; trạng thái rỗng và lỗi; a11y; checklist hướng dẫn demo; landing page; README, ADR, sơ đồ, video demo | Sẵn sàng đưa vào portfolio |
 | Dự phòng | 7 | — | Dành cho phần bị trễ. Nếu đúng tiến độ: launch sớm, hoặc làm các mục Could | — |
