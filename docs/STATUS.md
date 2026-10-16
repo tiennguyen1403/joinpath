@@ -2,12 +2,12 @@
 
 > File này được nạp vào mọi session qua `CLAUDE.md`. Giữ ngắn: chỉ trạng thái hiện tại. Lịch sử chi tiết nằm trong `docs/sessions/`.
 
-**Cập nhật:** 2026-10-17 · session 032 (M3.4b · Web: dashboard HR và Activity)
-**Mốc hiện tại:** M3 · Vận hành và demo, xong 10/11 session.
+**Cập nhật:** 2026-10-17 · session 033 (M3.5 · Demo public end-to-end)
+**Mốc hiện tại:** M4 · Editor và trực quan, chưa bắt đầu. M3 xong sau 11 session.
 
-M0, M1, M2 đã xong; demo public tại https://joinpath.vercel.app, đã push tới M2.4b (các commit từ `M2.5` tới `M3.4b` còn ở local). M3.1: HR đổi ngày bắt đầu, hủy, reassign, đổi deadline qua UI. M3.2: thông báo trong app và email (BR-N02); tick nhắc việc khi tua ngày và mỗi ngày qua Vercel Cron (chưa có trên prod). M3.3a–b: `POST /demo/sandboxes` (sandbox 24 giờ kèm A, B, C), `switch-user`, purge; mốc giờ theo ngày nghiệp vụ (BR-D05). M3.3c–d: Dynamic Island trên mọi trang của sandbox (app shell, portal, mock inbox; thiếu chỗ thì ở hàng riêng dưới header), Try demo ở trang Sign in, notice "Don't upload real documents", đường portal → My tasks. Golden path (PLAN §11) bước 1–9 chạy trọn ở local chỉ bằng UI (M3.3d). M3.4: `GET /dashboard` (chỉ HR) và `GET /onboardings/:id/activity` (timeline từ `audit_events`, revision và quyết định theo BR-P03); web: dashboard HR (thẻ số, Needs your attention quy task bị chặn về task gốc bằng `blockersOf` của `core`, Due in the next 7 days, Recent activity) và Activity là card ở cột phải trang chi tiết (PLAN §10); golden path bước 10 ở local (M3.4b).
+M0–M3 đã xong. Demo public tại https://joinpath.vercel.app, đã push tới M3.4b (`a254d2d`); golden path (PLAN §11) bước 1–10 chạy trên production chỉ bằng UI, từ Try demo tới dashboard và Activity (M3.5). Có trên prod: HR đổi ngày bắt đầu, hủy, reassign, đổi deadline; thông báo trong app và email; Vercel Cron gọi tick mỗi ngày 01:00 UTC (chạy được với Services, `CRON_SECRET` đã đặt); sandbox 24 giờ kèm A, B, C (tạo mất khoảng 2,6 s trên server), purge xóa cả file trên R2; mốc giờ theo ngày nghiệp vụ; Dynamic Island; dashboard HR và Activity.
 
-**Session kế tiếp:** **M3.5 · Demo public end-to-end** (xem bảng). Bước đầu: hỏi user rồi để user tự gõ `! git push origin main` (các commit từ `M2.5`, có migration `notifications` và `clock_advances`), theo dõi CI và deploy, rồi chạy golden path trên production. Handoff mới nhất: `docs/sessions/032-M3.4b-dashboard-activity-web.md`; production ở handoff 022, cron 025, sandbox và R2 027.
+**Session kế tiếp:** **M4.1 · Template editor dạng form** (xem bảng). Bước đầu: M4.1 là session đầu của M4, nên chi tiết hóa các session M4 trong bảng dưới trước khi code, chốt hai quyết định mở gắn M4.1; kiểm lần chạy theo lịch đầu tiên của Vercel Cron (handoff 033). Handoff mới nhất: `docs/sessions/033-M3.5-public-demo.md`.
 
 ## Quy ước session
 
@@ -27,8 +27,8 @@ Trạng thái: ✅ xong · ▶ kế tiếp · ⏳ chưa làm. Mốc M4–M5 mớ
 | M3.1a–M3.2b | Đổi ngày bắt đầu, hủy, reassign, đổi deadline (`planReschedule` trong `core`, API, web); thông báo trong app và email, cron tick, trang Notifications và chuông trên portal | AT-06, AT-19–AT-22, AT-24, AT-25 pass; qua UI mỗi vai làm được việc của mình (handoff 023–026) | ✅ |
 | M3.3a–M3.3d | Sandbox (`POST /demo/sandboxes`, scenarios A/B/C, purge, `switch-user`); mốc giờ theo ngày nghiệp vụ (`clock_advances`); Dynamic Island trên mọi trang của sandbox, cả 390 px; Try demo; notice dữ liệu giả; portal → My tasks | AT-31, BR-D01, BR-D05, BR-P06 pass; golden path bước 1–9 chạy ở local chỉ bằng UI (handoff 027–030) | ✅ |
 | M3.4a–M3.4b | API `GET /dashboard`, `GET /onboardings/:id/activity` (từ `audit_events`), schema và `blockersOf` trong `core`; web: dashboard HR, Activity là card ở cột phải trang chi tiết | Test FR-19 pass; golden path bước 10 ở local (handoff 031–032) | ✅ |
-| **M3.5** | Demo public end-to-end trên host; upload và xem file thật trên production (hoãn từ M2.5); đặt `CRON_SECRET`, kiểm Vercel Cron chạy với Services (không được thì GitHub Actions, handoff 025); đo thời gian tạo sandbox, kiểm purge với R2 (token cần quyền list, handoff 027) | **Mốc an toàn:** golden path 1–10 chạy trên production | ▶ |
-| M4.1 | Template editor dạng form + validate tức thì bằng `core` | | ⏳ |
+| M3.5 | Push, demo public end-to-end; upload và xem file thật trên production; `CRON_SECRET`, Vercel Cron với Services; thời gian tạo sandbox, purge với R2 | **Mốc an toàn:** golden path 1–10 chạy trên production (handoff 033) | ✅ |
+| **M4.1** | Template editor dạng form + validate tức thì bằng `core` | | ▶ |
 | M4.2 | Lịch sử version + luồng publish trên UI | | ⏳ |
 | M4.3 | Dependency graph (React Flow + dagre) | | ⏳ |
 | M4.4 | Analytics theo phòng ban + rà FR mức Must | **MVP cut line** | ⏳ |
@@ -71,13 +71,14 @@ Production: https://joinpath.vercel.app (Vercel Services + Neon Singapore, ADR 0
 git push origin main          # chạy CI và deploy production; migrate chạy trong bước build
 gh workflow run seed.yml      # tạo lại org acme trên prod (không kèm A/B/C), xóa sạch dữ liệu cũ của org; mật khẩu là secret SEED_PASSWORD
 vercel logs <deployment-url> --since 1h   # log runtime: mỗi request API một dòng, kèm IP và request id
+vercel crons list             # cron đã đăng ký; chạy tick prod ngay: user tự gõ ! MSYS_NO_PATHCONV=1 vercel crons run /api/internal/cron/tick
 ```
 
 Env trên Vercel:
 - Tự đặt: `APP_ORIGIN`, `TRUST_PROXY_HOPS=1`, `ENABLE_EXPERIMENTAL_COREPACK=1`.
 - Integration Neon cấp: `DATABASE_URL`, `DATABASE_URL_UNPOOLED`.
 - Storage R2 (M2.5), chỉ Production, loại Secret (không đọc lại được): `S3_ENDPOINT` (`https://<account id>.r2.cloudflarestorage.com`), `S3_REGION=auto`, `S3_BUCKET=joinpath`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` (token Object Read & Write, chỉ bucket `joinpath`). Thiếu thì API không boot.
-- `CRON_SECRET` (M3.2a), Production, loại Secret: **chưa đặt**. Vercel Cron gửi nó khi gọi `/api/internal/cron/tick` mỗi ngày (`vercel.json`); thiếu thì API vẫn boot, route trả 401.
+- `CRON_SECRET`, Production, loại Secret: đặt ở M3.5, 64 ký tự hex ngẫu nhiên, không ai giữ bản sao (đổi thì đặt lại với `--force`). Vercel Cron gửi nó khi gọi `/api/internal/cron/tick` mỗi ngày (`vercel.json`); thiếu thì API vẫn boot, route trả 401.
 
 Secret của repo GitHub: `DATABASE_URL` (giá trị unpooled), `SEED_PASSWORD`.
 

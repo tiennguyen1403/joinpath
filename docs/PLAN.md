@@ -1,4 +1,4 @@
-# Joinpath — Kế hoạch triển khai v0.38
+# Joinpath — Kế hoạch triển khai v0.39
 
 > **Joinpath**: Employee Onboarding & Workflow Management Platform, dự án portfolio Full-stack.
 > Bản này tinh chỉnh SRS v0.4 trong thread ChatGPT "Thiết kế dự án onboarding" (14/10/2026).
@@ -36,6 +36,7 @@
 > **v0.36 (16/10/2026):** island có trên portal và mock inbox; trên điện thoại, và trong app shell dưới 1024 px, island nằm ở một hàng riêng dưới header (§10, §10.1). Banner "dữ liệu giả" là một notice trên vùng upload, chỉ trong sandbox (§9). Người đã xong onboarding vẫn vào portal trước, có nút sang My tasks; sidebar có mục quay về portal (§10).
 > **v0.37 (17/10/2026):** M3 chia thành 11 session: M3.4 tách thành API (M3.4a) và web (M3.4b) (§13). `GET /onboardings/:id/activity` và `GET /dashboard`: shape, quyền, thứ tự (§8). Activity theo phạm vi của onboarding; không có upload và xóa file; revision và quyết định chỉ cho người xem được file (§9, BR-P03).
 > **v0.38 (17/10/2026):** web của dashboard HR và Activity (M3.4b). Activity là card ở cột phải trang chi tiết, cho mọi người xem được onboarding, chưa có tab tới khi có graph. Dashboard tự đếm, viết câu và chọn việc cần chú ý từ `GET /dashboard`; task bị chặn quy về task gốc bằng `blockersOf` trong `core` (§10, §10.1).
+> **v0.39 (17/10/2026):** Vercel Cron chạy được với Services (kiểm ở M3.5): không cần GitHub Actions (§6.5). M3 xong sau 11 session, golden path chạy trên production (§13).
 
 ## TL;DR: 6 thay đổi lớn nhất
 
@@ -520,9 +521,9 @@ joinpath/
 - **Purge sandbox hết hạn** (`expires_at ≤ now`, M3.3a):
   - Xóa object theo prefix `orgs/{orgId}/` (ListObjectsV2, có phân trang), rồi xóa org (cascade). Storage trước DB, để lỗi giữa chừng thì lần sau làm lại; org nào lỗi thì để tới lần sau.
   - Org có `expires_at` null (acme, org của test) không bao giờ bị purge.
-  - Chạy trong cron tick, và mỗi lần tạo sandbox (tối đa 3 org hết hạn lâu nhất): cron của Hobby chỉ chạy mỗi ngày, và Vercel Cron với Services chưa được kiểm.
+  - Chạy trong cron tick, và mỗi lần tạo sandbox (tối đa 3 org hết hạn lâu nhất), vì cron của Hobby chỉ chạy mỗi ngày một lần.
 - Tua ngày (`POST /demo/clock/advance`, nút "+1 ngày" trong sandbox) chạy tick của org đó ngay (BR-D03).
-- Vercel Hobby chỉ cho cron chạy mỗi ngày một lần; ngày nghiệp vụ tính theo ngày nên vậy là đủ. Chưa kiểm được cron có chạy với Vercel Services không: kiểm ở lần push đầu, không chạy thì chuyển sang GitHub Actions `schedule` (nhược điểm: GitHub tự tắt lịch chạy sau 60 ngày repo không có hoạt động).
+- Vercel Hobby chỉ cho cron chạy mỗi ngày một lần; ngày nghiệp vụ tính theo ngày nên vậy là đủ. Vercel Cron chạy được với Services (M3.5): project nhận `crons` của `vercel.json`, và lần gọi đi qua rewrite `/api/(.*)` tới api kèm đúng secret. Chạy tay: `vercel crons run /api/internal/cron/tick`.
 
 ### 6.6 Triển khai (đã chọn A ở M0.4)
 
@@ -902,7 +903,7 @@ Tự dựng theo token vì beUI không có: thanh tiến độ onboarding, avata
 | **M0** Walking skeleton | 1 (2–3 ngày đầu) | 4 (thực tế) | pnpm workspace (`web`, `api`, `core`); docker compose (Postgres); Prisma: org, departments, employees, users, sessions; seed một org cố định (§11); login/logout/me; layout theo vai trò; rewrite proxy; CI; **chọn host và deploy** | Có URL public, đăng nhập được bằng user seed |
 | **M1** Workflow engine | 1–2 | 11 (thực tế) | `core`: schema + `validateTemplate` + tính ngày + availability + activation plan, unit test kỹ. API template (tạo, `PUT` JSON, publish, archive; chưa có editor, template lấy từ seed). Nhân viên (CRUD tối thiểu). Draft → preview → activate. Checklist. Business clock + endpoint tua ngày (để tự test; UI demo bar làm ở M3). Ghi audit. Wizard, Onboarding detail, My Tasks | Activate được template seed; IT và Manager làm checklist; khóa theo ngày/dependency chạy đúng; onboarding tự COMPLETED; nhóm test T, A, E pass |
 | **M2** Tài liệu và duyệt | 3 | 7 (thực tế) | Invitation + mock inbox + nhận lời mời + resend; thêm RustFS vào docker compose và CI; upload (magic bytes → S3); submit revision; approve/reject/rework; signed download; need-to-know; portal nhân viên mới | Golden path (§11) chạy trọn vẹn ở local; nhóm test R, P pass |
-| **M3** Vận hành và demo | 4 | 11 (chia ở M3.1; M3.3 tách ba ở M3.3a, M3.3c và M3.4 tách đôi) | Đổi ngày, reassign, override deadline, hủy; thông báo in-app; cron tick; sandbox + demo bar; dashboard HR cơ bản; timeline | **Mốc an toàn:** demo public chạy được end-to-end trên host |
+| **M3** Vận hành và demo | 4 | 11 (thực tế; chia ở M3.1; M3.3 tách ba ở M3.3a, M3.3c và M3.4 tách đôi) | Đổi ngày, reassign, override deadline, hủy; thông báo in-app; cron tick; sandbox + demo bar; dashboard HR cơ bản; timeline | **Mốc an toàn:** demo public chạy được end-to-end trên host |
 | **M4** Editor và trực quan | 5 | ~5 | Template editor dạng form (phases, tasks, chọn `dependsOn`, rule, offset) + validate tức thì bằng `core` + lịch sử version; dependency graph; analytics theo phòng ban | **MVP cut line:** đủ mọi FR mức Must |
 | **M5** Hoàn thiện | 6 | 4 | Playwright golden path; rà lại ma trận quyền, cross-tenant, upload; trạng thái rỗng và lỗi; a11y; checklist hướng dẫn demo; landing page; README, ADR, sơ đồ, video demo | Sẵn sàng đưa vào portfolio |
 | Dự phòng | 7 | — | Dành cho phần bị trễ. Nếu đúng tiến độ: launch sớm, hoặc làm các mục Could | — |

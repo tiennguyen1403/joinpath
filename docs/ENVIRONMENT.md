@@ -18,12 +18,16 @@
   - ảnh `--full-page` trên Chrome headed hẹp hơn 15 px vì thanh cuộn, ảnh khung nhìn thì đủ. Kiểm tràn ngang bằng `eval` (`scrollWidth` so với `clientWidth`), không dựa vào ảnh;
   - CLI chặn URL `file:`: mở file local qua `python -m http.server <port> --bind 127.0.0.1 --directory <thư mục>` (M3.3a).
 - `eval` của Playwright CLI: hàm viết nhiều dòng, hoặc đối số có `"` lồng bên trong, bị Windows từ chối ("batch file arguments are invalid"). Viết hàm trên một dòng, bên trong dùng nháy đơn (M3.2b).
+  - Hàm dài thì ghi vào file rồi `run-code --filename <file>`. `page.waitForResponse` trong đó đo được một request, kể cả khi trang chuyển bằng `window.location.assign` (vd tạo sandbox, M3.5).
 - `click` nhận locator thay cho ref: `click "getByRole('button', { name: 'Lan Pham, HR' })"`, đỡ phải `snapshot` trước mỗi bước (M3.3d).
   - Tên khớp theo chuỗi con, không phân biệt hoa thường: "Mock inbox" khớp cả "Open mock inbox", locator trùng hai phần tử thì không bấm gì. Thêm `exact: true`.
   - Mở island xong thì pill biến mất khỏi DOM (thành dialog): `eval` tìm `button[aria-label^="Demo controls"]` lúc đó trả null.
 - Chrome headed trên Windows có thanh cuộn chiếm chỗ: ở cửa sổ 390 px, `clientWidth` là 375, trong khi `100vw` vẫn là 390. Phần tử rộng `calc(100vw-32px)` khi đó chỉ cách mép khoảng 8 px; điện thoại thật dùng thanh cuộn nổi, nên vẫn là 16 px. Đo bằng `clientWidth`, đừng đo theo kích thước cửa sổ (M3.3d).
-- Auto mode của Claude Code chặn thao tác ghi trên production (bấm Activate, `POST` thẳng vào API) dù kế hoạch đã có: xin user cho phép trong chat, liệt kê đúng từng thao tác; thao tác ngoài danh sách vẫn bị chặn. `vercel env add` (Secret-Store Writes) cũng vậy. Riêng `git push origin main` (Production Deploy) vẫn bị chặn dù user đã đồng ý trong chat: user tự gõ `! git push origin main` (M2.5).
-- Git Bash đổi đối số bắt đầu bằng `/` (vd `/tasks/mine`, `/entrypoint.sh`) thành đường dẫn Windows khi gọi chương trình native như `node`, `docker`: đặt `MSYS_NO_PATHCONV=1`.
+- Auto mode của Claude Code chặn thao tác ghi trên production (bấm Activate, `POST` thẳng vào API) dù kế hoạch đã có:
+  - xin user cho phép trong chat, liệt kê đúng từng thao tác; thao tác ngoài danh sách vẫn bị chặn. User chỉ trả lời "xác nhận" cho danh sách Claude soạn thì chưa đủ để bấm qua Playwright: user phải tự gửi câu cho phép nêu từng thao tác (M3.5);
+  - `vercel env add` (Secret-Store Writes) cũng vậy;
+  - `git push origin main` và `vercel crons run` (Production Deploy) vẫn bị chặn dù user đã đồng ý: user tự gõ `! git push origin main` (M2.5), `! MSYS_NO_PATHCONV=1 vercel crons run /api/internal/cron/tick` (M3.5).
+- Git Bash đổi đối số bắt đầu bằng `/` (vd `/tasks/mine`, `/entrypoint.sh`) thành đường dẫn Windows khi gọi chương trình native như `node`, `docker`, `vercel`: đặt `MSYS_NO_PATHCONV=1`. Lệnh `!` của user cũng chạy qua Git Bash, nên cũng cần biến này (M3.5).
 - Storage (từ M2.2): RustFS 1.0.1 trong compose, port 9000.
   - MinIO không còn image để pull: Quay báo "no such manifest", Docker Hub từ chối. Máy còn bản cache `quay.io/minio/minio` và `quay.io/minio/mc` của 2025, không dùng nữa.
   - RustFS đọc key từ `RUSTFS_ACCESS_KEY`, `RUSTFS_SECRET_KEY` (mặc định `rustfsadmin`). `GET /health` trả 200; trong image có `curl`. Chỉ nhận path-style URL, trừ khi đặt `RUSTFS_SERVER_DOMAINS`.
@@ -38,8 +42,11 @@
 - Việc cần Linux (vd kiểm TZ có DST): image `node:20-alpine` có sẵn trong Docker của máy; mount `packages/core` read-only rồi chạy script import `core/dist` (handoff 023).
 - Sửa `packages/core` khi `pnpm dev` đang chạy: web có thể giữ bản core cũ, nên build core rồi restart `pnpm dev`. Sửa `app-shell.tsx` lúc dev đang chạy cũng vậy: SSR giữ bản cũ, gây lỗi hydration (handoff 013).
 - Xóa một route của web xong, `pnpm typecheck` báo không tìm thấy trang đó: `apps/web/.next/dev/types/validator.ts` do dev server sinh ra vẫn trỏ tới nó, `next typegen` không tạo lại. Dừng dev rồi xóa `apps/web/.next/dev/types` (M3.2b).
-- Vercel CLI 62.2.0 (global, đã đăng nhập; hook đầu session báo "not installed" là sai). MCP Vercel trả 403 với team này: dùng `vercel api`, `vercel logs`, `vercel inspect --logs`. Không chạy `vercel deploy` từ máy (CLI upload cả `apps/api/.env`).
+- Vercel CLI 62.2.0 (global, đã đăng nhập; hook đầu session báo "not installed" là sai). MCP Vercel trả 403 với team này: dùng `vercel api`, `vercel logs`, `vercel inspect --logs`, `vercel crons list`. Không chạy `vercel deploy` từ máy (CLI upload cả `apps/api/.env`).
+  - `vercel logs <url>` trả tối đa 100 dòng (`--json` khoảng 50): tìm một request bằng khoảng `--since`/`--until` dạng ISO; lọc bằng `--status-code 4xx`, `--query`, `--level`.
+  - Request mà cold start in cảnh báo SSL của `pg` ra stderr bị gắn mức `error`, dù trả 200 (M3.5).
 - Secret không bao giờ in ra transcript. Đặt secret qua file tạm trong scratchpad rồi xóa ngay, hoặc để user tự gõ trong terminal riêng.
 - Neon (Postgres 18.6) ngủ sau 5 phút không có truy vấn; request đầu tiên khi đó chậm thêm khoảng 0,9 s.
+  - SQL Editor của Neon console: tắt read-only mới chạy được UPDATE. Dòng "0 rows" là số dòng trả về, không phải số dòng bị đổi: kiểm lại qua API, vd `/api/auth/me` → `organization.demo.expiresAt` (M3.5).
 - Proxy dev của Next (rewrite `/api` → :3001) đôi khi trả 500 "Failed to proxy … read ECONNRESET": API đóng socket keep-alive (Node mặc định 5 s) đúng lúc proxy dùng lại, hay gặp khi nhiều query refetch cùng lúc (vd sau +1 day). Request sau thì bình thường; chỉ có ở dev (M3.3c).
 - Thử trạng thái chờ và lỗi mạng trên UI: Playwright `eval` thay `window.fetch` bằng một promise reject sau vài giây (một dòng, nháy đơn). Thử 429 của Try demo: chèn org giả có `created_ip_hash = encode(sha256('::1'::bytea), 'hex')` (IP local qua proxy dev là `::1`), thử xong thì xóa (M3.3c).
