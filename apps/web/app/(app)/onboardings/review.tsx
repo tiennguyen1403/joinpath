@@ -10,19 +10,11 @@ import {
   onboardingDetailSchema,
   type PlannedTask,
   type Role,
-  type TaskDef,
   unresolvedAssigneesSchema,
 } from '@joinpath/core';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { type ReactNode, useState } from 'react';
-import {
-  ArrowRight,
-  Check,
-  Clock,
-  DocumentText,
-  Eye,
-  ListCheck,
-} from 'reicon-react';
+import { ArrowRight, Check, Clock } from 'reicon-react';
 import { Avatar, tintOf } from '@/components/avatar';
 import { cn } from '@/components/beui/lib/utils';
 import { AnimatedBadge } from '@/components/beui/motion/animated-badge';
@@ -35,6 +27,7 @@ import {
 } from '@/components/beui/motion/select';
 import { Notice } from '@/components/notice';
 import { Table, Td, Th, THead, Tr } from '@/components/table';
+import { TASK_TYPES } from '@/components/task-status';
 import { api, ApiError } from '@/lib/api';
 import {
   capitalized,
@@ -46,15 +39,6 @@ import {
 import { Divider, NewHire, PRIMARY, type Step, WizardFrame } from './wizard';
 
 const countTasks = (n: number) => `${inWords(n)} ${n === 1 ? 'task' : 'tasks'}`;
-
-const TYPES: Record<
-  TaskDef['type'],
-  { label: string; icon: typeof ListCheck }
-> = {
-  CHECKLIST: { label: 'Checklist', icon: ListCheck },
-  DOCUMENT: { label: 'Document', icon: DocumentText },
-  APPROVAL: { label: 'Approval', icon: Eye },
-};
 
 const without = <T,>(record: Record<string, T>, key: string) =>
   Object.fromEntries(Object.entries(record).filter(([k]) => k !== key));
@@ -458,7 +442,7 @@ function Row({
   today: IsoDate;
   onPick: (task: PlannedTask, employeeId: string | undefined) => void;
 }) {
-  const type = TYPES[task.type];
+  const type = TASK_TYPES[task.type];
   return (
     <Tr
       className={cn(

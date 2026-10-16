@@ -19,6 +19,10 @@
   - CLI chặn URL `file:`: mở file local qua `python -m http.server <port> --bind 127.0.0.1 --directory <thư mục>` (M3.3a).
 - `eval` của Playwright CLI: hàm viết nhiều dòng, hoặc đối số có `"` lồng bên trong, bị Windows từ chối ("batch file arguments are invalid"). Viết hàm trên một dòng, bên trong dùng nháy đơn (M3.2b).
   - Hàm dài thì ghi vào file rồi `run-code --filename <file>`. `page.waitForResponse` trong đó đo được một request, kể cả khi trang chuyển bằng `window.location.assign` (vd tạo sandbox, M3.5).
+- `getByRole('alert').first()` bắt trúng route announcer rỗng của Next (cũng `role="alert"`): tìm Alert của trang theo chữ (M4.1a).
+- Tự kiểm bảng phương án trước khi đưa user duyệt (M4.1a): bảng `.dc.html` là HTML tĩnh, trình duyệt thường dựng được như canvas.
+  - `python -m http.server <port> --bind 127.0.0.1 --directory <scratchpad>`, rồi `run-code --filename` một script: mỗi bảng đặt viewport bằng chiều rộng khung, chờ `document.fonts.ready`, ẩn thanh cuộn (`addStyleTag` `html{scrollbar-width:none}`), đo `scrollHeight`, `scrollWidth` so với `clientWidth`, chụp `fullPage`.
+  - Đặt `h` của khung trong `canvas.json` và `$preview` của bảng bằng chiều cao đo được. Hướng dẫn của loại canvas Design bảo không tự kiểm khi user chưa yêu cầu: dự án này thì kiểm.
 - `click` nhận locator thay cho ref: `click "getByRole('button', { name: 'Lan Pham, HR' })"`, đỡ phải `snapshot` trước mỗi bước (M3.3d).
   - Tên khớp theo chuỗi con, không phân biệt hoa thường: "Mock inbox" khớp cả "Open mock inbox", locator trùng hai phần tử thì không bấm gì. Thêm `exact: true`.
   - Mở island xong thì pill biến mất khỏi DOM (thành dialog): `eval` tìm `button[aria-label^="Demo controls"]` lúc đó trả null.

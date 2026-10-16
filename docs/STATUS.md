@@ -2,12 +2,12 @@
 
 > File này được nạp vào mọi session qua `CLAUDE.md`. Giữ ngắn: chỉ trạng thái hiện tại. Lịch sử chi tiết nằm trong `docs/sessions/`.
 
-**Cập nhật:** 2026-10-17 · session 033 (M3.5 · Demo public end-to-end)
-**Mốc hiện tại:** M4 · Editor và trực quan, chưa bắt đầu. M3 xong sau 11 session.
+**Cập nhật:** 2026-10-17 · session 034 (M4.1a · Template editor, sửa task)
+**Mốc hiện tại:** M4 · Editor và trực quan, 1/5 session. M3 xong sau 11 session.
 
-M0–M3 đã xong. Demo public tại https://joinpath.vercel.app, đã push tới M3.4b (`a254d2d`); golden path (PLAN §11) bước 1–10 chạy trên production chỉ bằng UI, từ Try demo tới dashboard và Activity (M3.5). Có trên prod: HR đổi ngày bắt đầu, hủy, reassign, đổi deadline; thông báo trong app và email; Vercel Cron gọi tick mỗi ngày 01:00 UTC (chạy được với Services, `CRON_SECRET` đã đặt); sandbox 24 giờ kèm A, B, C (tạo mất khoảng 2,6 s trên server), purge xóa cả file trên R2; mốc giờ theo ngày nghiệp vụ; Dynamic Island; dashboard HR và Activity.
+M0–M3 đã xong. Demo public tại https://joinpath.vercel.app, đã push tới M3.4b (`a254d2d`); golden path (PLAN §11) bước 1–10 chạy trên production chỉ bằng UI, từ Try demo tới dashboard và Activity (M3.5). Có trên prod: HR đổi ngày bắt đầu, hủy, reassign, đổi deadline; thông báo trong app và email; Vercel Cron gọi tick mỗi ngày 01:00 UTC (chạy được với Services, `CRON_SECRET` đã đặt); sandbox 24 giờ kèm A, B, C (tạo mất khoảng 2,6 s trên server), purge xóa cả file trên R2; mốc giờ theo ngày nghiệp vụ; Dynamic Island; dashboard HR và Activity. Chỉ ở local (chưa push): template editor của M4.1a, sửa task của một draft, validate tức thì, tự lưu.
 
-**Session kế tiếp:** **M4.1 · Template editor dạng form** (xem bảng). Bước đầu: M4.1 là session đầu của M4, nên chi tiết hóa các session M4 trong bảng dưới trước khi code, chốt hai quyết định mở gắn M4.1; kiểm lần chạy theo lịch đầu tiên của Vercel Cron (handoff 033). Handoff mới nhất: `docs/sessions/033-M3.5-public-demo.md`.
+**Session kế tiếp:** **M4.1b · Sửa cấu trúc template** (xem bảng). Bước đầu: kiểm lần chạy theo lịch của Vercel Cron (còn từ handoff 033); đề xuất cách sinh key và hành vi khi xóa; canvas phương án, tự kiểm trước khi đưa duyệt. Handoff mới nhất: `docs/sessions/034-M4.1a-template-editor-tasks.md`.
 
 ## Quy ước session
 
@@ -16,7 +16,7 @@ M0–M3 đã xong. Demo public tại https://joinpath.vercel.app, đã push tớ
 
 ## Bảng session
 
-Trạng thái: ✅ xong · ▶ kế tiếp · ⏳ chưa làm. Mốc M4–M5 mới ở mức khung.
+Trạng thái: ✅ xong · ▶ kế tiếp · ⏳ chưa làm. Mốc M5 mới ở mức khung.
 
 | ID | Nội dung | Xong khi | TT |
 |---|---|---|---|
@@ -28,9 +28,10 @@ Trạng thái: ✅ xong · ▶ kế tiếp · ⏳ chưa làm. Mốc M4–M5 mớ
 | M3.3a–M3.3d | Sandbox (`POST /demo/sandboxes`, scenarios A/B/C, purge, `switch-user`); mốc giờ theo ngày nghiệp vụ (`clock_advances`); Dynamic Island trên mọi trang của sandbox, cả 390 px; Try demo; notice dữ liệu giả; portal → My tasks | AT-31, BR-D01, BR-D05, BR-P06 pass; golden path bước 1–9 chạy ở local chỉ bằng UI (handoff 027–030) | ✅ |
 | M3.4a–M3.4b | API `GET /dashboard`, `GET /onboardings/:id/activity` (từ `audit_events`), schema và `blockersOf` trong `core`; web: dashboard HR, Activity là card ở cột phải trang chi tiết | Test FR-19 pass; golden path bước 10 ở local (handoff 031–032) | ✅ |
 | M3.5 | Push, demo public end-to-end; upload và xem file thật trên production; `CRON_SECRET`, Vercel Cron với Services; thời gian tạo sandbox, purge với R2 | **Mốc an toàn:** golden path 1–10 chạy trên production (handoff 033) | ✅ |
-| **M4.1** | Template editor dạng form + validate tức thì bằng `core` | | ▶ |
-| M4.2 | Lịch sử version + luồng publish trên UI | | ⏳ |
-| M4.3 | Dependency graph (React Flow + dagre) | | ⏳ |
+| **M4.1a** | Template editor, sửa task của một DRAFT: `/templates/[id]` mở từ bảng Templates, template chưa có draft thì có nút tạo draft; panel Edit task đủ field như canvas; validate tức thì bằng `core` (Alert, badge "N problems", lỗi theo field), gợi ý BR-R01; tự lưu qua `PUT` | Qua UI ở 1440 px: tạo draft v3 của Engineering, nối vòng như canvas → đúng Alert, badge trên 2 task, lỗi ở Waits for; gỡ link thì hết lỗi; reload vẫn giữ (handoff 034) | ✅ |
+| **M4.1b** | Sửa cấu trúc: thêm, xóa task; thêm, đổi tên, xóa phase; kéo thả thứ tự (`sortable-stack`); New template; 390 px; lỗi khi lưu | Qua UI dựng một template mới tới khi hết lỗi; 390 px không tràn ngang | ▶ |
+| M4.2 | Tab version (xem bản đã publish), số onboarding đang chạy và đã dùng mỗi version (API mới); Publish kèm tooltip; Discard draft (`DELETE /template-versions/:id`); Archive; draft trên template đã archive không còn "ready to activate" | Qua UI publish v3, onboarding mới dùng v3; test của API mới pass | ⏳ |
+| M4.3 | Dependency graph (React Flow + dagre, chỉ xem): xem trước trong editor và ở chi tiết onboarding, tô màu theo trạng thái | Graph đúng dependency và màu trạng thái, ở 1440 và 390 px | ⏳ |
 | M4.4 | Analytics theo phòng ban + rà FR mức Must | **MVP cut line** | ⏳ |
 | M5.1 | Playwright: golden path + quyền xem file | | ⏳ |
 | M5.2 | Rà ma trận quyền, cross-tenant, upload; trạng thái rỗng và lỗi; a11y | | ⏳ |
@@ -41,8 +42,8 @@ Trạng thái: ✅ xong · ▶ kế tiếp · ⏳ chưa làm. Mốc M4–M5 mớ
 
 - Preview deployment: origin khác `APP_ORIGIN` nên mọi request ghi bị 403, preview dùng chung DB với production, và không có `S3_*` (chỉ đặt cho Production) nên API của preview không boot. Chốt khi bắt đầu dùng PR: tắt preview, hoặc cho phép origin của preview và dùng Neon branch.
 - Swagger `/api/docs` (PLAN §8) chưa thuộc session nào; khi thêm phải chỉnh CSP của `helmet`. Gắn vào session nào?
-- BR-R01 ở mức template: M1.4a chốt không thêm rule chặn publish. Còn mở cho M4.1: editor có gợi ý (không chặn) khi DOCUMENT và APPROVAL của nó cùng giao `DIRECT_MANAGER` không?
-- Nút "Discard draft" (canvas, editor) cần xóa DRAFT, trái PLAN §7 (không xóa bản ghi nghiệp vụ) và §8 (không có endpoint): chốt ở M4.1.
+- `tooltip` của beUI (lý do nút Publish bị khóa, M4.2) kéo thêm `@floating-ui/dom`, chưa có trong PLAN §6.2: hỏi user ở M4.2.
+- Có đưa "tự dựng và kiểm bảng phương án ở local trước khi đưa duyệt" (ENVIRONMENT, mục Playwright) thành luật trong `CLAUDE.md` không? Đã hỏi ở M4.1a, user chưa trả lời.
 
 ## Chạy dự án
 
@@ -55,7 +56,7 @@ pnpm storage:init      # lần đầu, hoặc volume RustFS mới: tạo bucket 
 pnpm db:migrate        # prisma migrate dev (lần đầu, hoặc khi đổi schema)
 pnpm db:seed           # tạo lại org acme: lan.pham@acme.joinpath.demo (HR), duc.tran@… (IT), minh.nguyen@… (MEMBER), kèm onboarding
                        # A (An, nháp), B (Bao, chờ Lan duyệt ID), C (Chi, đã xong); cần RustFS + bucket. --no-scenarios: chỉ người và template
-pnpm dev               # web http://localhost:3000 (đăng nhập ở /login; thư mời ở /mock-inbox; portal của người mới ở /my-onboarding; duyệt tài liệu ở /tasks, nút Review documents; thông báo ở /notifications) · api http://localhost:3001/api/health
+pnpm dev               # web http://localhost:3000 (đăng nhập ở /login; thư mời ở /mock-inbox; portal của người mới ở /my-onboarding; duyệt tài liệu ở /tasks, nút Review documents; thông báo ở /notifications; sửa template: bấm một dòng ở /templates) · api http://localhost:3001/api/health
 pnpm test              # cần Postgres + migration, RustFS + bucket; rồi pnpm lint · pnpm typecheck · pnpm format:check
 # Tua ngày: +1 day, Jump trên island (mọi trang trong sandbox, cả portal và mock inbox), hoặc POST /api/demo/clock/advance {days} (1–30, chỉ sandbox; acme là sandbox); ghi clock_advances rồi chạy tick.
 # Try demo: "Start a demo instead" ở /login (5 sandbox mỗi giờ mỗi IP; IP local là ::1). Đổi vai: island, hoặc POST /api/demo/switch-user {employeeId}, cả trong acme.

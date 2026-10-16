@@ -23,7 +23,7 @@ export const messageOf = (error: unknown) =>
 export async function api<T>(
   path: string,
   schema: { parse: (data: unknown) => T },
-  write?: { method: 'POST' | 'PATCH' | 'DELETE'; body?: unknown },
+  write?: { method: 'POST' | 'PUT' | 'PATCH' | 'DELETE'; body?: unknown },
 ): Promise<T> {
   const res = await fetch(
     `/api${path}`,

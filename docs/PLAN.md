@@ -1,4 +1,4 @@
-# Joinpath — Kế hoạch triển khai v0.39
+# Joinpath — Kế hoạch triển khai v0.40
 
 > **Joinpath**: Employee Onboarding & Workflow Management Platform, dự án portfolio Full-stack.
 > Bản này tinh chỉnh SRS v0.4 trong thread ChatGPT "Thiết kế dự án onboarding" (14/10/2026).
@@ -37,6 +37,7 @@
 > **v0.37 (17/10/2026):** M3 chia thành 11 session: M3.4 tách thành API (M3.4a) và web (M3.4b) (§13). `GET /onboardings/:id/activity` và `GET /dashboard`: shape, quyền, thứ tự (§8). Activity theo phạm vi của onboarding; không có upload và xóa file; revision và quyết định chỉ cho người xem được file (§9, BR-P03).
 > **v0.38 (17/10/2026):** web của dashboard HR và Activity (M3.4b). Activity là card ở cột phải trang chi tiết, cho mọi người xem được onboarding, chưa có tab tới khi có graph. Dashboard tự đếm, viết câu và chọn việc cần chú ý từ `GET /dashboard`; task bị chặn quy về task gốc bằng `blockersOf` trong `core` (§10, §10.1).
 > **v0.39 (17/10/2026):** Vercel Cron chạy được với Services (kiểm ở M3.5): không cần GitHub Actions (§6.5). M3 xong sau 11 session, golden path chạy trên production (§13).
+> **v0.40 (17/10/2026):** M4 chia thành 5 session: M4.1 tách thành sửa task (M4.1a) và sửa cấu trúc template (M4.1b) (§13). Editor gợi ý, không chặn, khi APPROVAL và DOCUMENT mà nó duyệt cùng giao `DIRECT_MANAGER` (§4.2). Bỏ bản nháp template bằng `DELETE /template-versions/:id`: chỉ DRAFT của template đã có bản published, xóa hẳn và ghi audit; thêm một ngoại lệ vào quy tắc không xóa bản ghi nghiệp vụ (§7, §8). Template editor của M4.1a: trang của template, Edit tạo draft, panel sửa task, validate trên trình duyệt, tự lưu; `adaptive-stepper` và `multi-select` sửa tại chỗ (§10, §10.1).
 
 ## TL;DR: 6 thay đổi lớn nhất
 
@@ -217,6 +218,7 @@ Zod schema chỉ kiểm từng field: kiểu, độ dài, key dạng slug, offse
 - Kết quả là danh sách `{ rule, taskKeys, message }`. Mỗi vấn đề là một lỗi, gắn với mọi task liên quan; ví dụ một cycle là một lỗi, gắn với mọi task trong cycle. `taskKeys` rỗng nghĩa là lỗi ở mức cả template.
 - `message` viết tiếng Anh và gọi task bằng title, vì UI không hiện key.
 - DRAFT lưu được khi còn lỗi; publish thì phải hết lỗi (BR-T03).
+- Editor gợi ý, không chặn publish, khi APPROVAL và DOCUMENT mà nó duyệt cùng giao `DIRECT_MANAGER`: hai task luôn trùng người, nên lần activate nào HR cũng phải chọn approver khác (BR-R01, §4.7). Cùng giao một `ROLE` thì không gợi ý, vì còn tùy org có mấy người giữ role đó; preview đã xử lý (M4.1a).
 
 ### 4.3 Vòng đời onboarding
 
@@ -555,7 +557,7 @@ Chạy local: `docker compose up` (Postgres và RustFS), sau đó `pnpm dev`.
 
 ## 7. Data model
 
-Mọi bảng nghiệp vụ đều có `organization_id` và `created_at`. Không dùng soft-delete: template thì archive, onboarding thì cancel, sandbox thì purge cả org. Mọi foreign key đặt `onDelete: Cascade` (với quan hệ bắt buộc, Prisma mặc định là Restrict), nên purge sandbox chỉ cần một câu `DELETE FROM organizations WHERE …`. Ngoài purge và xóa file chưa submit, không có chỗ nào xóa bản ghi nghiệp vụ.
+Mọi bảng nghiệp vụ đều có `organization_id` và `created_at`. Không dùng soft-delete: template thì archive, onboarding thì cancel, sandbox thì purge cả org. Mọi foreign key đặt `onDelete: Cascade` (với quan hệ bắt buộc, Prisma mặc định là Restrict), nên purge sandbox chỉ cần một câu `DELETE FROM organizations WHERE …`. Ngoài purge, xóa file chưa submit và bỏ bản nháp template, không có chỗ nào xóa bản ghi nghiệp vụ. Bản nháp (DRAFT) chỉ bị xóa khi template đã có bản published (M4.2): không onboarding nào trỏ tới DRAFT, vì activate chỉ dùng bản published.
 
 | Bảng | Cột chính | Ràng buộc đáng chú ý |
 |---|---|---|
@@ -614,6 +616,8 @@ GET|POST /templates         GET /templates/:id           # POST {name, descripti
 POST /templates/:id/archive                   # không đảo ngược: sau đó không tạo version, sửa hay publish được nữa
 POST /templates/:id/versions                  # DRAFT mới, copy từ bản published mới nhất
 GET|PUT  /template-versions/:id               # PUT nguyên definition, chỉ khi DRAFT; trả về lỗi validate
+DELETE /template-versions/:id                 # Discard draft (M4.2): chỉ DRAFT, template chưa archive và đã có bản published (không thì 409);
+                                              # xóa hẳn (§7), ghi audit template.draft_discarded
 POST /template-versions/:id/publish
 
 # Onboardings
@@ -776,6 +780,12 @@ Activity trên trang chi tiết (M3.4b) là card ở cột phải, dưới Invit
 - người HR chọn lúc activate thành dòng phụ dưới dòng activated;
 - mốc giờ "today, 09:41" trong ngày nghiệp vụ hôm nay, còn lại "Oct 13, 17:05".
 
+Template editor (M4.1a), mở từ một dòng của bảng Templates (`/templates/:id`):
+- Template chưa có draft: bản published mới nhất, chỉ đọc, kèm nút Edit tạo DRAFT kế tiếp (BR-T02). Đã archive: chỉ đọc, không có Edit.
+- Draft: các phase bên trái; bên phải là panel Edit task (title, loại, tài liệu mà APPROVAL duyệt, người làm, phase, ngày mở và hạn, Waits for, Instructions). Phần cấu trúc (thêm, xóa, kéo thả) để M4.1b; Publish, Discard và tab version để M4.2.
+- Mỗi thay đổi chạy `templateDefinitionSchema` rồi `validateTemplate` ngay trên trình duyệt: Alert "Fix N problems to publish" liệt kê câu của `core`, badge "N problems" trên task, câu đó dưới field sửa được nó. Vòng phụ thuộc dùng câu của canvas, viết từ phía task đang sửa, và tô đỏ link gây vòng; gợi ý BR-R01 ở §4.2.
+- Draft tự lưu 600 ms sau thay đổi cuối (PUT cả definition); title trống thì chưa lưu; rời trang thì gửi nốt phần chưa gửi.
+
 Thiết kế chi tiết của 12 màn, cùng các bảng Foundations (token, icon), Motion và Components, nằm trên canvas "Joinpath Screens": https://claude.ai/artifact/Xr3pRZbd14D78pqUignjWV (bấm Play ở Landing để đi hết golden path).
 
 ### 10.1 Component beUI dùng ở đâu
@@ -793,8 +803,8 @@ Nguyên tắc (ADR 010): có component beUI thì dùng, không tự vẽ và kh�
 | Chọn một mục trong danh sách | `radio` | New onboarding (nhân viên ở bước 1, template ở bước 2) |
 | Ngày bắt đầu | `date-range-picker` với prop `single` (sửa tại chỗ, ADR 010) | New onboarding |
 | Ô nhập chữ | `input` | Sign in, Accept invitation, Template editor, Review, Employees |
-| Số ngày lệch so với ngày bắt đầu | `adaptive-stepper` | Template editor |
-| Task phụ thuộc | `multi-select` | Template editor |
+| Số ngày lệch so với ngày bắt đầu | `adaptive-stepper` (sửa tại chỗ: `fill`, ADR 010; editor tô nền viên thuốc xám, liquid trong suốt) | Template editor |
+| Task phụ thuộc | `multi-select` (sửa tại chỗ: `chipClassName` theo từng chip, ADR 010) | Template editor |
 | Sắp xếp task | `sortable-stack` | Template editor |
 | Loại task | `radio` | Template editor |
 | Checklist của một phase | `todo-list` (sửa tại chỗ: `meta`, `body`, ADR 010) | Onboarding detail, New-hire portal, Landing |
@@ -904,7 +914,7 @@ Tự dựng theo token vì beUI không có: thanh tiến độ onboarding, avata
 | **M1** Workflow engine | 1–2 | 11 (thực tế) | `core`: schema + `validateTemplate` + tính ngày + availability + activation plan, unit test kỹ. API template (tạo, `PUT` JSON, publish, archive; chưa có editor, template lấy từ seed). Nhân viên (CRUD tối thiểu). Draft → preview → activate. Checklist. Business clock + endpoint tua ngày (để tự test; UI demo bar làm ở M3). Ghi audit. Wizard, Onboarding detail, My Tasks | Activate được template seed; IT và Manager làm checklist; khóa theo ngày/dependency chạy đúng; onboarding tự COMPLETED; nhóm test T, A, E pass |
 | **M2** Tài liệu và duyệt | 3 | 7 (thực tế) | Invitation + mock inbox + nhận lời mời + resend; thêm RustFS vào docker compose và CI; upload (magic bytes → S3); submit revision; approve/reject/rework; signed download; need-to-know; portal nhân viên mới | Golden path (§11) chạy trọn vẹn ở local; nhóm test R, P pass |
 | **M3** Vận hành và demo | 4 | 11 (thực tế; chia ở M3.1; M3.3 tách ba ở M3.3a, M3.3c và M3.4 tách đôi) | Đổi ngày, reassign, override deadline, hủy; thông báo in-app; cron tick; sandbox + demo bar; dashboard HR cơ bản; timeline | **Mốc an toàn:** demo public chạy được end-to-end trên host |
-| **M4** Editor và trực quan | 5 | ~5 | Template editor dạng form (phases, tasks, chọn `dependsOn`, rule, offset) + validate tức thì bằng `core` + lịch sử version; dependency graph; analytics theo phòng ban | **MVP cut line:** đủ mọi FR mức Must |
+| **M4** Editor và trực quan | 5 | 5 (dự kiến; M4.1 tách đôi ở M4.1a) | Template editor dạng form (phases, tasks, chọn `dependsOn`, rule, offset) + validate tức thì bằng `core` + lịch sử version; dependency graph; analytics theo phòng ban | **MVP cut line:** đủ mọi FR mức Must |
 | **M5** Hoàn thiện | 6 | 4 | Playwright golden path; rà lại ma trận quyền, cross-tenant, upload; trạng thái rỗng và lỗi; a11y; checklist hướng dẫn demo; landing page; README, ADR, sơ đồ, video demo | Sẵn sàng đưa vào portfolio |
 | Dự phòng | 7 | — | Dành cho phần bị trễ. Nếu đúng tiến độ: launch sớm, hoặc làm các mục Could | — |
 

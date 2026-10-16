@@ -1,7 +1,26 @@
-import type { Task } from '@joinpath/core';
-import { ArrowRight, Check, Link, Lock, Timer } from 'reicon-react';
+import type { Task, TaskDef } from '@joinpath/core';
+import {
+  ArrowRight,
+  Check,
+  DocumentText,
+  Eye,
+  Link,
+  ListCheck,
+  Lock,
+  Timer,
+} from 'reicon-react';
 import { AnimatedBadge } from '@/components/beui/motion/animated-badge';
 import { formatMonthDay, inWords } from '@/lib/format';
+
+/** Each kind of task, as the wizard's review and the template editor show it. */
+export const TASK_TYPES: Record<
+  TaskDef['type'],
+  { label: string; icon: typeof ListCheck }
+> = {
+  CHECKLIST: { label: 'Checklist', icon: ListCheck },
+  DOCUMENT: { label: 'Document', icon: DocumentText },
+  APPROVAL: { label: 'Approval', icon: Eye },
+};
 
 /**
  * What a task still waits for: "the upload" or "the review" when that is a document or an

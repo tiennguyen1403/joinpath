@@ -5,7 +5,7 @@ import { Templates } from './templates';
 
 export const metadata: Metadata = { title: 'Templates · Joinpath' };
 
-// Templates are HR's, even to read (PLAN §8, §9). Until the editor (M4) this page only reads.
+// Templates are HR's, even to read (PLAN §8, §9). A row opens the template's editor.
 export default async function TemplatesPage() {
   const me = await requireMe();
   if (me.role !== 'HR') notFound();
