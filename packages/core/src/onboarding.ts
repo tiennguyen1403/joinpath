@@ -272,6 +272,8 @@ export const onboardingSchema = z.object({
   activatedAt: z.iso.datetime().nullable(),
   // When its last task was completed (BR-C01).
   completedAt: z.iso.datetime().nullable(),
+  // When HR canceled it (BR-C03).
+  canceledAt: z.iso.datetime().nullable(),
   employee: employeeSchema.omit({ user: true }),
   template: z.object({ id: z.uuid(), name: z.string() }),
   // The version the tasks came from. A draft has none yet, so it shows the one activating
@@ -396,6 +398,9 @@ export const onboardingDetailSchema = onboardingSchema.extend({
   // The newest invitation, for HR only, who resends it; null for anyone else, and when the
   // new hire already had an account on activation.
   invitation: onboardingInvitationSchema.nullable(),
+  // Why HR canceled it (BR-C03), for HR only, as the reason may be private; null for anyone
+  // else.
+  cancelReason: z.string().nullable(),
 });
 export type OnboardingDetail = z.infer<typeof onboardingDetailSchema>;
 

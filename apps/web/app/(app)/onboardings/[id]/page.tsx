@@ -13,6 +13,7 @@ export default async function OnboardingPage({
       id={id}
       orgName={me.organization.name}
       timeZone={me.organization.timezone}
+      hr={me.role === 'HR'}
     />
   );
 }

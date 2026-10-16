@@ -45,6 +45,7 @@ export const onboardingSelect = {
   startDate: true,
   activatedAt: true,
   completedAt: true,
+  canceledAt: true,
   employee: { select: personSelect },
   template: {
     select: {
@@ -128,6 +129,7 @@ export const taskSelect = {
 
 const detailSelect = {
   ...onboardingSelect,
+  cancelReason: true,
   tasks: {
     orderBy: [{ phaseOrder: 'asc' }, { position: 'asc' }],
     select: taskSelect,
@@ -167,6 +169,7 @@ export function toOnboarding({
   startDate,
   activatedAt,
   completedAt,
+  canceledAt,
   employee,
   template: { versions, ...template },
   templateVersion,
@@ -181,6 +184,7 @@ export function toOnboarding({
     startDate: toIsoDate(startDate),
     activatedAt: activatedAt?.toISOString() ?? null,
     completedAt: completedAt?.toISOString() ?? null,
+    canceledAt: canceledAt?.toISOString() ?? null,
     employee,
     template,
     templateVersion: version,
@@ -264,7 +268,7 @@ export function toTask(
 }
 
 function toDetail(
-  { invitations, ...row }: DetailRow,
+  { invitations, cancelReason, ...row }: DetailRow,
   today: IsoDate,
   viewer: AuthContext,
 ): OnboardingDetail {
@@ -293,6 +297,8 @@ function toDetail(
             revokedAt: invitation.revokedAt?.toISOString() ?? null,
           }
         : null,
+    // HR's own note, which may be private (BR-C03).
+    cancelReason: viewer.role === 'HR' ? cancelReason : null,
   };
 }
 

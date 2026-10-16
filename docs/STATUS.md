@@ -2,12 +2,12 @@
 
 > File này được nạp vào mọi session qua `CLAUDE.md`. Giữ ngắn: chỉ trạng thái hiện tại. Lịch sử chi tiết nằm trong `docs/sessions/`.
 
-**Cập nhật:** 2026-10-16 · session 023 (M3.1a · Đổi ngày, hủy, reassign, deadline: API)
-**Mốc hiện tại:** M3 · Vận hành và demo, xong 1/8 session.
+**Cập nhật:** 2026-10-16 · session 024 (M3.1b · Đổi ngày, hủy, reassign, deadline: web)
+**Mốc hiện tại:** M3 · Vận hành và demo, xong 2/8 session.
 
-M0, M1, M2 đã xong; demo public tại https://joinpath.vercel.app, đã push tới M2.4b (commit `M2.5`, `M3.1a` còn ở local). Golden path (PLAN §11) bước 2–9 chạy trọn ở local qua UI (M2.5). M3.1a: API đổi ngày, hủy, reassign, override deadline; chưa có UI.
+M0, M1, M2 đã xong; demo public tại https://joinpath.vercel.app, đã push tới M2.4b (commit `M2.5`, `M3.1a`, `M3.1b` còn ở local). Golden path (PLAN §11) bước 2–9 chạy trọn ở local qua UI (M2.5). M3.1: HR đổi ngày bắt đầu, hủy (cả draft), reassign, đổi và reset deadline qua UI ở onboarding detail; lý do hủy chỉ HR thấy.
 
-**Session kế tiếp:** **M3.1b · Web cho 4 thao tác đó ở onboarding detail** (xem bảng). Bước đầu: đọc canvas phần OnboardingDetail (nút header, menu ⋯, dialog). Handoff mới nhất: `docs/sessions/023-M3.1a-hr-changes-api.md`; dữ liệu đọc từ canvas nằm ở handoff 005, 008, 009, 016 và 019.
+**Session kế tiếp:** **M3.2a · API thông báo và cron tick** (xem bảng). Bước đầu: chốt người gọi cron và người nhận của từng sự kiện BR-N02. Handoff mới nhất: `docs/sessions/024-M3.1b-hr-changes-web.md`; dữ liệu đọc từ canvas nằm ở handoff 005, 008, 009, 016 và 019.
 
 ## Quy ước session
 
@@ -31,8 +31,8 @@ Trạng thái: ✅ xong · ▶ kế tiếp · ⏳ chưa làm. Mốc M4–M5 mớ
 | M2.4b | Web: drawer review (xem file), approve / reject kèm lý do; nút cho DOCUMENT, APPROVAL trong My Tasks | Qua UI: Lan reject → An nộp revision 2 → Lan approve | ✅ |
 | M2.5 | Golden path ở local, rà nhóm test P, push | Golden path bước 2–9 chạy trọn ở local (đăng nhập từng vai thay cho đổi vai, tua ngày bằng API); nhóm R, P pass | ✅ |
 | M3.1a | API: `planReschedule` trong `core`; reschedule, cancel, reassign, due-date; lệnh trên task kiểm lại assignee sau khi khóa | AT-06 (phần cancel), AT-19, AT-20 (dời muộn và dời sớm), AT-21, AT-22 pass; có test BR-S03, BR-S04 | ✅ |
-| **M3.1b** | Web: Change start date, Cancel onboarding ở header của detail; nút ⋯ trên dòng task (reassign, đổi và reset deadline); badge Canceled, Next step trống; nhãn riêng ở khung Invitation khi hủy | Qua UI, HR làm đủ 4 thao tác; khớp canvas | ▶ |
-| M3.2a | API: `notifications`, `notify(tx)` cho các sự kiện BR-N02 (submit, reject kèm lý do, approve, reassign, đổi deadline, hủy…); cron tick (due-soon, overdue, READY theo ngày, dọn session và lời mời hết hạn); tua ngày chạy tick (BR-D03); chốt người gọi cron | AT-24, AT-25 pass; mỗi sự kiện có test | ⏳ |
+| M3.1b | Web: Change start date, Cancel onboarding ở header của detail; nút ⋯ trên dòng task (reassign, đổi và reset deadline); badge Canceled, Next step trống; nhãn riêng ở khung Invitation khi hủy | Qua UI, HR làm đủ 4 thao tác; khớp canvas | ✅ |
+| **M3.2a** | API: `notifications`, `notify(tx)` cho các sự kiện BR-N02 (submit, reject kèm lý do, approve, reassign, đổi deadline, hủy…); cron tick (due-soon, overdue, READY theo ngày, dọn session và lời mời hết hạn); tua ngày chạy tick (BR-D03); chốt người gọi cron | AT-24, AT-25 pass; mỗi sự kiện có test | ▶ |
 | M3.2b | Web: chuông và danh sách thông báo (app shell và header của portal), "N overdue" ở sidebar, các email mới trong mock inbox | Qua UI, mỗi vai thấy thông báo của mình và đánh dấu đã đọc | ⏳ |
 | M3.3a | API sandbox: `POST /demo/sandboxes` (throttle theo IP hash lưu trong DB), `scenarios` A/B/C của seed (PLAN §11; A để start ≤ hôm nay + 5), purge sandbox hết hạn, `switch-user`; ngày "Finished" theo ngày nghiệp vụ (handoff 022) | AT-31 (phần đổi vai) pass; có test BR-D01, BR-P06 (phần sandbox) | ⏳ |
 | M3.3b | Web: Dynamic Island (đổi vai, ngày nghiệp vụ, +1 ngày, tới ngày bắt đầu, demo mới, inbox), cả trên portal; nút Try demo; đường từ portal sang My tasks cho người đã xong onboarding (handoff 020) | Golden path bước 1–9 chạy ở local chỉ bằng UI | ⏳ |
@@ -54,7 +54,6 @@ Trạng thái: ✅ xong · ▶ kế tiếp · ⏳ chưa làm. Mốc M4–M5 mớ
 - Swagger `/api/docs` (PLAN §8) chưa thuộc session nào; khi thêm phải chỉnh CSP của `helmet`. Gắn vào session nào?
 - BR-R01 ở mức template: M1.4a chốt không thêm rule chặn publish. Còn mở cho M4.1: editor có gợi ý (không chặn) khi DOCUMENT và APPROVAL của nó cùng giao `DIRECT_MANAGER` không?
 - Nút "Discard draft" (canvas, editor) cần xóa DRAFT, trái PLAN §7 (không xóa bản ghi nghiệp vụ) và §8 (không có endpoint): chốt ở M4.1.
-- Ai thấy lý do hủy (`cancel_reason`, API chưa trả): chỉ HR hay mọi người xem được onboarding. Chốt ở M3.1b theo canvas.
 
 ## Chạy dự án
 

@@ -9,8 +9,8 @@ import {
 } from '@joinpath/core';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
-import { type ReactNode, useState } from 'react';
-import { Envelope } from 'reicon-react';
+import { type ReactNode, useRef, useState } from 'react';
+import { Calendar, Envelope } from 'reicon-react';
 import { Avatar, newHireTint } from '@/components/avatar';
 import {
   TodoList,
@@ -32,6 +32,7 @@ import {
 } from '@/components/beui/motion/animated-toast-stack';
 import { Button, ButtonLink } from '@/components/beui/motion/button/base';
 import { EmptyState } from '@/components/empty-state';
+import { Notice } from '@/components/notice';
 import { TaskBadge, waitsFor } from '@/components/task-status';
 import { api, ApiError } from '@/lib/api';
 import {
@@ -44,24 +45,38 @@ import {
   inWords,
 } from '@/lib/format';
 import { usePageCrumb } from '../../app-shell';
+import { type Change, ChangeDialog, TaskMenu } from '../changes';
 import { STATUS_BADGE } from '../onboardings-table';
 import { Wizard } from '../wizard';
 
 /**
  * An onboarding's page. A draft is still the wizard, at its review; once activated it is
- * the onboarding's header and its tasks by phase.
+ * the onboarding's header and its tasks by phase. HR changes a running one from here (PLAN §9).
  */
 export function OnboardingView({
   id,
   orgName,
   timeZone,
+  hr,
 }: {
   id: string;
   orgName: string;
   timeZone: string;
+  hr: boolean;
 }) {
   const router = useRouter();
   const { toasts, showToast, dismissToast } = useAnimatedToastStack();
+  const [change, setChange] = useState<Change | null>(null);
+  // Where focus goes back to when the dialog closes: its button, or the task's ⋯.
+  const opener = useRef<HTMLElement | null>(null);
+  const openChange = (next: Change, from: Element | null) => {
+    opener.current = from instanceof HTMLElement ? from : null;
+    setChange(next);
+  };
+  const closeChange = () => {
+    setChange(null);
+    opener.current?.focus();
+  };
   const { data, error } = useQuery({
     queryKey: ['onboarding', id],
     queryFn: () => api(`/onboardings/${id}`, onboardingDetailSchema),
@@ -99,6 +114,17 @@ export function OnboardingView({
 
   let page: ReactNode = null;
   if (data) {
+    // HR's changes, while it runs (PLAN §9); nobody else gets the controls.
+    const changing = hr && data.status === 'ACTIVE';
+    const menu = (task: Task) =>
+      changing &&
+      (task.status === 'PENDING' || task.status === 'IN_PROGRESS') && (
+        <TaskMenu
+          task={task}
+          newHireId={data.employee.id}
+          onPick={openChange}
+        />
+      );
     page =
       data.status === 'DRAFT' ? (
         <Wizard
@@ -107,15 +133,48 @@ export function OnboardingView({
           timeZone={timeZone}
           draft={data}
           onActivated={activated}
+          onCancel={() =>
+            openChange({ kind: 'cancel' }, document.activeElement)
+          }
         />
       ) : (
         <>
-          <Header onboarding={data} timeZone={timeZone} />
+          <Header
+            onboarding={data}
+            timeZone={timeZone}
+            actions={
+              changing && (
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="secondary"
+                    aria-haspopup="dialog"
+                    onClick={(event) =>
+                      openChange({ kind: 'reschedule' }, event.currentTarget)
+                    }
+                    className="hover:bg-foreground/5 active:bg-foreground/8"
+                  >
+                    <Calendar aria-hidden className="size-4" />
+                    Change start date
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    aria-haspopup="dialog"
+                    onClick={(event) =>
+                      openChange({ kind: 'cancel' }, event.currentTarget)
+                    }
+                    className="text-danger-strong hover:bg-foreground/5 hover:text-danger-strong active:bg-foreground/8"
+                  >
+                    Cancel onboarding
+                  </Button>
+                </div>
+              )
+            }
+          />
           {data.invitation ? (
             // HR's view: the invitation beside the tasks, as the canvas lays it out.
             <div className="flex flex-wrap items-start gap-5">
               <div className="min-w-0 flex-[999_1_560px]">
-                <Phases onboarding={data} timeZone={timeZone} />
+                <Phases onboarding={data} timeZone={timeZone} menu={menu} />
               </div>
               <div className="flex min-w-0 flex-[1_1_300px] flex-col gap-3">
                 <InvitationCard
@@ -128,7 +187,7 @@ export function OnboardingView({
               </div>
             </div>
           ) : (
-            <Phases onboarding={data} timeZone={timeZone} />
+            <Phases onboarding={data} timeZone={timeZone} menu={menu} />
           )}
         </>
       );
@@ -157,6 +216,14 @@ export function OnboardingView({
   return (
     <>
       {page}
+      {data && (
+        <ChangeDialog
+          change={change}
+          onboarding={data}
+          onClose={closeChange}
+          showToast={showToast}
+        />
+      )}
       <AnimatedToastStack
         toasts={toasts}
         onDismiss={dismissToast}
@@ -171,14 +238,16 @@ export function OnboardingView({
   );
 }
 
-// The canvas's header; Change start date and Cancel come with M3.1, tabs with a second view
+// The canvas's header, with HR's actions while it runs; tabs come with a second view
 // (Activity in M3.4, Graph in M4.3).
 function Header({
   onboarding,
   timeZone,
+  actions,
 }: {
   onboarding: OnboardingDetail;
   timeZone: string;
+  actions: ReactNode;
 }) {
   const {
     employee,
@@ -187,78 +256,111 @@ function Header({
     tasks,
     startDate,
     today,
+    activatedAt,
     completedAt,
+    canceledAt,
+    cancelReason,
   } = onboarding;
   const done = tasks.filter(({ status }) => status === 'COMPLETED').length;
   const badge = STATUS_BADGE[onboarding.status];
   return (
     <>
-      <div className="flex items-center gap-4">
-        <Avatar
-          name={employee.fullName}
-          className={cn('size-14 text-lg', newHireTint(employee.id))}
-        />
-        <div className="flex flex-col gap-1.5">
-          <div className="flex flex-wrap items-center gap-2.5">
-            <h1 className="text-3xl font-semibold tracking-tight">
-              {employee.fullName}
-            </h1>
-            <AnimatedBadge
-              size="md"
-              status={badge.status}
-              showIcon={onboarding.status === 'COMPLETED'}
-              className={badge.className}
-            >
-              {badge.label}
-            </AnimatedBadge>
+      <div className="flex flex-wrap items-start justify-between gap-5">
+        <div className="flex items-center gap-4">
+          <Avatar
+            name={employee.fullName}
+            className={cn('size-14 text-lg', newHireTint(employee.id))}
+          />
+          <div className="flex flex-col gap-1.5">
+            <div className="flex flex-wrap items-center gap-2.5">
+              <h1 className="text-3xl font-semibold tracking-tight">
+                {employee.fullName}
+              </h1>
+              <AnimatedBadge
+                size="md"
+                status={badge.status}
+                showIcon={onboarding.status === 'COMPLETED'}
+                className={badge.className}
+              >
+                {badge.label}
+              </AnimatedBadge>
+            </div>
+            <span className="text-muted-foreground">
+              {[
+                employee.jobTitle,
+                employee.department?.name,
+                employee.manager && `reports to ${employee.manager.fullName}`,
+              ]
+                .filter(Boolean)
+                .join(' · ')}
+            </span>
           </div>
-          <span className="text-muted-foreground">
-            {[
-              employee.jobTitle,
-              employee.department?.name,
-              employee.manager && `reports to ${employee.manager.fullName}`,
-            ]
-              .filter(Boolean)
-              .join(' · ')}
-          </span>
         </div>
+        {actions}
       </div>
+      {/* HR's reason (BR-C03); nobody else gets it. */}
+      {canceledAt && cancelReason && (
+        <Notice
+          variant="default"
+          title={`Canceled on ${formatDateIn(canceledAt, timeZone)}${activatedAt ? '' : ', before it was activated'}`}
+          text={cancelReason}
+        />
+      )}
       <div className="grid grid-cols-[repeat(auto-fit,minmax(min(200px,100%),1fr))] gap-3">
-        <Stat label="Starts" note={formatFromToday(today, startDate)}>
+        <Stat
+          label="Starts"
+          // A canceled one never starts.
+          note={canceledAt ? undefined : formatFromToday(today, startDate)}
+        >
           <span className="font-mono">{formatDate(startDate)}</span>
         </Stat>
         <Stat
           label="Template"
-          note={`Version ${templateVersion.version}, locked in`}
+          note={
+            activatedAt
+              ? `Version ${templateVersion.version}, locked in`
+              : 'Never activated'
+          }
         >
           {template.name}
         </Stat>
         <Stat
           label="Progress"
           note={
-            completedAt
-              ? `Finished ${formatDateIn(completedAt, timeZone)}`
-              : undefined
+            canceledAt
+              ? `Canceled ${formatDateIn(canceledAt, timeZone)}`
+              : completedAt
+                ? `Finished ${formatDateIn(completedAt, timeZone)}`
+                : undefined
           }
           bar={
-            // The words above carry the value, as in the onboardings table.
-            <div
-              aria-hidden
-              className="mt-1 h-1.5 overflow-hidden rounded-full bg-foreground/6"
-            >
+            tasks.length > 0 && (
+              // The words above carry the value, as in the onboardings table.
               <div
-                className="h-full rounded-full bg-primary"
-                style={{
-                  width: `${(done / Math.max(tasks.length, 1)) * 100}%`,
-                }}
-              />
-            </div>
+                aria-hidden
+                className="mt-1 h-1.5 overflow-hidden rounded-full bg-foreground/6"
+              >
+                <div
+                  className="h-full rounded-full bg-primary"
+                  style={{ width: `${(done / tasks.length) * 100}%` }}
+                />
+              </div>
+            )
           }
         >
-          {done} of {tasks.length}{' '}
-          <span className="text-[13px] font-normal text-muted-foreground">
-            done
-          </span>
+          {tasks.length === 0 ? (
+            // A draft canceled before activation.
+            <span className="font-normal text-muted-foreground">
+              No tasks were created
+            </span>
+          ) : (
+            <>
+              {done} of {tasks.length}{' '}
+              <span className="text-[13px] font-normal text-muted-foreground">
+                done
+              </span>
+            </>
+          )}
         </Stat>
       </div>
     </>
@@ -272,13 +374,16 @@ const TODO_STATUS: Record<TaskStatus, TodoItemStatus> = {
   CANCELED: 'cancelled',
 };
 
-// Each phase a todo list (PLAN §10.1). One whose tasks are all done starts folded.
+// Each phase a todo list (PLAN §10.1). One whose tasks are all done starts folded. A task
+// may end with HR's ⋯ (`menu`).
 function Phases({
   onboarding: { tasks },
   timeZone,
+  menu,
 }: {
   onboarding: OnboardingDetail;
   timeZone: string;
+  menu: (task: Task) => ReactNode;
 }) {
   // The API sends the tasks by phase, then template order.
   const phases = [...Map.groupBy(tasks, (task) => task.phaseOrder).values()];
@@ -308,7 +413,12 @@ function Phases({
             // A started task holds a still arc rather than beUI's endless spinner.
             progress: 50,
             meta: <TaskMeta task={task} tasks={tasks} timeZone={timeZone} />,
-            detail: <TaskBadge task={task} tasks={tasks} />,
+            detail: (
+              <span className="flex items-center gap-1.5">
+                <TaskBadge task={task} tasks={tasks} />
+                {menu(task)}
+              </span>
+            ),
           }))}
         />
       ))}
@@ -343,6 +453,7 @@ function TaskMeta({
       </>
     );
   }
+  if (status === 'CANCELED') return `${assignee.fullName} · canceled`;
   const waiting =
     task.availability === 'LOCKED_BY_DATE' &&
     tasks.some(
@@ -356,6 +467,8 @@ function TaskMeta({
         {formatDate(task.dueOn)}
       </span>
       {overdue && <span className="text-danger-strong"> · overdue</span>}
+      {/* A new start date keeps it (BR-S02), and a reset puts the template's back. */}
+      {task.dueOverridden && ' · set by HR'}
       {status === 'IN_PROGRESS' && startedAt && (
         <>
           {' '}
@@ -420,25 +533,34 @@ function InvitationCard({
   });
 
   const expired = Date.parse(expiresAt) <= now;
+  // Canceling turns the link off too (BR-C03).
+  const canceled = status === 'CANCELED';
+  const first = firstName(employee.fullName);
   const badge = acceptedAt
     ? {
         label: 'Accepted',
         status: 'success' as const,
         className: 'border-success/30 bg-success/10 text-success-strong',
       }
-    : revokedAt
+    : canceled && revokedAt
       ? {
-          label: 'Email changed',
-          status: 'warning' as const,
-          className: WARNING,
+          label: 'Canceled',
+          status: 'neutral' as const,
+          className: 'bg-background',
         }
-      : expired
-        ? { label: 'Expired', status: 'warning' as const, className: WARNING }
-        : {
-            label: 'Not accepted yet',
-            status: 'neutral' as const,
-            className: 'bg-background',
-          };
+      : revokedAt
+        ? {
+            label: 'Email changed',
+            status: 'warning' as const,
+            className: WARNING,
+          }
+        : expired
+          ? { label: 'Expired', status: 'warning' as const, className: WARNING }
+          : {
+              label: 'Not accepted yet',
+              status: 'neutral' as const,
+              className: 'bg-background',
+            };
   const last = acceptedAt
     ? ['Accepted', acceptedAt]
     : revokedAt
@@ -477,14 +599,23 @@ function InvitationCard({
           </>
         )}
       </dl>
-      {revokedAt && !acceptedAt && (
+      {canceled ? (
         <p className="text-[13px] leading-5 text-muted-foreground">
-          {firstName(employee.fullName)}&apos;s email is now{' '}
-          <span className="font-mono text-xs text-foreground wrap-anywhere">
-            {employee.email}
-          </span>
-          , so this link no longer works. Resend sends a new one there.
+          {acceptedAt
+            ? `${first} was signed out when the onboarding was canceled, and can sign in again once a new onboarding of theirs is activated.`
+            : `The onboarding was canceled before ${first} accepted, so this link no longer works.`}
         </p>
+      ) : (
+        revokedAt &&
+        !acceptedAt && (
+          <p className="text-[13px] leading-5 text-muted-foreground">
+            {first}&apos;s email is now{' '}
+            <span className="font-mono text-xs text-foreground wrap-anywhere">
+              {employee.email}
+            </span>
+            , so this link no longer works. Resend sends a new one there.
+          </p>
+        )
       )}
       <div className="flex flex-wrap gap-2">
         <ButtonLink

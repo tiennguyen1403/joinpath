@@ -64,11 +64,26 @@ export const formatTimeIn = (timestamp: string, timeZone: string) =>
 // The API words its emails the same way.
 export { capitalized, firstName, inWords } from '@joinpath/core';
 
+/** Calendar days from one date to another, negative when it is sooner. */
+export const daysBetween = (from: IsoDate, to: IsoDate) =>
+  Math.round(
+    (atMidnight(to).getTime() - atMidnight(from).getTime()) / 86_400_000,
+  );
+
 /** "in 12 days", "today" or "3 days ago", counted from the org's today. */
 export function formatFromToday(today: IsoDate, date: IsoDate) {
-  const days = Math.round(
-    (atMidnight(date).getTime() - atMidnight(today).getTime()) / 86_400_000,
-  );
+  const days = daysBetween(today, date);
   const span = `${Math.abs(days)} ${Math.abs(days) === 1 ? 'day' : 'days'}`;
   return days === 0 ? 'today' : days > 0 ? `in ${span}` : `${span} ago`;
+}
+
+/** "2 days later", "a week sooner": how far a date moved. */
+export function formatShift(days: number) {
+  const span =
+    Math.abs(days) === 1
+      ? 'a day'
+      : Math.abs(days) === 7
+        ? 'a week'
+        : `${Math.abs(days)} days`;
+  return `${span} ${days > 0 ? 'later' : 'sooner'}`;
 }

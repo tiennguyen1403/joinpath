@@ -68,10 +68,12 @@ export function Review({
   draft,
   onBack,
   onActivated,
+  onCancel,
 }: {
   draft: OnboardingDetail;
   onBack: (step: Step) => void;
   onActivated: (onboarding: OnboardingDetail) => void;
+  onCancel?: () => void;
 }) {
   const queryClient = useQueryClient();
   const preview = useQuery({
@@ -225,6 +227,17 @@ export function Review({
             <ButtonLink href="/onboardings" variant="secondary">
               Save as draft
             </ButtonLink>
+            {onCancel && (
+              <Button
+                variant="ghost"
+                aria-haspopup="dialog"
+                disabled={activate.isPending}
+                onClick={onCancel}
+                className="text-danger-strong hover:bg-foreground/5 hover:text-danger-strong active:bg-foreground/8"
+              >
+                Cancel onboarding
+              </Button>
+            )}
             {Object.keys(picks).length > 0 && (
               <p className="text-center text-xs leading-4 text-muted-foreground">
                 Owner picks aren&apos;t saved with the draft.

@@ -124,6 +124,7 @@ describe('onboardings', () => {
       startDate: '2026-11-02',
       activatedAt: null,
       completedAt: null,
+      canceledAt: null,
       employee: {
         id: chi.id,
         fullName: 'Chi Dang',

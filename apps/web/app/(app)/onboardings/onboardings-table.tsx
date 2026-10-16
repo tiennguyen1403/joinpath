@@ -230,6 +230,8 @@ function Row({
           >
             Review and activate
           </Link>
+        ) : onboarding.canceledAt ? (
+          `Canceled ${formatDateIn(onboarding.canceledAt, timeZone)}`
         ) : onboarding.completedAt ? (
           `Finished ${formatDateIn(onboarding.completedAt, timeZone)}`
         ) : (

@@ -62,12 +62,15 @@ export function Wizard({
   timeZone,
   draft,
   onActivated,
+  onCancel,
 }: {
   orgName: string;
   today: IsoDate;
   timeZone: string;
   draft?: OnboardingDetail;
   onActivated?: (onboarding: OnboardingDetail) => void;
+  // A draft's review offers to cancel it (BR-C03).
+  onCancel?: () => void;
 }) {
   usePageCrumb('New onboarding');
   const router = useRouter();
@@ -121,6 +124,7 @@ export function Wizard({
         draft={draft}
         onBack={setStep}
         onActivated={(onboarding) => onActivated?.(onboarding)}
+        onCancel={onCancel}
       />
     );
   }

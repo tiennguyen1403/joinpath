@@ -127,7 +127,8 @@ function TodoStatusIcon({
       className={cn(
         "mx-0.5 size-5 shrink-0 overflow-visible text-muted-foreground",
         status === "in-progress" && "text-foreground",
-        status === "cancelled" && "text-rose-600 dark:text-rose-400",
+        // Joinpath: a cancelled item keeps the muted tone (was rose): a canceled
+        // onboarding cancels every task left, and a column of red marks reads as errors.
       )}
     >
       <motion.circle

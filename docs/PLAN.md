@@ -1,4 +1,4 @@
-# Joinpath — Kế hoạch triển khai v0.29
+# Joinpath — Kế hoạch triển khai v0.30
 
 > **Joinpath**: Employee Onboarding & Workflow Management Platform, dự án portfolio Full-stack.
 > Bản này tinh chỉnh SRS v0.4 trong thread ChatGPT "Thiết kế dự án onboarding" (14/10/2026).
@@ -27,6 +27,7 @@
 > **v0.27 (16/10/2026):** xem file đã nộp bằng `morphing-lightbox`, thay `image-viewer` (không có trên registry): ảnh xem trước qua signed URL, PDF chỉ tải về vì link ký kèm `Content-Disposition: attachment`. Drawer review mở từ My Tasks; `drawer` render qua portal và giữ focus bằng `useModalScope`, `approval-card` có `meta` thay badge trạng thái (sửa tại chỗ). Task DOCUMENT làm ngay trong My Tasks bằng khối của portal (§10.1, ADR 010).
 > **v0.28 (16/10/2026):** storage của production là Cloudflare R2. Path-style URL không dùng được với mọi provider: Tigris bỏ path-style cho bucket tạo từ 19/02/2025 (§6.2, ADR 008). M2 xong sau 7 session (§13).
 > **v0.29 (16/10/2026):** M3 chia thành 8 session (§13). Hủy chỉ khóa tài khoản mà người mới có được qua lời mời; activate một onboarding mới cho người đó mở lại tài khoản (BR-C03). Assignee hiện tại của DOCUMENT xem được file và revision của nó (BR-P03, §9). Reschedule, cancel, reassign, due-date: thứ tự kiểm, mã lỗi, audit; task kèm `dueOverridden`; lệnh trên task kiểm lại assignee sau khi khóa (§8).
+> **v0.30 (16/10/2026):** onboarding kèm `canceledAt`; chi tiết kèm `cancelReason`, chỉ HR thấy (BR-C03, §8, §9). Onboarding detail: nút ⋯ trên dòng task mở `context-menu` bằng click, các dialog đổi ngày, hủy, reassign, đổi hạn dùng `center-morph-modal`; draft hủy được từ bước review của wizard (§10.1, ADR 010).
 
 ## TL;DR: 6 thay đổi lớn nhất
 
@@ -363,7 +364,7 @@ ID ổn định theo từng nhóm: thêm rule mới không làm đổi số củ
 |---|---|
 | BR-C01 | Task cuối cùng COMPLETED thì onboarding chuyển COMPLETED ngay trong cùng transaction |
 | BR-C02 | COMPLETED và CANCELED là trạng thái cuối (terminal) |
-| BR-C03 | Hủy (chỉ HR, bắt buộc có lý do): task chưa xong chuyển CANCELED; task đã xong, file và audit được giữ; thu hồi invitation; nếu nhân viên mới có tài khoản nhờ một lời mời thì khóa tài khoản đó và xóa session. Ai có tài khoản từ trước (vd HR hay IT được tạo onboarding nhầm) thì giữ nguyên. Activate một onboarding mới cho người bị khóa thì mở lại tài khoản, giữ mật khẩu cũ, không gửi lời mời mới |
+| BR-C03 | Hủy (chỉ HR, bắt buộc có lý do, chỉ HR xem được lý do): task chưa xong chuyển CANCELED; task đã xong, file và audit được giữ; thu hồi invitation; nếu nhân viên mới có tài khoản nhờ một lời mời thì khóa tài khoản đó và xóa session. Ai có tài khoản từ trước (vd HR hay IT được tạo onboarding nhầm) thì giữ nguyên. Activate một onboarding mới cho người bị khóa thì mở lại tài khoản, giữ mật khẩu cũ, không gửi lời mời mới |
 | BR-C04 | Nhắc việc bỏ qua task và onboarding không còn ACTIVE |
 
 **N: Thông báo**
@@ -571,6 +572,7 @@ POST /template-versions/:id/publish
 # Onboardings
 GET  /onboardings           GET /onboardings/:id         # theo phạm vi (§9); draft hiện bản published mới nhất, tức bản activate sẽ dùng
                                               # /:id kèm today và task (availability, overdue tính theo today(org); dueOverridden: hạn do HR đặt); POST, PATCH, activate trả đúng shape này
+                                              # mọi onboarding kèm canceledAt; /:id kèm cancelReason, chỉ HR thấy, người khác nhận null (BR-C03)
                                               # list: start date muộn nhất trước, cùng ngày thì mới tạo trước; mỗi dòng kèm progress {completed, total, overdue}
                                               # và nextTask {id, title} | null: task chưa xong có dueOn sớm nhất, hòa thì theo thứ tự template
 POST /onboardings                             {employeeId, templateId, startDate}
@@ -717,7 +719,8 @@ Nguyên tắc (ADR 010): có component beUI thì dùng, không tự vẽ và kh�
 | Upload giấy tờ | `file-upload` (sửa tại chỗ: `note`, `queueLabel`, ADR 010) | New-hire portal |
 | Đặt mật khẩu | `input` (không dùng `signup-form`: bản này luôn có ô Name, Email sửa được và checkbox Terms; M2.1b) | Accept invitation |
 | Báo kết quả vừa xảy ra | `animated-toast-stack` | Sau khi activate, Landing |
-| Thao tác trên dòng task | `context-menu` | Onboarding detail |
+| Thao tác trên dòng task | `context-menu` (sửa tại chỗ: nút ⋯ mở bằng click, ADR 010) | Onboarding detail |
+| Đổi ngày bắt đầu, hủy, reassign, đổi hạn | `center-morph-modal` (sửa tại chỗ: Esc nhường `select` đang mở, ADR 010) | Onboarding detail, review của draft |
 | Giải thích vì sao nút bị khóa | `tooltip` | Nút Publish của Template editor |
 | Danh sách onboarding, nhân viên, phòng ban, template; bảng task theo phase | tự dựng (`components/table.tsx`), không dùng `table` của beUI | Dashboard, Onboardings, New onboarding, Employees, Templates |
 | Bề mặt, thông báo, công tắc, nút | `card`, `alert`, `switch`, `button-base` | Mọi nơi |

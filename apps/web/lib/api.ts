@@ -10,6 +10,12 @@ export class ApiError extends Error {
   }
 }
 
+/** What a refused write says, or what to do when the API was out of reach. */
+export const messageOf = (error: unknown) =>
+  error instanceof ApiError
+    ? error.message
+    : 'Check your connection and try again.';
+
 /**
  * Browser only: asks the API through this origin's /api (ADR 007) and checks the answer.
  * A write sends its body as JSON, or a file as multipart form data.

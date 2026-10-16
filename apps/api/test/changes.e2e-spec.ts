@@ -4,6 +4,7 @@ import {
   mockEmailSchema,
   type OnboardingDetail,
   onboardingDetailSchema,
+  onboardingSummarySchema,
   type TemplateDefinition,
 } from '@joinpath/core';
 import request from 'supertest';
@@ -526,6 +527,17 @@ describe('changes', () => {
       cancelReason: 'The candidate took another offer',
       canceledAt: expect.any(Date),
     });
+    // When shows to all who see the onboarding, why to HR only: it may be private.
+    expect(canceled).toMatchObject({
+      canceledAt: expect.any(String),
+      cancelReason: 'The candidate took another offer',
+    });
+    for (const client of [others.manager, others.IT]) {
+      expect(await read(client, onboarding)).toMatchObject({
+        canceledAt: canceled.canceledAt,
+        cancelReason: null,
+      });
+    }
     // The file and the audit trail stay.
     expect(await prisma.documentFile.count({ where: { taskId: ids.id } })).toBe(
       1,
@@ -595,7 +607,21 @@ describe('changes', () => {
     );
     expect(detailOf(await cancel(hr, draft).expect(200))).toMatchObject({
       status: 'CANCELED',
+      activatedAt: null,
+      canceledAt: expect.any(String),
+      cancelReason: 'The candidate took another offer',
       tasks: [],
+    });
+    // The list says when, as it does for a finished one.
+    expect(
+      onboardingSummarySchema
+        .array()
+        .parse((await hr.get('/onboardings').expect(200)).body)
+        .find((row) => row.id === draft.id),
+    ).toMatchObject({
+      status: 'CANCELED',
+      canceledAt: expect.any(String),
+      nextTask: null,
     });
     await cancel(hr, { id: randomUUID() }).expect(404);
 
