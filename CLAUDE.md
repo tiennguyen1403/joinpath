@@ -6,10 +6,9 @@ Joinpath là nền tảng onboarding nhân viên, dự án portfolio full-stack.
 
 Dự án chạy qua nhiều session ngắn; mỗi session là một dòng trong bảng ở `docs/STATUS.md`.
 
-**Mở session** (hoặc user gõ `/session-start`):
-1. Đọc STATUS (bên dưới) và handoff mới nhất trong `docs/sessions/` (file `NNN-*.md` có NNN lớn nhất).
-2. Chạy `git status --short` và `git log --oneline -5`; commit mới nhất phải bắt đầu bằng ID của handoff đó. Lệch thì báo user trước.
-3. Tóm tắt cho user: đang ở đâu, mục tiêu và tiêu chí "xong khi" của session này, các bước dự kiến. Chờ user xác nhận rồi mới làm.
+**Mở session:** user gõ `/session-start`.
+- Các bước nằm trong `.claude/skills/session-start/SKILL.md`, là danh sách bước đầy đủ duy nhất: đọc STATUS và handoff, đối chiếu git, tóm tắt, chờ user xác nhận rồi mới làm.
+- User mở session mà không gõ lệnh: đọc file đó và làm đúng các bước. Claude không tự gọi được skill này (`disable-model-invocation`).
 
 **Trong session:**
 - Chỉ làm việc của session này. Thấy việc ngoài phạm vi: ghi vào handoff, không tự làm.

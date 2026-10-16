@@ -5,7 +5,7 @@ disable-model-invocation: true
 allowed-tools: Read Grep Glob Bash(git status *) Bash(git log *) Bash(git diff *)
 ---
 
-Mở session theo quy trình trong `CLAUDE.md`:
+Mở session. `CLAUDE.md` trỏ tới đây: đây là danh sách bước đầy đủ duy nhất.
 
 1. Đọc `docs/STATUS.md` và file handoff mới nhất trong `docs/sessions/` (file `NNN-*.md` có NNN lớn nhất; bỏ qua `TEMPLATE.md`).
 2. Chạy `git status --short` và `git log --oneline -5`. Commit mới nhất phải có message bắt đầu bằng ID của handoff đó. Nếu có thay đổi chưa commit hoặc commit không khớp, báo user trước khi làm gì khác.
