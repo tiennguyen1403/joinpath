@@ -25,6 +25,7 @@ import {
 } from '@/components/beui/motion/animated-toast-stack';
 import { Button } from '@/components/beui/motion/button/base';
 import { Notice } from '@/components/notice';
+import { NotificationBell } from '@/components/notifications';
 import { TaskBadge, waitsFor } from '@/components/task-status';
 import { ChecklistWork, DocumentWork, InReview } from '@/components/task-work';
 import { api } from '@/lib/api';
@@ -91,7 +92,7 @@ export function Portal({ me }: { me: Me }) {
 
   return (
     <div className="min-h-dvh text-sm">
-      <Header me={me} />
+      <Header me={me} showToast={showToast} />
       <main className="px-4 pt-6 pb-12 sm:px-5 sm:pt-8 sm:pb-18">
         <div className="mx-auto flex max-w-260 flex-col gap-6">
           {data ? (
@@ -117,7 +118,13 @@ export function Portal({ me }: { me: Me }) {
   );
 }
 
-function Header({ me }: { me: Me }) {
+function Header({
+  me,
+  showToast,
+}: {
+  me: Me;
+  showToast: (toast: ToastInput) => void;
+}) {
   const router = useRouter();
   async function signOut() {
     await fetch('/api/auth/logout', { method: 'POST' });
@@ -139,6 +146,10 @@ function Header({ me }: { me: Me }) {
           </span>
         </div>
         <nav aria-label="Account" className="flex items-center gap-1">
+          <NotificationBell
+            timeZone={me.organization.timezone}
+            showToast={showToast}
+          />
           <span className="flex h-9 items-center gap-2 rounded-full sm:bg-card sm:pr-3 sm:pl-1">
             <Avatar
               name={me.employee.fullName}

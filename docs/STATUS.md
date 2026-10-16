@@ -2,12 +2,12 @@
 
 > File này được nạp vào mọi session qua `CLAUDE.md`. Giữ ngắn: chỉ trạng thái hiện tại. Lịch sử chi tiết nằm trong `docs/sessions/`.
 
-**Cập nhật:** 2026-10-16 · session 025 (M3.2a · API thông báo và cron tick)
-**Mốc hiện tại:** M3 · Vận hành và demo, xong 3/8 session.
+**Cập nhật:** 2026-10-16 · session 026 (M3.2b · Web: chuông và danh sách thông báo)
+**Mốc hiện tại:** M3 · Vận hành và demo, xong 4/8 session.
 
-M0, M1, M2 đã xong; demo public tại https://joinpath.vercel.app, đã push tới M2.4b (commit `M2.5`, `M3.1a`, `M3.1b`, `M3.2a` còn ở local). Golden path (PLAN §11) bước 2–9 chạy trọn ở local qua UI (M2.5). M3.1: HR đổi ngày bắt đầu, hủy (cả draft), reassign, đổi và reset deadline qua UI ở onboarding detail; lý do hủy chỉ HR thấy. M3.2a: API ghi thông báo trong app và email cho các sự kiện BR-N02 (người nhận ở PLAN §6.5); tick nhắc due-soon, overdue, báo task mở theo ngày, chạy khi tua ngày và mỗi ngày qua Vercel Cron (chưa có trên prod).
+M0, M1, M2 đã xong; demo public tại https://joinpath.vercel.app, đã push tới M2.4b (commit `M2.5`, `M3.1a`, `M3.1b`, `M3.2a`, `M3.2b` còn ở local). Golden path (PLAN §11) bước 2–9 chạy trọn ở local qua UI (M2.5). M3.1: HR đổi ngày bắt đầu, hủy, reassign, đổi deadline qua UI; lý do hủy chỉ HR thấy. M3.2: thông báo trong app và email cho các sự kiện BR-N02 (người nhận ở PLAN §6.5); tick nhắc việc chạy khi tua ngày và mỗi ngày qua Vercel Cron (chưa có trên prod); trang Notifications (số chưa đọc ở sidebar, "N overdue" cạnh My tasks) và chuông trên portal.
 
-**Session kế tiếp:** **M3.2b · Web: chuông và danh sách thông báo** (xem bảng). Bước đầu: canvas phương án cho chuông và danh sách (canvas chưa có bảng nào được duyệt cho phần này). Handoff mới nhất: `docs/sessions/025-M3.2a-notifications-api.md`; dữ liệu đọc từ canvas nằm ở handoff 005, 008, 009, 016, 019 và 025.
+**Session kế tiếp:** **M3.3a · API sandbox** (xem bảng). Bước đầu: ước lượng lại (phần ngày nghiệp vụ có thể tách riêng), đề xuất cách lưu ngày nghiệp vụ và shape của sandbox cho user duyệt. Handoff mới nhất: `docs/sessions/026-M3.2b-notifications-web.md`; dữ liệu đọc từ canvas nằm ở handoff 005, 008, 009, 016, 019 và 025.
 
 ## Quy ước session
 
@@ -33,8 +33,8 @@ Trạng thái: ✅ xong · ▶ kế tiếp · ⏳ chưa làm. Mốc M4–M5 mớ
 | M3.1a | API: `planReschedule` trong `core`; reschedule, cancel, reassign, due-date; lệnh trên task kiểm lại assignee sau khi khóa | AT-06 (phần cancel), AT-19, AT-20 (dời muộn và dời sớm), AT-21, AT-22 pass; có test BR-S03, BR-S04 | ✅ |
 | M3.1b | Web: Change start date, Cancel onboarding ở header của detail; nút ⋯ trên dòng task (reassign, đổi và reset deadline); badge Canceled, Next step trống; nhãn riêng ở khung Invitation khi hủy | Qua UI, HR làm đủ 4 thao tác; khớp canvas | ✅ |
 | M3.2a | API: `notifications`, `notify(tx)` cho các sự kiện BR-N02; cron tick (due-soon, overdue, task mở theo ngày, xóa session hết hạn); tua ngày chạy tick (BR-D03); người gọi cron là Vercel Cron | AT-24, AT-25 pass; mỗi sự kiện có test | ✅ |
-| **M3.2b** | Web: chuông và danh sách thông báo (app shell và header của portal), "N overdue" ở sidebar, các email mới trong mock inbox | Qua UI, mỗi vai thấy thông báo của mình và đánh dấu đã đọc | ▶ |
-| M3.3a | API sandbox: `POST /demo/sandboxes` (throttle theo IP hash lưu trong DB), `scenarios` A/B/C của seed (PLAN §11; A để start ≤ hôm nay + 5), purge sandbox hết hạn, `switch-user`; ngày "Finished" theo ngày nghiệp vụ (handoff 022) | AT-31 (phần đổi vai) pass; có test BR-D01, BR-P06 (phần sandbox) | ⏳ |
+| M3.2b | Web: trang Notifications (sidebar) và chuông trên portal, "N overdue" ở sidebar, các email mới trong mock inbox | Qua UI, mỗi vai thấy thông báo của mình và đánh dấu đã đọc | ✅ |
+| **M3.3a** | API sandbox: `POST /demo/sandboxes` (throttle theo IP hash lưu trong DB), `scenarios` A/B/C của seed (PLAN §11; A để start ≤ hôm nay + 5), purge sandbox hết hạn, `switch-user`; ngày "Finished", giờ của thông báo và email theo ngày nghiệp vụ (handoff 022, 026) | AT-31 (phần đổi vai) pass; có test BR-D01, BR-P06 (phần sandbox) | ▶ |
 | M3.3b | Web: Dynamic Island (đổi vai, ngày nghiệp vụ, +1 ngày, tới ngày bắt đầu, demo mới, inbox), cả trên portal; nút Try demo; đường từ portal sang My tasks cho người đã xong onboarding (handoff 020) | Golden path bước 1–9 chạy ở local chỉ bằng UI | ⏳ |
 | M3.4 | Dashboard HR + tab Activity (`GET /dashboard`, `GET /onboardings/:id/activity`); có thể tách a/b | Golden path bước 10 ở local | ⏳ |
 | M3.5 | Demo public end-to-end trên host; upload và xem file thật trên production (hoãn từ M2.5); đặt `CRON_SECRET`, kiểm Vercel Cron chạy với Services (không được thì GitHub Actions, handoff 025) | **Mốc an toàn:** golden path 1–10 chạy trên production | ⏳ |
@@ -64,7 +64,7 @@ pnpm build             # core/dist + client Prisma (src/generated) + dist của 
 pnpm storage:init      # lần đầu, hoặc volume RustFS mới: tạo bucket joinpath (test và upload cần nó)
 pnpm db:migrate        # prisma migrate dev (lần đầu, hoặc khi đổi schema)
 pnpm db:seed           # tạo lại org acme: lan.pham@acme.joinpath.demo (HR), duc.tran@… (IT), minh.nguyen@… (MEMBER)
-pnpm dev               # web http://localhost:3000 (đăng nhập ở /login; thư mời ở /mock-inbox; portal của người mới ở /my-onboarding; duyệt tài liệu ở /tasks, nút Review documents) · api http://localhost:3001/api/health
+pnpm dev               # web http://localhost:3000 (đăng nhập ở /login; thư mời ở /mock-inbox; portal của người mới ở /my-onboarding; duyệt tài liệu ở /tasks, nút Review documents; thông báo ở /notifications) · api http://localhost:3001/api/health
 pnpm test              # cần Postgres + migration, RustFS + bucket; rồi pnpm lint · pnpm typecheck · pnpm format:check
 # Tua ngày nghiệp vụ: POST /api/demo/clock/advance {days} (1–30, org sandbox; acme là sandbox), chạy luôn tick nhắc việc của org; chưa có UI (M3.3).
 # Tick mọi org bằng tay: đặt CRON_SECRET trong apps/api/.env rồi curl -H "Authorization: Bearer <secret>" http://localhost:3001/api/internal/cron/tick

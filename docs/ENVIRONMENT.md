@@ -16,6 +16,7 @@
   - bấm vùng thả file rồi chạy `upload <file…>` để trả lời hộp chọn file đang mở;
   - `drop <ref> --path <đường dẫn tuyệt đối>` để thả file;
   - ảnh `--full-page` trên Chrome headed hẹp hơn 15 px vì thanh cuộn, ảnh khung nhìn thì đủ. Kiểm tràn ngang bằng `eval` (`scrollWidth` so với `clientWidth`), không dựa vào ảnh.
+- `eval` của Playwright CLI: hàm viết nhiều dòng, hoặc đối số có `"` lồng bên trong, bị Windows từ chối ("batch file arguments are invalid"). Viết hàm trên một dòng, bên trong dùng nháy đơn (M3.2b).
 - Auto mode của Claude Code chặn thao tác ghi trên production (bấm Activate, `POST` thẳng vào API) dù kế hoạch đã có: xin user cho phép trong chat, liệt kê đúng từng thao tác; thao tác ngoài danh sách vẫn bị chặn. `vercel env add` (Secret-Store Writes) cũng vậy. Riêng `git push origin main` (Production Deploy) vẫn bị chặn dù user đã đồng ý trong chat: user tự gõ `! git push origin main` (M2.5).
 - Git Bash đổi đối số bắt đầu bằng `/` (vd `/tasks/mine`, `/entrypoint.sh`) thành đường dẫn Windows khi gọi chương trình native như `node`, `docker`: đặt `MSYS_NO_PATHCONV=1`.
 - Storage (từ M2.2): RustFS 1.0.1 trong compose, port 9000.
@@ -30,6 +31,7 @@
   - `$TMP` của Git Bash không phải scratchpad của session: file tạm, bản sao lưu thì dùng đường dẫn scratchpad tuyệt đối.
 - Việc cần Linux (vd kiểm TZ có DST): image `node:20-alpine` có sẵn trong Docker của máy; mount `packages/core` read-only rồi chạy script import `core/dist` (handoff 023).
 - Sửa `packages/core` khi `pnpm dev` đang chạy: web có thể giữ bản core cũ, nên build core rồi restart `pnpm dev`. Sửa `app-shell.tsx` lúc dev đang chạy cũng vậy: SSR giữ bản cũ, gây lỗi hydration (handoff 013).
+- Xóa một route của web xong, `pnpm typecheck` báo không tìm thấy trang đó: `apps/web/.next/dev/types/validator.ts` do dev server sinh ra vẫn trỏ tới nó, `next typegen` không tạo lại. Dừng dev rồi xóa `apps/web/.next/dev/types` (M3.2b).
 - Vercel CLI 62.2.0 (global, đã đăng nhập; hook đầu session báo "not installed" là sai). MCP Vercel trả 403 với team này: dùng `vercel api`, `vercel logs`, `vercel inspect --logs`. Không chạy `vercel deploy` từ máy (CLI upload cả `apps/api/.env`).
 - Secret không bao giờ in ra transcript. Đặt secret qua file tạm trong scratchpad rồi xóa ngay, hoặc để user tự gõ trong terminal riêng.
 - Neon (Postgres 18.6) ngủ sau 5 phút không có truy vấn; request đầu tiên khi đó chậm thêm khoảng 0,9 s.

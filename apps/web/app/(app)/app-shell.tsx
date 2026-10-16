@@ -40,6 +40,7 @@ import {
 } from '@/components/beui/motion/breadcrumb';
 import { Button } from '@/components/beui/motion/button/base';
 import { Logo } from '@/components/logo';
+import { notificationsQuery } from '@/components/notifications';
 import { QueryProvider } from '@/components/query-provider';
 import { findNavItem, NAV, type NavItem } from '@/lib/nav';
 import { myTasksQuery } from './tasks/my-tasks';
@@ -61,13 +62,30 @@ export function usePageCrumb(label: string | undefined) {
   }, [label, setCrumb]);
 }
 
-// How many of my tasks are open, beside My tasks as the canvas's sidebar has it.
+// Beside My tasks: how many of mine are overdue, in red, else how many are open (the canvas).
 function TasksToDo() {
   const { data } = useQuery(myTasksQuery);
+  const overdue = data?.tasks.filter((task) => task.overdue).length;
+  if (overdue) {
+    return (
+      <span className="text-danger-strong tabular-nums">{overdue} overdue</span>
+    );
+  }
   const count = data?.tasks.filter(
     ({ availability }) => availability === 'READY',
   ).length;
   return count ? <span className="tabular-nums">{count}</span> : null;
+}
+
+// Beside Notifications: how many are unread.
+function Unread() {
+  const { data } = useQuery(notificationsQuery);
+  return data?.unread ? (
+    <span className="tabular-nums">
+      {data.unread}
+      <span className="sr-only"> unread</span>
+    </span>
+  ) : null;
 }
 
 export function AppShell({ me, children }: { me: Me; children: ReactNode }) {
@@ -130,7 +148,13 @@ export function AppShell({ me, children }: { me: Me; children: ReactNode }) {
                   )}
                 />
               }
-              badge={href === '/tasks' ? <TasksToDo /> : undefined}
+              badge={
+                href === '/tasks' ? (
+                  <TasksToDo />
+                ) : href === '/notifications' ? (
+                  <Unread />
+                ) : undefined
+              }
               // Pressed: 3% over the 5% hover pill comes to the 8% of ADR 009.
               className="active:bg-foreground/[0.03]"
             >

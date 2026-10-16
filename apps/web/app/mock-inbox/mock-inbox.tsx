@@ -108,7 +108,7 @@ export function MockInbox({
           ) : emails?.length === 0 ? (
             <EmptyState
               title="No email yet"
-              description="When HR activates an onboarding for someone without an account, their invitation lands here."
+              description="Invitations, new tasks, requests for changes and overdue reminders land here once Joinpath sends them."
             />
           ) : (
             open && (

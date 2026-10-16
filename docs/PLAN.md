@@ -1,4 +1,4 @@
-# Joinpath — Kế hoạch triển khai v0.31
+# Joinpath — Kế hoạch triển khai v0.32
 
 > **Joinpath**: Employee Onboarding & Workflow Management Platform, dự án portfolio Full-stack.
 > Bản này tinh chỉnh SRS v0.4 trong thread ChatGPT "Thiết kế dự án onboarding" (14/10/2026).
@@ -29,6 +29,7 @@
 > **v0.29 (16/10/2026):** M3 chia thành 8 session (§13). Hủy chỉ khóa tài khoản mà người mới có được qua lời mời; activate một onboarding mới cho người đó mở lại tài khoản (BR-C03). Assignee hiện tại của DOCUMENT xem được file và revision của nó (BR-P03, §9). Reschedule, cancel, reassign, due-date: thứ tự kiểm, mã lỗi, audit; task kèm `dueOverridden`; lệnh trên task kiểm lại assignee sau khi khóa (§8).
 > **v0.30 (16/10/2026):** onboarding kèm `canceledAt`; chi tiết kèm `cancelReason`, chỉ HR thấy (BR-C03, §8, §9). Onboarding detail: nút ⋯ trên dòng task mở `context-menu` bằng click, các dialog đổi ngày, hủy, reassign, đổi hạn dùng `center-morph-modal`; draft hủy được từ bước review của wizard (§10.1, ADR 010).
 > **v0.31 (16/10/2026):** người gọi cron là Vercel Cron, mỗi ngày 01:00 UTC, bằng `GET /internal/cron/tick` kèm `Authorization: Bearer` (§6.1, §6.2, §6.5, §8). Người nhận và email của từng sự kiện (§6.5); đổi ngày bắt đầu cũng báo (BR-N02). Nhắc việc bỏ qua task đang bị chặn (BR-N03); task mở theo ngày xét `available_on ≤ today`, để tua nhiều ngày không sót (§6.5); dedupe key theo task (BR-N04). Tick chỉ xóa session hết hạn, giữ lời mời (§6.5, §7). Route thông báo trả `{unread, notifications}` (§8).
+> **v0.32 (16/10/2026):** thông báo trên web (M3.2b): trang Notifications mở từ sidebar, số chưa đọc nằm cạnh mục; trên portal là chuông mở `popover-morph` ở mọi độ rộng; danh sách tự dựng theo token, không dùng `notification-stack`. Cạnh My tasks: số task quá hạn màu đỏ, nếu không có thì số task READY (§10.1).
 
 ## TL;DR: 6 thay đổi lớn nhất
 
@@ -738,13 +739,14 @@ Nguyên tắc (ADR 010): có component beUI thì dùng, không tự vẽ và kh�
 | Upload giấy tờ | `file-upload` (sửa tại chỗ: `note`, `queueLabel`, ADR 010) | New-hire portal |
 | Đặt mật khẩu | `input` (không dùng `signup-form`: bản này luôn có ô Name, Email sửa được và checkbox Terms; M2.1b) | Accept invitation |
 | Báo kết quả vừa xảy ra | `animated-toast-stack` | Sau khi activate, Landing |
+| Chuông thông báo và danh sách mở từ nó | `popover-morph`, mọi độ rộng (M3.2b) | Header của New-hire portal |
 | Thao tác trên dòng task | `context-menu` (sửa tại chỗ: nút ⋯ mở bằng click, ADR 010) | Onboarding detail |
 | Đổi ngày bắt đầu, hủy, reassign, đổi hạn | `center-morph-modal` (sửa tại chỗ: Esc nhường `select` đang mở, ADR 010) | Onboarding detail, review của draft |
 | Giải thích vì sao nút bị khóa | `tooltip` | Nút Publish của Template editor |
 | Danh sách onboarding, nhân viên, phòng ban, template; bảng task theo phase | tự dựng (`components/table.tsx`), không dùng `table` của beUI | Dashboard, Onboardings, New onboarding, Employees, Templates |
 | Bề mặt, thông báo, công tắc, nút | `card`, `alert`, `switch`, `button-base` | Mọi nơi |
 
-Tự dựng theo token vì beUI không có: thanh tiến độ onboarding, avatar chữ cái đầu, các bước của wizard, textarea, canvas dependency graph (React Flow), thanh độ mạnh mật khẩu (chép cách chấm điểm và thanh 4 nấc của `signup-form`, MIT). Bảng cũng tự dựng (M1.6a, ADR 010): `table` của beUI là data grid ảo hóa, khung cuộn cao cố định, mọi dòng cao bằng nhau và cần `@tanstack/react-virtual`, trong khi bảng của Joinpath ngắn và các dòng cao khác nhau.
+Tự dựng theo token vì beUI không có: thanh tiến độ onboarding, avatar chữ cái đầu, các bước của wizard, textarea, canvas dependency graph (React Flow), thanh độ mạnh mật khẩu (chép cách chấm điểm và thanh 4 nấc của `signup-form`, MIT), danh sách thông báo (M3.2b: `notification-stack` của beUI là một nút duy nhất xổ ra 3 thẻ không bấm được, không mở được từng thông báo). Bảng cũng tự dựng (M1.6a, ADR 010): `table` của beUI là data grid ảo hóa, khung cuộn cao cố định, mọi dòng cao bằng nhau và cần `@tanstack/react-virtual`, trong khi bảng của Joinpath ngắn và các dòng cao khác nhau.
 
 ---
 
