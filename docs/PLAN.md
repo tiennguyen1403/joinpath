@@ -1,4 +1,4 @@
-# Joinpath — Kế hoạch triển khai v0.27
+# Joinpath — Kế hoạch triển khai v0.28
 
 > **Joinpath**: Employee Onboarding & Workflow Management Platform, dự án portfolio Full-stack.
 > Bản này tinh chỉnh SRS v0.4 trong thread ChatGPT "Thiết kế dự án onboarding" (14/10/2026).
@@ -25,6 +25,7 @@
 > **v0.25 (16/10/2026):** reject chép các file của revision bị reject sang bản nháp của revision mới: dòng mới, dùng chung object, nên object chỉ bị xóa khi không còn dòng nào trỏ tới (§4.5, §7). Submit, approve, reject: thứ tự kiểm, mã lỗi, trả chi tiết onboarding; mỗi DOCUMENT kèm `submissions` (revision, file, quyết định) theo quyền xem file, file kèm `carriedOver` (§8, §9).
 > **v0.26 (16/10/2026):** `GET /auth/me` kèm `onboardingId`: onboarding ACTIVE của chính người đó, nếu không có thì bản COMPLETED mới nhất (§8). Có `onboardingId` thì `/`, đăng nhập và nhận lời mời đưa tới portal `/my-onboarding`, nằm ngoài app shell (§10). Portal dùng `todo-list` (sửa tại chỗ: `body` dưới dòng của task) và `file-upload` (sửa tại chỗ: `note`, `queueLabel`, thanh progress, nút Remove) (§10.1, ADR 010).
 > **v0.27 (16/10/2026):** xem file đã nộp bằng `morphing-lightbox`, thay `image-viewer` (không có trên registry): ảnh xem trước qua signed URL, PDF chỉ tải về vì link ký kèm `Content-Disposition: attachment`. Drawer review mở từ My Tasks; `drawer` render qua portal và giữ focus bằng `useModalScope`, `approval-card` có `meta` thay badge trạng thái (sửa tại chỗ). Task DOCUMENT làm ngay trong My Tasks bằng khối của portal (§10.1, ADR 010).
+> **v0.28 (16/10/2026):** storage của production là Cloudflare R2. Path-style URL không dùng được với mọi provider: Tigris bỏ path-style cho bucket tạo từ 19/02/2025 (§6.2, ADR 008). M2 xong sau 7 session (§13).
 
 ## TL;DR: 6 thay đổi lớn nhất
 
@@ -422,7 +423,7 @@ Sơ đồ trên là ở local. Trên Vercel (ADR 011), router của Vercel chia 
 | API | NestJS 12 (ESM), REST, Swagger | Template của Nest 12 dùng ESM, Vitest và oxlint |
 | Schema và types | Zod trong `packages/core` | Dùng chung FE/BE |
 | DB | PostgreSQL 18 + Prisma 7.10 (pin cố định) | Tag `latest` của prisma CLI đang trỏ vào bản 8.0 RC, nên phải pin. Partial unique index khai báo ngay trong schema bằng preview `partialIndexes` (`@@unique([...], where: {...})`, dùng từ M1.3). CHECK thì Prisma schema chưa biểu diễn được, nên viết SQL tay trong migration (`migrate dev --create-only`) |
-| Storage | Bucket private S3-compatible: local và CI dùng RustFS 1.0.1; client `aws4fetch` 1.0.20 | MinIO ngừng phát hành image từ 10/2025 và archive repo năm 2026; image cũ không còn tải được (M2.2). `aws4fetch` (MIT, không dependency) ký request `fetch` có sẵn của Node, kể cả presigned URL. Mọi provider đều gọi bằng path-style URL qua cùng các biến env `S3_*`. Provider cho production chốt ở M2.5 |
+| Storage | Bucket private S3-compatible: local và CI dùng RustFS 1.0.1, production dùng Cloudflare R2; client `aws4fetch` 1.0.20 | MinIO ngừng phát hành image từ 10/2025 và archive repo năm 2026; image cũ không còn tải được (M2.2). `aws4fetch` (MIT, không dependency) ký request `fetch` có sẵn của Node, kể cả presigned URL. Gọi bằng path-style URL qua cùng các biến env `S3_*`: RustFS, R2 và Amazon S3 đều nhận, Tigris thì không (bucket tạo từ 19/02/2025). R2 (chốt ở M2.5): `S3_REGION=auto`, location hint APAC, egress miễn phí, free 10 GB không hết hạn |
 | Việc định kỳ | Cron gọi `POST /internal/cron/tick` | Không dùng Redis, queue hay worker |
 | Test | Vitest 4, Supertest, Playwright | Một test runner cho cả repo. Vite 8 tự xử lý decorator metadata của Nest nên không cần plugin SWC |
 | Repo | pnpm workspaces, oxlint (type-aware), Prettier | Không dùng Turborepo. oxlint và Prettier mỗi công cụ một config ở gốc; Prettier có sẵn trong template Nest 12 nên giữ lại và áp cho code cả repo (không áp cho docs nội bộ) |
@@ -794,7 +795,7 @@ Tự dựng theo token vì beUI không có: thanh tiến độ onboarding, avata
 |---|---|---|---|---|
 | **M0** Walking skeleton | 1 (2–3 ngày đầu) | 4 (thực tế) | pnpm workspace (`web`, `api`, `core`); docker compose (Postgres); Prisma: org, departments, employees, users, sessions; seed một org cố định (§11); login/logout/me; layout theo vai trò; rewrite proxy; CI; **chọn host và deploy** | Có URL public, đăng nhập được bằng user seed |
 | **M1** Workflow engine | 1–2 | 11 (thực tế) | `core`: schema + `validateTemplate` + tính ngày + availability + activation plan, unit test kỹ. API template (tạo, `PUT` JSON, publish, archive; chưa có editor, template lấy từ seed). Nhân viên (CRUD tối thiểu). Draft → preview → activate. Checklist. Business clock + endpoint tua ngày (để tự test; UI demo bar làm ở M3). Ghi audit. Wizard, Onboarding detail, My Tasks | Activate được template seed; IT và Manager làm checklist; khóa theo ngày/dependency chạy đúng; onboarding tự COMPLETED; nhóm test T, A, E pass |
-| **M2** Tài liệu và duyệt | 3 | 7 | Invitation + mock inbox + nhận lời mời + resend; thêm RustFS vào docker compose và CI; upload (magic bytes → S3); submit revision; approve/reject/rework; signed download; need-to-know; portal nhân viên mới | Golden path (§11) chạy trọn vẹn ở local; nhóm test R, P pass |
+| **M2** Tài liệu và duyệt | 3 | 7 (thực tế) | Invitation + mock inbox + nhận lời mời + resend; thêm RustFS vào docker compose và CI; upload (magic bytes → S3); submit revision; approve/reject/rework; signed download; need-to-know; portal nhân viên mới | Golden path (§11) chạy trọn vẹn ở local; nhóm test R, P pass |
 | **M3** Vận hành và demo | 4 | ~7 | Đổi ngày, reassign, override deadline, hủy; thông báo in-app; cron tick; sandbox + demo bar; dashboard HR cơ bản; timeline | **Mốc an toàn:** demo public chạy được end-to-end trên host |
 | **M4** Editor và trực quan | 5 | ~5 | Template editor dạng form (phases, tasks, chọn `dependsOn`, rule, offset) + validate tức thì bằng `core` + lịch sử version; dependency graph; analytics theo phòng ban | **MVP cut line:** đủ mọi FR mức Must |
 | **M5** Hoàn thiện | 6 | 4 | Playwright golden path; rà lại ma trận quyền, cross-tenant, upload; trạng thái rỗng và lỗi; a11y; checklist hướng dẫn demo; landing page; README, ADR, sơ đồ, video demo | Sẵn sàng đưa vào portfolio |

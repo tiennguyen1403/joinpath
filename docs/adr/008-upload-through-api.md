@@ -18,7 +18,7 @@ MinIO, the S3-compatible server the plan named for local work, stopped publishin
 - **Checked before storage sees it.** The command checks who may upload (as for any work on a task), then the file's type by its first bytes (`sniffMimeType` in `core`: `%PDF`, the PNG signature, `FF D8 FF`). The name and the Content-Type sent never count. A file over the limit is a 400, like any refused file.
 - **Storage first, then the row** (PLAN §6.4). The object goes to the bucket outside the transaction. The transaction then locks the onboarding, checks the task again, counts the files and writes the row. If it fails, the object is deleted at once.
 - **Keys and links come from the server.** The key is `orgs/{orgId}/tasks/{taskId}/{random uuid}`. Downloads use a GET URL signed for 5 minutes, with `Content-Disposition: attachment` and the original name. The bucket stays private.
-- **Any S3-compatible service, through `aws4fetch`.** This MIT library has no dependencies and signs Node's own `fetch`, presigned URLs included. Path-style URLs and the same `S3_*` variables work for every provider. Locally and in CI the server is RustFS 1.0.1 (Apache-2.0). It boots from environment variables alone, so GitHub Actions can run it as a service container.
+- **Any S3-compatible service, through `aws4fetch`.** This MIT library has no dependencies and signs Node's own `fetch`, presigned URLs included. Path-style URLs and the same `S3_*` variables work for RustFS, Cloudflare R2 and Amazon S3, though not for Tigris buckets made since February 2025. Locally and in CI the server is RustFS 1.0.1 (Apache-2.0). It boots from environment variables alone, so GitHub Actions can run it as a service container. Production uses R2 (session M2.5), with `S3_REGION=auto`.
 
 ## Consequences
 

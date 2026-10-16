@@ -2,17 +2,14 @@
 
 > File này được nạp vào mọi session qua `CLAUDE.md`. Giữ ngắn: chỉ trạng thái hiện tại. Lịch sử chi tiết nằm trong `docs/sessions/`.
 
-**Cập nhật:** 2026-10-16 · session 021 (M2.4b · Drawer review)
-**Mốc hiện tại:** M2 · Tài liệu và duyệt, đang làm. Đã xong (đều chưa push):
-- M2.1: lời mời qua mock inbox.
-- M2.2: API upload, xóa file, signed download trên RustFS ở local.
-- M2.3: API submit, approve, reject; reject chép file sang revision mới.
-- M2.4a: portal `/my-onboarding`, người mới upload, submit, xem lịch sử duyệt, làm checklist; `/auth/me` kèm `onboardingId`.
-- M2.4b: drawer review mở từ My Tasks: xem ảnh (lightbox) và tải PDF, approve hoặc yêu cầu sửa kèm lý do; task DOCUMENT làm ngay trong My Tasks như trên portal.
+**Cập nhật:** 2026-10-16 · session 022 (M2.5 · Golden path, push)
+**Mốc hiện tại:** M3 · Vận hành và demo, chưa bắt đầu.
 
-M1 · Workflow engine đã xong: tiêu chí PLAN §13 đạt trên production (trừ onboarding tự COMPLETED, chờ task của nhân viên mới ở M2). M0 · Walking skeleton đã xong: CI trên GitHub Actions, demo public tại https://joinpath.vercel.app.
+M2 · Tài liệu và duyệt đã xong sau 7 session, đã push tới M2.4b (commit `M2.5: …` còn ở local): lời mời qua mock inbox; upload và signed download (RustFS ở local và CI, Cloudflare R2 trên production); submit, approve, reject; portal của nhân viên mới; drawer review. Golden path (PLAN §11) bước 2–9 chạy trọn ở local qua UI; nhóm test R, P pass ở local và CI.
 
-**Session kế tiếp:** **M2.5 · Golden path ở local, rà nhóm test P, push** (xem bảng). Bước đầu: đọc kịch bản golden path (PLAN §11) và chạy bước 2–9 ở local bằng UI (đăng nhập từng vai, tua ngày bằng API); trước khi push, chốt với user provider storage cho production và đặt đủ 5 biến `S3_*` trên Vercel (mục "Quyết định còn mở"). Handoff mới nhất: `docs/sessions/021-M2.4b-review-drawer.md`; dữ liệu đọc từ canvas nằm ở handoff 005, 008, 009, 016 và 019.
+M1 · Workflow engine đã xong: tiêu chí PLAN §13 đạt trên production; onboarding tự COMPLETED khi nhân viên mới làm task cuối đã kiểm ở local (M2.5). M0 · Walking skeleton đã xong: CI trên GitHub Actions, demo public tại https://joinpath.vercel.app.
+
+**Session kế tiếp:** **M3.1 · Đổi ngày, reassign, override deadline, hủy** (xem bảng). Session đầu của M3: chi tiết hóa lại các session M3 trong bảng trước khi code (quy ước session), rồi đọc PLAN §4.3, §5 nhóm S và C, §8. Handoff mới nhất: `docs/sessions/022-M2.5-golden-path-push.md`; dữ liệu đọc từ canvas nằm ở handoff 005, 008, 009, 016 và 019.
 
 ## Quy ước session
 
@@ -47,10 +44,10 @@ Trạng thái: ✅ xong · ▶ kế tiếp · ⏳ chưa làm. Mốc M3–M5 mớ
 | M2.3 | Submit revision, approve / reject / rework | AT-15…AT-18 pass (AT-19 cần reassign, M3.1); AT-13 bỏ đoạn đánh dấu bằng Prisma | ✅ |
 | M2.4a | Web: portal nhân viên mới, upload, submit, lịch sử duyệt | An upload, submit qua UI ở 390 px và desktop | ✅ |
 | M2.4b | Web: drawer review (xem file), approve / reject kèm lý do; nút cho DOCUMENT, APPROVAL trong My Tasks | Qua UI: Lan reject → An nộp revision 2 → Lan approve | ✅ |
-| **M2.5** | Golden path ở local, rà nhóm test P, push | Golden path bước 2–9 chạy trọn ở local (đăng nhập từng vai thay cho đổi vai, tua ngày bằng API); nhóm R, P pass | ▶ |
-| M3.1 | Đổi ngày, reassign, override deadline, hủy; phần cancel của AT-06 | | ⏳ |
+| M2.5 | Golden path ở local, rà nhóm test P, push | Golden path bước 2–9 chạy trọn ở local (đăng nhập từng vai thay cho đổi vai, tua ngày bằng API); nhóm R, P pass | ✅ |
+| **M3.1** | Đổi ngày, reassign, override deadline, hủy; phần cancel của AT-06 | | ▶ |
 | M3.2 | Thông báo in-app + cron tick; báo approver khi có submit, báo nhân viên mới khi bị reject (kèm lý do) hay được approve (BR-N02, chốt ở M2.3); chuông trên header của portal | | ⏳ |
-| M3.3 | Sandbox mỗi khách + Dynamic Island (đổi vai, ngày nghiệp vụ), cả trên portal; phần đổi vai của AT-31; đường từ portal sang My tasks cho người đã xong onboarding (handoff 020) | | ⏳ |
+| M3.3 | Sandbox mỗi khách + Dynamic Island (đổi vai, ngày nghiệp vụ), cả trên portal; phần đổi vai của AT-31; đường từ portal sang My tasks cho người đã xong onboarding (handoff 020); `scenarios` A/B/C của seed (PLAN §11; A để start ≤ hôm nay + 5); ngày "Finished" theo ngày nghiệp vụ (handoff 022) | | ⏳ |
 | M3.4 | Dashboard HR + timeline | | ⏳ |
 | M3.5 | Demo public end-to-end trên host | **Mốc an toàn** | ⏳ |
 | M4.1 | Template editor dạng form + validate tức thì bằng `core` | | ⏳ |
@@ -64,9 +61,8 @@ Trạng thái: ✅ xong · ▶ kế tiếp · ⏳ chưa làm. Mốc M3–M5 mớ
 
 ## Quyết định còn mở
 
-- Provider storage cho production (S3-compatible; ứng viên R2, Tigris, Amazon S3 qua Vercel Marketplace, handoff 018): chốt ở M2.5, trước khi push. Tạo tài khoản dịch vụ ngoài thì hỏi user trước. **API đọc 5 biến `S3_*` lúc khởi động: push lên `main` khi Vercel chưa có đủ các biến đó thì API không boot.**
 - Người gọi cron tick (PLAN §6.5): chốt ở M3.2. Vercel Hobby chỉ cho cron chạy mỗi ngày một lần, nên nhiều khả năng dùng GitHub Actions `schedule`.
-- Preview deployment: origin khác `APP_ORIGIN` nên mọi request ghi bị 403, và preview dùng chung DB với production. Chốt khi bắt đầu dùng PR: tắt preview, hoặc cho phép origin của preview và dùng Neon branch.
+- Preview deployment: origin khác `APP_ORIGIN` nên mọi request ghi bị 403, preview dùng chung DB với production, và không có `S3_*` (chỉ đặt cho Production) nên API của preview không boot. Chốt khi bắt đầu dùng PR: tắt preview, hoặc cho phép origin của preview và dùng Neon branch.
 - Swagger `/api/docs` (PLAN §8) chưa thuộc session nào; khi thêm phải chỉnh CSP của `helmet`. Gắn vào session nào?
 - BR-R01 ở mức template: M1.4a chốt không thêm rule chặn publish. Còn mở cho M4.1: editor có gợi ý (không chặn) khi DOCUMENT và APPROVAL của nó cùng giao `DIRECT_MANAGER` không?
 - Nút "Discard draft" (canvas, editor) cần xóa DRAFT, trái PLAN §7 (không xóa bản ghi nghiệp vụ) và §8 (không có endpoint): chốt ở M4.1.
@@ -87,7 +83,7 @@ docker compose exec -T postgres psql -U joinpath -d joinpath -c "UPDATE organiza
 pnpm exec playwright-cli -s=joinpath open http://localhost:3000/login   # Chrome có cửa sổ; `show` mở dashboard xem trực tiếp
 ```
 
-Production: https://joinpath.vercel.app (Vercel Services + Neon Singapore, ADR 011).
+Production: https://joinpath.vercel.app (Vercel Services + Neon Singapore, ADR 011; storage Cloudflare R2, bucket `joinpath`, location hint APAC).
 
 ```sh
 git push origin main          # chạy CI và deploy production; migrate chạy trong bước build
@@ -98,7 +94,7 @@ vercel logs <deployment-url> --since 1h   # log runtime: mỗi request API một
 Env trên Vercel:
 - Tự đặt: `APP_ORIGIN`, `TRUST_PROXY_HOPS=1`, `ENABLE_EXPERIMENTAL_COREPACK=1`.
 - Integration Neon cấp: `DATABASE_URL`, `DATABASE_URL_UNPOOLED`.
-- **Chưa có, phải đặt trước lần push tới (M2.5):** `S3_ENDPOINT`, `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` của provider đã chọn, kèm bucket private tạo sẵn. Thiếu thì API không boot.
+- Storage R2 (M2.5), chỉ Production, loại Secret (không đọc lại được): `S3_ENDPOINT` (`https://<account id>.r2.cloudflarestorage.com`), `S3_REGION=auto`, `S3_BUCKET=joinpath`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` (token Object Read & Write, chỉ bucket `joinpath`). Thiếu thì API không boot.
 
 Secret của repo GitHub: `DATABASE_URL` (giá trị unpooled), `SEED_PASSWORD`.
 

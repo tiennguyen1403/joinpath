@@ -16,7 +16,7 @@
   - bấm vùng thả file rồi chạy `upload <file…>` để trả lời hộp chọn file đang mở;
   - `drop <ref> --path <đường dẫn tuyệt đối>` để thả file;
   - ảnh `--full-page` trên Chrome headed hẹp hơn 15 px vì thanh cuộn, ảnh khung nhìn thì đủ. Kiểm tràn ngang bằng `eval` (`scrollWidth` so với `clientWidth`), không dựa vào ảnh.
-- Auto mode của Claude Code chặn thao tác ghi trên production (bấm Activate, `POST` thẳng vào API) dù kế hoạch đã có: xin user cho phép trong chat, liệt kê đúng từng thao tác; thao tác ngoài danh sách vẫn bị chặn.
+- Auto mode của Claude Code chặn thao tác ghi trên production (bấm Activate, `POST` thẳng vào API) dù kế hoạch đã có: xin user cho phép trong chat, liệt kê đúng từng thao tác; thao tác ngoài danh sách vẫn bị chặn. `vercel env add` (Secret-Store Writes) cũng vậy. Riêng `git push origin main` (Production Deploy) vẫn bị chặn dù user đã đồng ý trong chat: user tự gõ `! git push origin main` (M2.5).
 - Git Bash đổi đối số bắt đầu bằng `/` (vd `/tasks/mine`, `/entrypoint.sh`) thành đường dẫn Windows khi gọi chương trình native như `node`, `docker`: đặt `MSYS_NO_PATHCONV=1`.
 - Storage (từ M2.2): RustFS 1.0.1 trong compose, port 9000.
   - MinIO không còn image để pull: Quay báo "no such manifest", Docker Hub từ chối. Máy còn bản cache `quay.io/minio/minio` và `quay.io/minio/mc` của 2025, không dùng nữa.

@@ -762,7 +762,8 @@ describe('onboardings', () => {
     }
   });
 
-  it('BR-P01 BR-P02 the employees, templates and onboardings of another org are 404', async () => {
+  it('AT-28 BR-P01 BR-P02 the employees, templates and onboardings of another org are 404', async () => {
+    // A sandbox, like every org seedDemoOrg makes: HR of one sandbox reads another's.
     const other = await seedDemoOrg(prisma, {
       slug: newSlug(),
       password: PASSWORD,

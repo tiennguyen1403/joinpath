@@ -2,8 +2,8 @@ import { AwsClient } from 'aws4fetch';
 import { required } from '../../env.js';
 
 // Documents sit in one private bucket on an S3-compatible service (PLAN §6.2): RustFS locally
-// and in CI. Path-style URLs, which every provider accepts. Read at startup, like env.ts, but
-// apart from it: the seed never touches storage.
+// and in CI, Cloudflare R2 in production. Path-style URLs, which both accept. Read at startup,
+// like env.ts, but apart from it: the seed never touches storage.
 const bucketUrl = `${new URL(required('S3_ENDPOINT')).origin}/${required('S3_BUCKET')}`;
 const s3 = new AwsClient({
   accessKeyId: required('S3_ACCESS_KEY_ID'),
