@@ -15,12 +15,10 @@ Dự án chạy qua nhiều session ngắn; mỗi session là một dòng trong 
 - Chỉ làm việc của session này. Thấy việc ngoài phạm vi: ghi vào handoff, không tự làm.
 - Việc lớn hơn dự kiến, hoặc user báo `/context` đã quá nửa (Claude không tự xem được mức context): dừng ở điểm sạch (build và test xanh), đóng session, chuyển phần còn lại sang session tách (M?.?a / M?.?b).
 
-**Đóng session** (hoặc `/session-end`):
-1. Chạy đủ kiểm chứng của session; ghi kết quả thật, kể cả phần fail.
-2. Viết `docs/sessions/NNN-<ID>-<slug>.md` theo `docs/sessions/TEMPLATE.md`.
-3. Cập nhật `docs/STATUS.md` (dòng "Cập nhật", mốc, session kế tiếp, cột TT, quyết định còn mở, lệnh chạy dự án).
-4. Commit local, đã được user cho phép sẵn: `git add -A`, message `<ID>: <tóm tắt>`. **Không push.**
-5. Session có bảng canvas được duyệt: chép các bảng đó vào canvas chính thành một hàng mới "N · <tên> (approved in <ID>)", chỉnh cho khớp bản đã build, không chép phương án bị loại. Đã được user cho phép sẵn (15/10/2026), không hỏi lại. Ghi version của canvas vào handoff bằng một commit nhỏ.
+**Đóng session:** luôn gọi skill `session-end` bằng Skill tool, kể cả khi user không gõ `/session-end` và khi đóng sớm ở điểm sạch.
+- Không tự đóng theo trí nhớ: hai lần đóng tay (M3.3d, M3.4a) đều sót bước cuối của skill.
+- Skill là danh sách bước đầy đủ duy nhất: kiểm chứng, handoff, STATUS, commit local, chép bảng canvas được duyệt, báo user và nhắc mở session mới.
+- Commit local và chép bảng canvas được duyệt đã được user cho phép sẵn, không hỏi lại. **Không push.**
 
 ## Luật cứng
 
