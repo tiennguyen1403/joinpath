@@ -43,8 +43,6 @@ Trạng thái: ✅ xong · ▶ kế tiếp · ⏳ chưa làm. Mốc M5 mới ở
 - Preview deployment: origin khác `APP_ORIGIN` nên mọi request ghi bị 403, preview dùng chung DB với production, và không có `S3_*` (chỉ đặt cho Production) nên API của preview không boot. Chốt khi bắt đầu dùng PR: tắt preview, hoặc cho phép origin của preview và dùng Neon branch.
 - Swagger `/api/docs` (PLAN §8) chưa thuộc session nào; khi thêm phải chỉnh CSP của `helmet`. Gắn vào session nào?
 - `tooltip` của beUI (lý do nút Publish bị khóa, M4.2) kéo thêm `@floating-ui/dom`, chưa có trong PLAN §6.2: hỏi user ở M4.2.
-- Có đưa "tự dựng và kiểm bảng phương án ở local trước khi đưa duyệt" (ENVIRONMENT, mục Playwright) thành luật trong `CLAUDE.md` không? Đã hỏi ở M4.1a, user chưa trả lời.
-
 ## Chạy dự án
 
 ```sh

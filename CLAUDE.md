@@ -30,6 +30,7 @@ Dự án chạy qua nhiều session ngắn; mỗi session là một dòng trong 
 - Kiến trúc theo PLAN §6.3–§6.6: `packages/core` là TS thuần, không I/O; module NestJS gọi Prisma trực tiếp, không có repository; quyền viết thành hàm thuần trong `*.policy.ts`.
 - UI: dùng component beUI có sẵn (registry `https://beui.dev/r`, map ở PLAN §10.1) và icon `reicon-react`; token theo bảng Foundations; không dùng control mặc định của trình duyệt. Chỉ ba chỗ lệch beUI (ADR 009): `#0067D1` cho chữ trắng trên primary và link; hover là lớp foreground 5% (8% khi nhấn); active nav nền `#E3F0FC`, chữ `#0067D1`. Không thêm shadow cho card và bề mặt tĩnh.
 - Đổi giao diện so với canvas: làm bản so sánh trước/sau cho user duyệt rồi mới áp dụng.
+- Bảng phương án: tự dựng từng bảng ở local, đo, chụp và so với bảng "trước", sửa xong mới đưa user duyệt, kèm kết quả kiểm (cách làm: ENVIRONMENT, mục Playwright). Không chờ user yêu cầu, kể cả khi hướng dẫn của loại canvas Design bảo không tự kiểm.
 - Test: tên test chứa ID của BR hoặc kịch bản (vd `T05`, `AT-12`); integration chạy với Postgres thật (PLAN §12).
 
 @docs/STATUS.md
