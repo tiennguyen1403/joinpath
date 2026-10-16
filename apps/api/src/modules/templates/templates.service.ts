@@ -17,6 +17,7 @@ import type { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../prisma.js';
 import { recordAudit } from '../audit/audit.js';
 import type { AuthContext } from '../auth/session.js';
+import { type OrgClock, orgClock } from '../org/org.service.js';
 
 const templateSelect = {
   id: true,
@@ -43,27 +44,25 @@ type VersionRow = Prisma.TemplateVersionGetPayload<{
   select: typeof versionSelect;
 }>;
 
-const toTemplate = ({
-  archivedAt,
-  versions,
-  ...template
-}: TemplateRow): Template => ({
+const toTemplate = (
+  { archivedAt, versions, ...template }: TemplateRow,
+  { at }: OrgClock,
+): Template => ({
   ...template,
-  archivedAt: archivedAt?.toISOString() ?? null,
+  archivedAt: archivedAt && at(archivedAt),
   versions: versions.map(({ publishedAt, ...version }) => ({
     ...version,
-    publishedAt: publishedAt?.toISOString() ?? null,
+    publishedAt: publishedAt && at(publishedAt),
   })),
 });
 
 // Every write stores what templateDefinitionSchema.parse() returned, so reads trust it.
-const toVersion = ({
-  publishedAt,
-  definition,
-  ...version
-}: VersionRow): TemplateVersion => ({
+const toVersion = (
+  { publishedAt, definition, ...version }: VersionRow,
+  { at }: OrgClock,
+): TemplateVersion => ({
   ...version,
-  publishedAt: publishedAt?.toISOString() ?? null,
+  publishedAt: publishedAt && at(publishedAt),
   definition: definition as TemplateDefinition,
 });
 
@@ -79,11 +78,15 @@ export class TemplatesService {
       orderBy: { name: 'asc' },
       select: templateSelect,
     });
-    return templates.map(toTemplate);
+    const clock = await orgClock(this.prisma, organizationId);
+    return templates.map((template) => toTemplate(template, clock));
   }
 
   async get({ organizationId }: AuthContext, id: string): Promise<Template> {
-    return toTemplate(await findTemplate(this.prisma, organizationId, id));
+    return toTemplate(
+      await findTemplate(this.prisma, organizationId, id),
+      await orgClock(this.prisma, organizationId),
+    );
   }
 
   /** A new template starts with an empty DRAFT v1. */
@@ -110,7 +113,7 @@ export class TemplatesService {
         entityId: template.id,
         data: { name: template.name, versionId: template.versions[0].id },
       });
-      return toTemplate(template);
+      return toTemplate(template, await orgClock(tx, organizationId));
     });
   }
 
@@ -157,7 +160,7 @@ export class TemplatesService {
         entityId: draft.id,
         data: { templateId, version: draft.version, copiedFrom: latest.id },
       });
-      return toVersion(draft);
+      return toVersion(draft, await orgClock(tx, organizationId));
     });
   }
 
@@ -165,7 +168,10 @@ export class TemplatesService {
     { organizationId }: AuthContext,
     id: string,
   ): Promise<TemplateVersion> {
-    return toVersion(await findVersion(this.prisma, organizationId, id));
+    return toVersion(
+      await findVersion(this.prisma, organizationId, id),
+      await orgClock(this.prisma, organizationId),
+    );
   }
 
   /** Saves a draft even when it breaks rules, and returns them (PLAN §4.2). Not audited. */
@@ -187,7 +193,10 @@ export class TemplatesService {
       );
     }
     return {
-      ...toVersion({ ...version, definition }),
+      ...toVersion(
+        { ...version, definition },
+        await orgClock(this.prisma, organizationId),
+      ),
       issues: validateTemplate(definition),
     };
   }
@@ -222,7 +231,10 @@ export class TemplatesService {
         entityId: id,
         data: { templateId: version.templateId, version: version.version },
       });
-      return toVersion({ ...version, status: 'PUBLISHED', publishedAt });
+      return toVersion(
+        { ...version, status: 'PUBLISHED', publishedAt },
+        await orgClock(tx, auth.organizationId),
+      );
     });
   }
 
@@ -243,7 +255,10 @@ export class TemplatesService {
         entityType: 'template',
         entityId: id,
       });
-      return toTemplate({ ...template, archivedAt });
+      return toTemplate(
+        { ...template, archivedAt },
+        await orgClock(tx, auth.organizationId),
+      );
     });
   }
 }

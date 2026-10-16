@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import {
+  businessMoment,
   type CreateEmployee,
   type Department,
   type DepartmentName,
@@ -48,6 +49,49 @@ export async function orgToday(
     },
   );
   return today(timezone, clockOffsetDays, new Date());
+}
+
+// The org's demo clock: where it stands, and every move it made (PLAN §4.6). The offset only
+// grows, so it orders two moves in one millisecond.
+export const clockSelect = {
+  timezone: true,
+  clockOffsetDays: true,
+  clockAdvances: {
+    orderBy: [{ createdAt: 'asc' }, { offsetDays: 'asc' }],
+    select: { createdAt: true, offsetDays: true },
+  },
+} satisfies Prisma.OrganizationSelect;
+
+/**
+ * today(org), and `at`, which dates a real moment by the business day it happened on, as every
+ * moment the API sends is (BR-D05).
+ */
+export function clockOf({
+  timezone,
+  clockOffsetDays,
+  clockAdvances,
+}: Prisma.OrganizationGetPayload<{ select: typeof clockSelect }>) {
+  const history = clockAdvances.map(({ createdAt, offsetDays }) => ({
+    at: createdAt,
+    offsetDays,
+  }));
+  return {
+    today: today(timezone, clockOffsetDays, new Date()),
+    at: (moment: Date) => businessMoment(moment, history).toISOString(),
+  };
+}
+export type OrgClock = ReturnType<typeof clockOf>;
+
+export async function orgClock(
+  db: Prisma.TransactionClient,
+  organizationId: string,
+): Promise<OrgClock> {
+  return clockOf(
+    await db.organization.findUniqueOrThrow({
+      where: { id: organizationId },
+      select: clockSelect,
+    }),
+  );
 }
 
 @Injectable()

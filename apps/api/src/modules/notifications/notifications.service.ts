@@ -10,6 +10,7 @@ import { env } from '../../env.js';
 import { PrismaService } from '../../prisma.js';
 import type { AuthContext } from '../auth/session.js';
 import { purgeExpiredSandboxes } from '../demo/sandbox.js';
+import { clockOf, clockSelect, orgClock } from '../org/org.service.js';
 import { tickOrg } from './tick.js';
 
 @Injectable()
@@ -17,7 +18,10 @@ export class NotificationsService {
   constructor(private readonly prisma: PrismaService) {}
 
   /** The signed-in person's newest notifications, and how many they haven't read. */
-  async list({ employeeId }: AuthContext): Promise<Notifications> {
+  async list({
+    employeeId,
+    organizationId,
+  }: AuthContext): Promise<Notifications> {
     const mine = { recipientEmployeeId: employeeId };
     const rows = await this.prisma.notification.findMany({
       where: mine,
@@ -38,12 +42,13 @@ export class NotificationsService {
     const unread = await this.prisma.notification.count({
       where: { ...mine, readAt: null },
     });
+    const { at } = await orgClock(this.prisma, organizationId);
     return {
       unread,
       notifications: rows.map(({ readAt, createdAt, ...row }) => ({
         ...row,
-        readAt: readAt?.toISOString() ?? null,
-        createdAt: createdAt.toISOString(),
+        readAt: readAt && at(readAt),
+        createdAt: at(createdAt),
       })),
     };
   }
@@ -102,10 +107,11 @@ export class NotificationsService {
    * the guest plays every part (PLAN §9).
    */
   async mockInbox({ organizationId, role }: AuthContext): Promise<MockEmail[]> {
-    const { isSandbox } = await this.prisma.organization.findUniqueOrThrow({
-      where: { id: organizationId },
-      select: { isSandbox: true },
-    });
+    const { isSandbox, ...clock } =
+      await this.prisma.organization.findUniqueOrThrow({
+        where: { id: organizationId },
+        select: { isSandbox: true, ...clockSelect },
+      });
     if (role !== 'HR' && !isSandbox) {
       throw new ForbiddenException(
         'Outside a sandbox, only HR reads the mock inbox',
@@ -126,9 +132,10 @@ export class NotificationsService {
         createdAt: true,
       },
     });
+    const { at } = clockOf(clock);
     return emails.map(({ createdAt, ...email }) => ({
       ...email,
-      sentAt: createdAt.toISOString(),
+      sentAt: at(createdAt),
     }));
   }
 }

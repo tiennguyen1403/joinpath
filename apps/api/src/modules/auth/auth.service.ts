@@ -12,6 +12,7 @@ import type { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../prisma.js';
 import { recordAudit } from '../audit/audit.js';
 import { toIsoDate } from '../onboarding/onboarding.service.js';
+import { clockOf, clockSelect } from '../org/org.service.js';
 import { invalidInvitation, usable } from './invitation.js';
 import { hashPassword, verifyPassword } from './password.js';
 import {
@@ -124,9 +125,7 @@ export class AuthService {
       where: { tokenHash: hashToken(token), ...usable(new Date()) },
       select: {
         expiresAt: true,
-        organization: {
-          select: { name: true, timezone: true, clockOffsetDays: true },
-        },
+        organization: { select: { name: true, ...clockSelect } },
         onboarding: {
           select: {
             startDate: true,
@@ -157,7 +156,8 @@ export class AuthService {
       },
     });
     if (!invitation) throw invalidInvitation();
-    const { timezone, clockOffsetDays, name } = invitation.organization;
+    const { name, timezone } = invitation.organization;
+    const clock = clockOf(invitation.organization);
     const { startDate, employee, tasks } = invitation.onboarding;
     const { id, manager, ...person } = employee;
     return {
@@ -165,8 +165,8 @@ export class AuthService {
       employee: person,
       manager,
       startDate: toIsoDate(startDate),
-      today: today(timezone, clockOffsetDays, new Date()),
-      expiresAt: invitation.expiresAt.toISOString(),
+      today: clock.today,
+      expiresAt: clock.at(invitation.expiresAt),
       tasks: tasks
         .filter((task) => task.assigneeEmployeeId === id)
         .map(({ title, description, availableOn, dueOn }) => ({

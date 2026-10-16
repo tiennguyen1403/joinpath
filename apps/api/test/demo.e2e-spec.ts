@@ -1,14 +1,21 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import type { INestApplication } from '@nestjs/common';
 import {
+  activationPreviewSchema,
   addDays,
+  clockSchema,
+  invitationSchema,
   type Me,
   meSchema,
+  mockEmailSchema,
   myTasksSchema,
+  type Notifications,
   notificationsSchema,
+  onboardingDetailSchema,
   onboardingSummarySchema,
   SESSION_COOKIE,
   templateSchema,
+  today,
 } from '@joinpath/core';
 import request from 'supertest';
 import type { App } from 'supertest/types.js';
@@ -30,6 +37,7 @@ import {
 } from './app.js';
 
 const HOUR_MS = 60 * 60 * 1000;
+const DAY_MS = 24 * HOUR_MS;
 const hashOf = (ip: string) => createHash('sha256').update(ip).digest('hex');
 // The limit on new demos counts per client IP in the database, across runs (BR-P06), so each
 // client here gets an address of its own.
@@ -178,6 +186,195 @@ describe('demo', () => {
     ]);
     // B's and C's ID, one PDF each.
     expect(await keysUnder(`orgs/${sandbox.id}/`)).toHaveLength(2);
+  });
+
+  it('BR-D05 once the demo clock moves, the API dates what happens by the business day; what came before keeps its date', async () => {
+    const lan = clientFor(app, sandbox.cookie);
+    const { timezone, today: started } = sandbox.me.organization;
+    // The day a moment the API sends falls on, where the company is.
+    const dayOf = (moment: string) => today(timezone, 0, new Date(moment));
+    // Every moment a response holds, field by field, but expiries, which are still to come.
+    const pastOf = (body: unknown) =>
+      JSON.stringify(body).match(/"(?!expiresAt)\w+At":"[^"]+"/g)!;
+    const listed = async () =>
+      onboardingSummarySchema
+        .array()
+        .parse((await lan.get('/onboardings').expect(200)).body);
+    const ids = Object.fromEntries(
+      (await listed()).map((each) => [each.employee.fullName, each.id]),
+    );
+    const read = async (fullName: string) =>
+      onboardingDetailSchema.parse(
+        (await lan.get(`/onboardings/${ids[fullName]}`).expect(200)).body,
+      );
+    const [bao, chi] = [await read('Bao Ho'), await read('Chi Dang')];
+
+    const moved = clockSchema.parse(
+      (await lan.post('/demo/clock/advance', { days: 3 }).expect(200)).body,
+    );
+    expect(moved.today).toBe(addDays(started, 3));
+    // On record with the move, as the offset now stands.
+    const org = await prisma.organization.findUniqueOrThrow({
+      where: { id: sandbox.id },
+      select: {
+        clockOffsetDays: true,
+        clockAdvances: { select: { offsetDays: true, createdAt: true } },
+      },
+    });
+    expect(org.clockOffsetDays).toBe(3);
+    expect(org.clockAdvances.map((advance) => advance.offsetDays)).toEqual([3]);
+    const [{ createdAt: movedAt }] = org.clockAdvances;
+
+    // C's story keeps its dates; a link not run out yet goes by the clock as it is now.
+    const chiNow = await read('Chi Dang');
+    expect(pastOf(chiNow)).toEqual(pastOf(chi));
+    expect(
+      Date.parse(chiNow.invitation!.expiresAt) -
+        Date.parse(chi.invitation!.expiresAt),
+    ).toBe(3 * DAY_MS);
+
+    // HR approves B's ID: done today, the business day, in the detail and in My tasks.
+    const review = bao.tasks.find(
+      (task) => task.title === 'Review ID documents',
+    )!;
+    const upload = bao.tasks.find(
+      (task) => task.title === 'Upload ID documents',
+    )!;
+    const approved = onboardingDetailSchema.parse(
+      (
+        await lan
+          .post(`/tasks/${review.id}/approve`, {
+            submissionId: upload.submissions[0].id,
+          })
+          .expect(200)
+      ).body,
+    );
+    const { completedAt } = approved.tasks.find(
+      (task) => task.id === review.id,
+    )!;
+    expect(dayOf(completedAt!)).toBe(moved.today);
+    const [revision] = approved.tasks.find(
+      (task) => task.id === upload.id,
+    )!.submissions;
+    expect(dayOf(revision.decision!.decidedAt)).toBe(moved.today);
+    expect(pastOf(approved)).toEqual(expect.arrayContaining(pastOf(bao)));
+    const mine = myTasksSchema.parse(
+      (await lan.get('/tasks/mine').expect(200)).body,
+    );
+    expect(mine.tasks.find((task) => task.id === review.id)!.completedAt).toBe(
+      completedAt,
+    );
+
+    // HR activates A: activated and invited today, the link good for 72 hours (BR-P05).
+    const { onboarding: draft } = activationPreviewSchema.parse(
+      (
+        await lan
+          .get(`/onboardings/${ids['An Vo']}/activation-preview`)
+          .expect(200)
+      ).body,
+    );
+    const { id: duc } = await prisma.employee.findFirstOrThrow({
+      where: { organizationId: sandbox.id, fullName: 'Duc Tran' },
+    });
+    const activated = onboardingDetailSchema.parse(
+      (
+        await lan
+          .post(`/onboardings/${draft.id}/activate`, {
+            templateVersionId: draft.templateVersion.id,
+            assignees: { 'prepare-laptop': duc, 'create-accounts': duc },
+          })
+          .expect(200)
+      ).body,
+    );
+    expect(dayOf(activated.activatedAt!)).toBe(moved.today);
+    expect(
+      (await listed()).find((each) => each.id === activated.id)!.activatedAt,
+    ).toBe(activated.activatedAt);
+    const { sentAt, expiresAt } = activated.invitation!;
+    expect(dayOf(sentAt)).toBe(moved.today);
+    expect(
+      Math.abs(Date.parse(expiresAt) - Date.parse(sentAt) - 72 * HOUR_MS),
+    ).toBeLessThan(5000);
+    // An's email too, whose small print gives the expiry by the same clock, as the page its
+    // link opens does.
+    const invite = mockEmailSchema
+      .array()
+      .parse((await lan.get('/mock-inbox').expect(200)).body)
+      .find((email) => email.toName === 'An Vo')!;
+    expect(dayOf(invite.sentAt)).toBe(moved.today);
+    const expiry = new Intl.DateTimeFormat('en-US', {
+      timeZone: timezone,
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+    }).format(new Date(expiresAt));
+    expect(invite.footer).toContain(`expires on ${expiry} at`);
+    const page = await request(app.getHttpServer())
+      .post('/api/auth/invitations/lookup')
+      .set('X-Forwarded-For', newIp())
+      .send({ token: new URL(invite.link).hash.slice(1) })
+      .expect(200);
+    expect(invitationSchema.parse(page.body)).toMatchObject({
+      today: moved.today,
+      expiresAt,
+    });
+
+    // Templates published as the demo began; one archived today.
+    const general = templateSchema
+      .array()
+      .parse((await lan.get('/templates').expect(200)).body)
+      .find((template) => template.name === 'General Onboarding')!;
+    expect(
+      general.versions.map((version) => dayOf(version.publishedAt!)),
+    ).toEqual(general.versions.map(() => started));
+    const archived = templateSchema.parse(
+      (await lan.post(`/templates/${general.id}/archive`).expect(200)).body,
+    );
+    expect(dayOf(archived.archivedAt!)).toBe(moved.today);
+
+    // Lan's notes as on record: 3 days on for what came after the move (the tick's reminders,
+    // and reading them), as they were for the rest.
+    const shifted = (moment: Date | null) =>
+      moment &&
+      new Date(
+        moment.getTime() + (moment >= movedAt ? 3 * DAY_MS : 0),
+      ).toISOString();
+    const onRecord = async () =>
+      (
+        await prisma.notification.findMany({
+          where: { recipientEmployeeId: sandbox.me.employee.id },
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          select: { id: true, createdAt: true, readAt: true },
+        })
+      ).map(({ id, createdAt, readAt }) => ({
+        id,
+        createdAt: shifted(createdAt),
+        readAt: shifted(readAt),
+      }));
+    const sent = ({ notifications }: Notifications) =>
+      notifications.map(({ id, createdAt, readAt }) => ({
+        id,
+        createdAt,
+        readAt,
+      }));
+    const notes = notificationsSchema.parse(
+      (await lan.get('/notifications').expect(200)).body,
+    );
+    const reminders = notes.notifications.filter(
+      (note) => note.kind === 'OVERDUE',
+    );
+    expect(reminders).not.toEqual([]);
+    expect(reminders.map((note) => dayOf(note.createdAt))).toEqual(
+      reminders.map(() => moved.today),
+    );
+    expect(sent(notes)).toEqual(await onRecord());
+    const allRead = notificationsSchema.parse(
+      (await lan.post('/notifications/read-all').expect(200)).body,
+    );
+    expect(
+      new Set(allRead.notifications.map((note) => dayOf(note.readAt!))),
+    ).toEqual(new Set([started, moved.today]));
+    expect(sent(allRead)).toEqual(await onRecord());
   });
 
   it('AT-31 BR-D02 FR-27 in a sandbox, anyone plays anyone with an account, whose session replaces theirs; outside one, 403', async () => {

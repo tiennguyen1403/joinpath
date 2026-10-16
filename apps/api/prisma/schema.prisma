@@ -41,8 +41,24 @@ model Organization {
   mockEmails        MockEmail[]
   notifications     Notification[]
   auditEvents       AuditEvent[]
+  clockAdvances     ClockAdvance[]
 
   @@map("organizations")
+}
+
+/// Each move of a sandbox's demo clock (PLAN §4.6), so the API dates what happened by the
+/// business day it happened on (BR-D05).
+model ClockAdvance {
+  id             String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  /// clock_offset_days from this advance on.
+  offsetDays     Int      @map("offset_days")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, createdAt])
+  @@map("clock_advances")
 }
 
 model Department {

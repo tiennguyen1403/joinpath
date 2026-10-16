@@ -31,7 +31,7 @@ import {
   personOf,
   reassigned,
 } from '../notifications/notify.js';
-import { orgToday } from '../org/org.service.js';
+import { orgClock, orgToday } from '../org/org.service.js';
 import { canWorkOn, visibleOnboardings } from './onboarding.policy.js';
 import {
   fromIsoDate,
@@ -67,7 +67,7 @@ export class TaskService {
   /** Every task assigned to the signed-in person, whatever its state. */
   async mine(auth: AuthContext): Promise<MyTasks> {
     const { organizationId, employeeId } = auth;
-    const today = await orgToday(this.prisma, organizationId);
+    const clock = await orgClock(this.prisma, organizationId);
     const tasks = await this.prisma.task.findMany({
       where: { organizationId, assigneeEmployeeId: employeeId },
       // What is due first; on one day, each onboarding's tasks together, in template order.
@@ -80,16 +80,16 @@ export class TaskService {
       select: myTaskSelect,
     });
     return {
-      today,
+      today: clock.today,
       tasks: tasks.map(({ onboarding, ...task }) => ({
         ...toTask(
           task,
           onboarding.status,
           task.dependsOn.map((dep) => dep.dependsOn.status),
-          today,
+          clock,
           auth,
         ),
-        onboarding: toOnboarding(onboarding),
+        onboarding: toOnboarding(onboarding, clock),
       })),
     };
   }

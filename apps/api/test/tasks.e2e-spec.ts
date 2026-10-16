@@ -88,10 +88,7 @@ describe('tasks', () => {
         availability: 'COMPLETED',
       });
     } finally {
-      await org.prisma.organization.update({
-        where: { id: org.organizationId },
-        data: { clockOffsetDays: 0 },
-      });
+      await org.resetClock();
     }
   });
 
@@ -390,7 +387,7 @@ describe('tasks', () => {
     );
   });
 
-  it('AT-31 BR-D02 FR-28 the demo clock moves forward only, a month at most a call, and in a sandbox only', async () => {
+  it('AT-31 BR-D02 BR-D05 FR-28 the demo clock moves forward only, a month at most a call, and in a sandbox only; each move goes on record in turn', async () => {
     const advance = (client: Client, body: object) =>
       client.post('/demo/clock/advance', body);
     const todayOf = async (client: Client) =>
@@ -418,6 +415,15 @@ describe('tasks', () => {
       ]);
       expect(both.map((res) => res.status)).toEqual([200, 200]);
       expect(await todayOf(org.hr)).toBe(org.day(31));
+      // Each under the org's lock, so in the order they ran, the later one at 31 (BR-D05).
+      const moves = await org.prisma.clockAdvance.findMany({
+        where: { organizationId: org.organizationId },
+        orderBy: [{ createdAt: 'asc' }, { offsetDays: 'asc' }],
+      });
+      expect([
+        [1, 31],
+        [30, 31],
+      ]).toContainEqual(moves.map((move) => move.offsetDays));
 
       await org.prisma.organization.update({
         where: { id: org.organizationId },
@@ -434,8 +440,9 @@ describe('tasks', () => {
     } finally {
       await org.prisma.organization.update({
         where: { id: org.organizationId },
-        data: { isSandbox: true, clockOffsetDays: 0 },
+        data: { isSandbox: true },
       });
+      await org.resetClock();
     }
   });
 });

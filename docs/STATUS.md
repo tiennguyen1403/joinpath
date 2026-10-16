@@ -2,12 +2,12 @@
 
 > File này được nạp vào mọi session qua `CLAUDE.md`. Giữ ngắn: chỉ trạng thái hiện tại. Lịch sử chi tiết nằm trong `docs/sessions/`.
 
-**Cập nhật:** 2026-10-16 · session 027 (M3.3a · API sandbox)
-**Mốc hiện tại:** M3 · Vận hành và demo, xong 5/9 session.
+**Cập nhật:** 2026-10-16 · session 028 (M3.3b · API mốc giờ theo ngày nghiệp vụ)
+**Mốc hiện tại:** M3 · Vận hành và demo, xong 6/9 session.
 
-M0, M1, M2 đã xong; demo public tại https://joinpath.vercel.app, đã push tới M2.4b (commit `M2.5`, `M3.1a`, `M3.1b`, `M3.2a`, `M3.2b`, `M3.3a` còn ở local). Golden path (PLAN §11) bước 2–9 chạy trọn ở local qua UI (M2.5). M3.1: HR đổi ngày bắt đầu, hủy, reassign, đổi deadline qua UI; lý do hủy chỉ HR thấy. M3.2: thông báo trong app và email cho các sự kiện BR-N02 (người nhận ở PLAN §6.5); tick nhắc việc chạy khi tua ngày và mỗi ngày qua Vercel Cron (chưa có trên prod); trang Notifications (số chưa đọc ở sidebar, "N overdue" cạnh My tasks) và chuông trên portal. M3.3a (chỉ API, chưa có UI): `POST /demo/sandboxes` tạo sandbox riêng 24 giờ kèm onboarding A, B, C chạy bằng handler thật; `switch-user`; purge sandbox hết hạn.
+M0, M1, M2 đã xong; demo public tại https://joinpath.vercel.app, đã push tới M2.4b (commit `M2.5`, `M3.1a`, `M3.1b`, `M3.2a`, `M3.2b`, `M3.3a`, `M3.3b` còn ở local). Golden path (PLAN §11) bước 2–9 chạy trọn ở local qua UI (M2.5). M3.1: HR đổi ngày bắt đầu, hủy, reassign, đổi deadline qua UI; lý do hủy chỉ HR thấy. M3.2: thông báo trong app và email cho các sự kiện BR-N02 (người nhận ở PLAN §6.5); tick nhắc việc chạy khi tua ngày và mỗi ngày qua Vercel Cron (chưa có trên prod); trang Notifications (số chưa đọc ở sidebar, "N overdue" cạnh My tasks) và chuông trên portal. M3.3a (chỉ API, chưa có UI): `POST /demo/sandboxes` tạo sandbox riêng 24 giờ kèm onboarding A, B, C chạy bằng handler thật; `switch-user`; purge sandbox hết hạn. M3.3b: mốc giờ API trả về theo ngày nghiệp vụ (BR-D05, bảng `clock_advances`).
 
-**Session kế tiếp:** **M3.3b · API: mốc giờ theo ngày nghiệp vụ** (xem bảng; PLAN §4.6 đã chốt hướng). Bước đầu: đề xuất chỗ lưu lịch sử tua ngày và danh sách field cần dời cho user duyệt. Handoff mới nhất: `docs/sessions/027-M3.3a-sandbox-api.md`; dữ liệu đọc từ canvas nằm ở handoff 005, 008, 009, 016, 019, 025 và 027 (island, Try demo).
+**Session kế tiếp:** **M3.3c · Web: Dynamic Island và Try demo** (xem bảng). Bước đầu: đề xuất shape API cho danh sách người để đổi vai và hạn của sandbox, cùng trạng thái chip của người chưa có tài khoản, cho user duyệt; cân nhắc tách a/b. Handoff mới nhất: `docs/sessions/028-M3.3b-business-timestamps.md`; dữ liệu đọc từ canvas nằm ở handoff 005, 008, 009, 016, 019, 025 và 027 (island, Try demo).
 
 ## Quy ước session
 
@@ -29,8 +29,8 @@ Trạng thái: ✅ xong · ▶ kế tiếp · ⏳ chưa làm. Mốc M4–M5 mớ
 | M3.2a | API: `notifications`, `notify(tx)` cho các sự kiện BR-N02; cron tick (due-soon, overdue, task mở theo ngày, xóa session hết hạn); tua ngày chạy tick (BR-D03); người gọi cron là Vercel Cron | AT-24, AT-25 pass; mỗi sự kiện có test | ✅ |
 | M3.2b | Web: trang Notifications (sidebar) và chuông trên portal, "N overdue" ở sidebar, các email mới trong mock inbox | Qua UI, mỗi vai thấy thông báo của mình và đánh dấu đã đọc | ✅ |
 | M3.3a | API sandbox: `POST /demo/sandboxes` (5 mỗi giờ mỗi IP hash lưu trong DB, trần 200), `scenarios` A/B/C của seed chạy bằng handler thật, purge sandbox hết hạn (cron và khi tạo sandbox), `switch-user` | AT-31 (phần đổi vai) pass; có test BR-D01, BR-P06 (phần sandbox), hình dạng scenarios | ✅ |
-| **M3.3b** | API: mốc giờ theo ngày nghiệp vụ (PLAN §4.6): lưu lịch sử tua ngày; API trả mọi mốc giờ đã dời (Finished, done, Canceled, revision, lời mời, thông báo, email) | Sau khi tua ngày, mọi mốc giờ web hiện khớp ngày nghiệp vụ; có test ở `core` và API | ▶ |
-| M3.3c | Web: Dynamic Island (đổi vai, ngày nghiệp vụ, +1 ngày, tới ngày bắt đầu, demo mới, inbox), cả trên portal; API cho danh sách người để đổi vai và hạn của sandbox; nút Try demo; đường từ portal sang My tasks cho người đã xong onboarding (handoff 020) | Golden path bước 1–9 chạy ở local chỉ bằng UI | ⏳ |
+| M3.3b | API: mốc giờ theo ngày nghiệp vụ (PLAN §4.6): lưu lịch sử tua ngày; API trả mọi mốc giờ đã dời (Finished, done, Canceled, revision, lời mời, thông báo, email) | Sau khi tua ngày, mọi mốc giờ web hiện khớp ngày nghiệp vụ; có test ở `core` và API | ✅ |
+| **M3.3c** | Web: Dynamic Island (đổi vai, ngày nghiệp vụ, +1 ngày, tới ngày bắt đầu, demo mới, inbox), cả trên portal; API cho danh sách người để đổi vai và hạn của sandbox; nút Try demo; đường từ portal sang My tasks cho người đã xong onboarding (handoff 020) | Golden path bước 1–9 chạy ở local chỉ bằng UI | ▶ |
 | M3.4 | Dashboard HR + tab Activity (`GET /dashboard`, `GET /onboardings/:id/activity`); có thể tách a/b | Golden path bước 10 ở local | ⏳ |
 | M3.5 | Demo public end-to-end trên host; upload và xem file thật trên production (hoãn từ M2.5); đặt `CRON_SECRET`, kiểm Vercel Cron chạy với Services (không được thì GitHub Actions, handoff 025); đo thời gian tạo sandbox, kiểm purge với R2 (token cần quyền list, handoff 027) | **Mốc an toàn:** golden path 1–10 chạy trên production | ⏳ |
 | M4.1 | Template editor dạng form + validate tức thì bằng `core` | | ⏳ |
@@ -62,11 +62,11 @@ pnpm db:seed           # tạo lại org acme: lan.pham@acme.joinpath.demo (HR),
                        # A (An, nháp), B (Bao, chờ Lan duyệt ID), C (Chi, đã xong); cần RustFS + bucket. --no-scenarios: chỉ người và template
 pnpm dev               # web http://localhost:3000 (đăng nhập ở /login; thư mời ở /mock-inbox; portal của người mới ở /my-onboarding; duyệt tài liệu ở /tasks, nút Review documents; thông báo ở /notifications) · api http://localhost:3001/api/health
 pnpm test              # cần Postgres + migration, RustFS + bucket; rồi pnpm lint · pnpm typecheck · pnpm format:check
-# Tua ngày nghiệp vụ: POST /api/demo/clock/advance {days} (1–30, org sandbox; acme là sandbox), chạy luôn tick nhắc việc của org; chưa có UI (M3.3c).
+# Tua ngày nghiệp vụ: POST /api/demo/clock/advance {days} (1–30, org sandbox; acme là sandbox), ghi clock_advances (BR-D05) rồi chạy tick của org; chưa có UI (M3.3c).
 # Như nút Try demo: curl -X POST http://localhost:3001/api/demo/sandboxes (sandbox mới, trả cookie của Lan). Đổi vai: POST /api/demo/switch-user {employeeId}, cả trong acme.
 # Tick mọi org bằng tay: đặt CRON_SECRET trong apps/api/.env rồi curl -H "Authorization: Bearer <secret>" http://localhost:3001/api/internal/cron/tick
-# Đưa đồng hồ local về hôm nay:
-docker compose exec -T postgres psql -U joinpath -d joinpath -c "UPDATE organizations SET clock_offset_days = 0 WHERE slug = 'acme'"
+# Đưa đồng hồ local về hôm nay (xóa luôn lịch sử tua ngày, không thì mốc giờ còn dời):
+docker compose exec -T postgres psql -U joinpath -d joinpath -c "UPDATE organizations SET clock_offset_days = 0 WHERE slug = 'acme'; DELETE FROM clock_advances WHERE organization_id = (SELECT id FROM organizations WHERE slug = 'acme')"
 pnpm exec playwright-cli -s=joinpath open http://localhost:3000/login   # Chrome có cửa sổ; `show` mở dashboard xem trực tiếp
 ```
 

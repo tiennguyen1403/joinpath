@@ -31,3 +31,24 @@ export function addDays(date: IsoDate, days: number): IsoDate {
   d.setUTCDate(d.getUTCDate() + days);
   return d.toISOString().slice(0, 10);
 }
+
+/** A move of the demo clock: from `at` on, the org's business date ran `offsetDays` ahead. */
+export interface ClockAdvance {
+  at: Date;
+  offsetDays: number;
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * A real moment as the org lived it (PLAN §4.6): moved on by the days the demo clock was ahead
+ * then, as the last advance up to it left it, or 0 before any. A moment still to come, such as
+ * an invitation's expiry, goes by the clock as it is now. `history` runs oldest first.
+ * ponytail: whole 24-hour days, so across a DST change the time of day slips an hour; move
+ * the date in the org's zone if a sandbox ever runs in one with DST.
+ */
+export function businessMoment(moment: Date, history: ClockAdvance[]): Date {
+  const offsetDays =
+    history.findLast((advance) => advance.at <= moment)?.offsetDays ?? 0;
+  return new Date(moment.getTime() + offsetDays * DAY_MS);
+}

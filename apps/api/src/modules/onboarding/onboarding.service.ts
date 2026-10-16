@@ -38,7 +38,12 @@ import {
   personOf,
   rescheduled,
 } from '../notifications/notify.js';
-import { orgToday, personSelect } from '../org/org.service.js';
+import {
+  type OrgClock,
+  orgClock,
+  orgToday,
+  personSelect,
+} from '../org/org.service.js';
 import { visibleOnboardings } from './onboarding.policy.js';
 
 // DATE columns travel as midnight UTC; the API speaks 'YYYY-MM-DD' (PLAN §4.6).
@@ -170,17 +175,20 @@ type TaskRow = Prisma.TaskGetPayload<{ select: typeof taskSelect }>;
 type FileRow = TaskRow['files'][number];
 type DetailRow = Prisma.OnboardingGetPayload<{ select: typeof detailSelect }>;
 
-export function toOnboarding({
-  id,
-  status,
-  startDate,
-  activatedAt,
-  completedAt,
-  canceledAt,
-  employee,
-  template: { versions, ...template },
-  templateVersion,
-}: OnboardingRow): Onboarding {
+export function toOnboarding(
+  {
+    id,
+    status,
+    startDate,
+    activatedAt,
+    completedAt,
+    canceledAt,
+    employee,
+    template: { versions, ...template },
+    templateVersion,
+  }: OnboardingRow,
+  { at }: OrgClock,
+): Onboarding {
   // A draft's template always has a published version: create and update refuse one
   // without, and published versions are never deleted.
   const version = templateVersion ?? versions.at(0);
@@ -189,9 +197,9 @@ export function toOnboarding({
     id,
     status,
     startDate: toIsoDate(startDate),
-    activatedAt: activatedAt?.toISOString() ?? null,
-    completedAt: completedAt?.toISOString() ?? null,
-    canceledAt: canceledAt?.toISOString() ?? null,
+    activatedAt: activatedAt && at(activatedAt),
+    completedAt: completedAt && at(completedAt),
+    canceledAt: canceledAt && at(canceledAt),
     employee,
     template,
     templateVersion: version,
@@ -213,7 +221,7 @@ export function toTask(
   }: TaskRow,
   onboardingStatus: OnboardingStatus,
   prereqStatuses: TaskStatus[],
-  today: IsoDate,
+  { today, at }: OrgClock,
   viewer: AuthContext,
 ): Task {
   const dates = {
@@ -238,7 +246,7 @@ export function toTask(
         // Only ever written from sniffMimeType (BR-P04).
         mimeType: file.mimeType as DocumentMimeType,
         sizeBytes: file.sizeBytes,
-        uploadedAt: file.createdAt.toISOString(),
+        uploadedAt: at(file.createdAt),
         carriedOver: carried.has(file.storageKey),
       }));
   };
@@ -246,8 +254,8 @@ export function toTask(
     ...task,
     ...dates,
     dependsOn: dependsOn.map((dep) => dep.dependsOnTaskId),
-    startedAt: startedAt?.toISOString() ?? null,
-    completedAt: completedAt?.toISOString() ?? null,
+    startedAt: startedAt && at(startedAt),
+    completedAt: completedAt && at(completedAt),
     availability: availability(
       { status: task.status, ...dates },
       onboardingStatus,
@@ -264,10 +272,10 @@ export function toTask(
         id: submission.id,
         revision: submission.revision,
         submittedBy: submission.submittedBy,
-        submittedAt: submission.submittedAt.toISOString(),
+        submittedAt: at(submission.submittedAt),
         files: toFiles(submission.files, submissions.at(i + 1)?.files),
         decision: decision
-          ? { ...decision, decidedAt: decision.decidedAt.toISOString() }
+          ? { ...decision, decidedAt: at(decision.decidedAt) }
           : null,
       };
     }),
@@ -276,20 +284,21 @@ export function toTask(
 
 function toDetail(
   { invitations, cancelReason, ...row }: DetailRow,
-  today: IsoDate,
+  clock: OrgClock,
   viewer: AuthContext,
 ): OnboardingDetail {
+  const { at } = clock;
   const statusById = new Map(row.tasks.map((task) => [task.id, task.status]));
   const invitation = invitations.at(0);
   return {
-    ...toOnboarding(row),
-    today,
+    ...toOnboarding(row, clock),
+    today: clock.today,
     tasks: row.tasks.map((task) =>
       toTask(
         task,
         row.status,
         task.dependsOn.map((dep) => statusById.get(dep.dependsOnTaskId)!),
-        today,
+        clock,
         viewer,
       ),
     ),
@@ -298,10 +307,10 @@ function toDetail(
       viewer.role === 'HR' && invitation
         ? {
             email: invitation.email,
-            sentAt: invitation.createdAt.toISOString(),
-            expiresAt: invitation.expiresAt.toISOString(),
-            acceptedAt: invitation.acceptedAt?.toISOString() ?? null,
-            revokedAt: invitation.revokedAt?.toISOString() ?? null,
+            sentAt: at(invitation.createdAt),
+            expiresAt: at(invitation.expiresAt),
+            acceptedAt: invitation.acceptedAt && at(invitation.acceptedAt),
+            revokedAt: invitation.revokedAt && at(invitation.revokedAt),
           }
         : null,
     // HR's own note, which may be private (BR-C03).
@@ -322,20 +331,20 @@ export class OnboardingService {
       orderBy: [{ startDate: 'desc' }, { createdAt: 'desc' }],
       select: summarySelect,
     });
-    const today = await orgToday(this.prisma, auth.organizationId);
+    const clock = await orgClock(this.prisma, auth.organizationId);
     return onboardings.map(({ tasks, ...row }) => {
       const next = tasks.find(
         (task) => task.status === 'PENDING' || task.status === 'IN_PROGRESS',
       );
       return {
-        ...toOnboarding(row),
+        ...toOnboarding(row, clock),
         progress: {
           completed: tasks.filter((task) => task.status === 'COMPLETED').length,
           total: tasks.length,
           overdue: tasks.filter((task) =>
             isOverdue(
               { status: task.status, dueOn: toIsoDate(task.dueOn) },
-              today,
+              clock.today,
             ),
           ).length,
         },
@@ -352,7 +361,7 @@ export class OnboardingService {
     if (!onboarding) throw new NotFoundException('Onboarding not found');
     return toDetail(
       onboarding,
-      await orgToday(this.prisma, auth.organizationId),
+      await orgClock(this.prisma, auth.organizationId),
       auth,
     );
   }
@@ -365,7 +374,10 @@ export class OnboardingService {
       select: onboardingSelect,
     });
     if (!row) throw new NotFoundException('Onboarding not found');
-    const onboarding = toOnboarding(row);
+    const onboarding = toOnboarding(
+      row,
+      await orgClock(this.prisma, organizationId),
+    );
     if (onboarding.status !== 'DRAFT') {
       throw new ConflictException('Only a draft can be activated');
     }

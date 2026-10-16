@@ -160,13 +160,21 @@ export class DemoService {
     { organizationId }: AuthContext,
     days: number,
   ): Promise<Clock> {
-    const { count } = await this.prisma.organization.updateMany({
-      where: { id: organizationId, isSandbox: true },
-      data: { clockOffsetDays: { increment: days } },
+    await this.prisma.$transaction(async (tx) => {
+      const [org] = await tx.organization.updateManyAndReturn({
+        where: { id: organizationId, isSandbox: true },
+        data: { clockOffsetDays: { increment: days } },
+        select: { clockOffsetDays: true },
+      });
+      if (!org) {
+        throw new ForbiddenException('The demo clock works in a sandbox only');
+      }
+      // Under the org's lock, so advances at once go on record in their order; what happens
+      // from now on, the tick's notes first, is dated by the new business day (BR-D05).
+      await tx.clockAdvance.create({
+        data: { organizationId, offsetDays: org.clockOffsetDays },
+      });
     });
-    if (count === 0) {
-      throw new ForbiddenException('The demo clock works in a sandbox only');
-    }
     await tickOrg(this.prisma, organizationId);
     return { today: await orgToday(this.prisma, organizationId) };
   }

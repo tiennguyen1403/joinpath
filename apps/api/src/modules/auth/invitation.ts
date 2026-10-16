@@ -3,6 +3,7 @@ import { capitalized, firstName, inWords } from '@joinpath/core';
 import { env } from '../../env.js';
 import type { Prisma } from '../../generated/prisma/client.js';
 import { recordAudit } from '../audit/audit.js';
+import { clockOf, clockSelect } from '../org/org.service.js';
 import { type AuthContext, hashToken, newToken } from './session.js';
 
 // BR-P05: a link works once, for 72 hours, until a resend or a change of email replaces it.
@@ -67,7 +68,7 @@ export async function sendInvitation(
   });
   const organization = await tx.organization.findUniqueOrThrow({
     where: { id: organizationId },
-    select: { name: true, timezone: true },
+    select: { name: true, ...clockSelect },
   });
   const person = { fullName: true, department: { select: { name: true } } };
   const employee = await tx.employee.findUniqueOrThrow({
@@ -119,8 +120,10 @@ export async function sendInvitation(
     titles.length > 0 &&
       `${capitalized(inWords(titles.length))} ${titles.length === 1 ? 'task is' : 'tasks are'} waiting for you before your first day: ${new Intl.ListFormat('en-US').format(titles)}.`,
   ];
+  // On the business clock, as the email's own date is (BR-D05).
+  const expires = new Date(clockOf(organization).at(expiresAt));
   const footer = [
-    `This link works once and expires on ${formatMoment(expiresAt, organization.timezone)}. If it runs out, ask ${firstName(sender.fullName)} to send a new one.`,
+    `This link works once and expires on ${formatMoment(expires, organization.timezone)}. If it runs out, ask ${firstName(sender.fullName)} to send a new one.`,
     `You're receiving this because ${organization.name} added you as a new hire in Joinpath.`,
   ];
   await tx.mockEmail.create({

@@ -1,4 +1,4 @@
-# Joinpath — Kế hoạch triển khai v0.33
+# Joinpath — Kế hoạch triển khai v0.34
 
 > **Joinpath**: Employee Onboarding & Workflow Management Platform, dự án portfolio Full-stack.
 > Bản này tinh chỉnh SRS v0.4 trong thread ChatGPT "Thiết kế dự án onboarding" (14/10/2026).
@@ -31,6 +31,7 @@
 > **v0.31 (16/10/2026):** người gọi cron là Vercel Cron, mỗi ngày 01:00 UTC, bằng `GET /internal/cron/tick` kèm `Authorization: Bearer` (§6.1, §6.2, §6.5, §8). Người nhận và email của từng sự kiện (§6.5); đổi ngày bắt đầu cũng báo (BR-N02). Nhắc việc bỏ qua task đang bị chặn (BR-N03); task mở theo ngày xét `available_on ≤ today`, để tua nhiều ngày không sót (§6.5); dedupe key theo task (BR-N04). Tick chỉ xóa session hết hạn, giữ lời mời (§6.5, §7). Route thông báo trả `{unread, notifications}` (§8).
 > **v0.32 (16/10/2026):** thông báo trên web (M3.2b): trang Notifications mở từ sidebar, số chưa đọc nằm cạnh mục; trên portal là chuông mở `popover-morph` ở mọi độ rộng; danh sách tự dựng theo token, không dùng `notification-stack`. Cạnh My tasks: số task quá hạn màu đỏ, nếu không có thì số task READY (§10.1).
 > **v0.33 (16/10/2026):** M3 chia thành 9 session: M3.3 tách thành API sandbox (M3.3a), mốc giờ theo ngày nghiệp vụ (M3.3b) và web (M3.3c) (§13). Trong sandbox, mọi mốc giờ hiện theo giờ nghiệp vụ, tính từ lịch sử tua ngày; thay đánh đổi "giờ thật" cũ (§4.6, làm ở M3.3b). `POST /demo/sandboxes`: org riêng trong 24 giờ, kèm onboarding A, B, C chạy bằng handler thật, đăng nhập luôn với vai HR; tối đa 5 sandbox mỗi giờ mỗi IP và 200 sandbox còn hạn. `switch-user`: thứ tự kiểm, mã lỗi (§8, §9, §11). Purge sandbox hết hạn chạy trong cron tick và mỗi lần tạo sandbox (§6.5). Production seed org cố định không kèm scenarios (§11).
+> **v0.34 (16/10/2026):** mốc giờ theo giờ nghiệp vụ (M3.3b, BR-D05 mới): lịch sử tua ngày lưu ở bảng `clock_advances` (§7), mỗi mốc giờ dời theo lần tua cuối cùng không muộn hơn nó, mốc trong tương lai (hạn lời mời) theo đồng hồ hiện tại; hạn của sandbox, của signed URL và session giữ giờ thật; hạn link trong email mời viết theo giờ nghiệp vụ (§4.6, §5, §8).
 
 ## TL;DR: 6 thay đổi lớn nhất
 
@@ -275,12 +276,19 @@ Mỗi bước là một transaction. Revision, file và quyết định cũ khô
 - `available_on = start_date + availableOffsetDays`; `due_on = start_date + dueOffsetDays`. Tính theo calendar days, không trừ cuối tuần.
 - **Chỉ có một hàm:** `today(org)` = ngày hiện tại theo `org.timezone` cộng `org.clock_offset_days`. Mọi command, query và cron đều dùng hàm này. `clock_offset_days` chỉ khác 0 trong sandbox, và chỉ được tăng, không được lùi.
 - Các hàm logic thuần nhận `today` làm tham số, nhờ vậy unit test không cần mock đồng hồ.
-- **Mốc giờ (timestamp) theo giờ nghiệp vụ** (chốt ở M3.3a, làm ở M3.3b):
-  - DB lưu giờ thật. Mỗi lần tua ngày ghi một dòng lịch sử (lúc tua, số ngày lệch mới), trong cùng transaction với lần tua và trước tick.
-  - API trả mọi mốc giờ để hiển thị (xong, hủy, bắt đầu, nộp, duyệt, gửi lời mời, thông báo, email, timeline) đã dời: giờ thật cộng số ngày lệch đang áp dụng lúc đó, tính bằng hàm thuần trong `core`. Web không phải tính.
+- **Mốc giờ (timestamp) theo giờ nghiệp vụ** (BR-D05; chốt ở M3.3a, làm ở M3.3b):
+  - DB lưu giờ thật. Mỗi lần tua ngày ghi một dòng `clock_advances` (lúc tua là `created_at`, kèm số ngày lệch mới). Dòng này ghi trong cùng transaction với lần tăng `clock_offset_days`, sau khi đã khóa dòng org, nên các lần tua cùng lúc vào lịch sử đúng thứ tự. Tick chạy sau khi commit, nên thông báo của tick mang ngày mới.
+  - API trả mọi mốc giờ để hiển thị đã dời bằng `businessMoment` (hàm thuần trong `core`): giờ thật cộng số ngày lệch của lần tua cuối cùng không muộn hơn mốc đó, chưa tua thì 0. Mốc trong tương lai, như hạn của lời mời, lấy số ngày lệch hiện tại. Web không phải tính.
+    - Dời: onboarding (kích hoạt, xong, hủy), task (bắt đầu, xong), file (upload), revision (nộp), quyết định, lời mời (gửi, hết hạn, nhận, thu hồi), thông báo (tạo, đọc), email, template (publish, archive). Timeline (M3.4) cũng vậy.
+    - Giữ giờ thật, vì là hạn theo đồng hồ thật chứ không phải sự kiện nghiệp vụ: hạn của sandbox ("Resets in 23 h", M3.3c), hạn của signed URL tải file, session.
+    - Chữ viết sẵn lúc gửi theo cùng quy tắc: hạn của link trong email mời.
   - Ngoài sandbox số ngày lệch luôn là 0, nên không có gì đổi.
   - Thay đánh đổi cũ ("audit và notification hiện giờ thật"), vì canvas vẽ mọi mốc giờ theo ngày nghiệp vụ, và chỉ sửa vài chỗ thì detail sẽ ghi "Finished Oct 25" cạnh task "done Oct 16".
-  - Giới hạn: lịch sử của onboarding B, C trong seed (§11) nằm ở lúc tạo sandbox.
+  - Giới hạn:
+    - lịch sử của onboarding B, C trong seed (§11) nằm ở lúc tạo sandbox;
+    - dời theo bội của 24 giờ, nên ở múi giờ có DST, giờ trong ngày lệch 1 tiếng khi qua mốc đổi giờ (sandbox luôn dùng Asia/Ho_Chi_Minh);
+    - badge Expired của web so hạn lời mời (đã dời) với giờ thật. Trong sandbox badge không sai được, vì sandbox sống 24 giờ còn link sống 72 giờ. Org không hết hạn (acme) có thể hiện "Expires" thay cho "Expired" thêm vài ngày sau khi link hết hạn;
+    - sửa tay `clock_offset_days` (vd đưa đồng hồ local về hôm nay) thì xóa luôn các dòng `clock_advances` của org đó.
 
 ### 4.7 Resolve assignee (trong preview và activate)
 
@@ -403,6 +411,7 @@ ID ổn định theo từng nhóm: thêm rule mới không làm đổi số củ
 | BR-D02 | Đổi vai và tua ngày chỉ dùng được trong org sandbox |
 | BR-D03 | Tua ngày chỉ được tiến về trước, và chạy ngay hàm tick (§6.5) cho org đó |
 | BR-D04 | Trong sandbox, email nhân viên luôn có đuôi `@{slug}.joinpath.demo` (form chỉ cho nhập phần trước @). Nhờ vậy email đăng nhập không trùng giữa các sandbox, và demo không bao giờ chứa email thật |
+| BR-D05 | Mọi mốc giờ API trả về để hiển thị theo giờ nghiệp vụ: giờ thật cộng số ngày lệch mà đồng hồ demo có lúc đó (§4.6). Ngoài sandbox số ngày lệch luôn là 0 |
 
 ---
 
@@ -546,6 +555,7 @@ Mọi bảng nghiệp vụ đều có `organization_id` và `created_at`. Không
 | Bảng | Cột chính | Ràng buộc đáng chú ý |
 |---|---|---|
 | `organizations` | name, slug, timezone, is_sandbox, clock_offset_days, expires_at?, created_ip_hash? | unique(slug); slug là đuôi email `@{slug}.joinpath.demo` (BR-D04), nên mỗi org (kể cả org do test tạo) có bộ email đăng nhập riêng |
+| `clock_advances` | offset_days (`clock_offset_days` từ lần tua này), created_at (lúc tua) | index(organization_id, created_at); ghi cùng transaction với lần tăng `clock_offset_days` (§4.6, BR-D05) |
 | `departments` | name | unique(org, name) |
 | `employees` | full_name, email, job_title, department_id?, manager_id? | unique(org, email) |
 | `users` | employee_id, email (định danh đăng nhập), role (`HR`/`IT`/`MEMBER`), password_hash, status (`ACTIVE`/`DISABLED`) | unique(employee_id); unique(email) trên toàn hệ thống, để form login không cần biết org (xem BR-D04) |
@@ -567,7 +577,7 @@ Mọi bảng nghiệp vụ đều có `organization_id` và `created_at`. Không
 
 ## 8. API
 
-Prefix `/api` (đi qua rewrite). API thiết kế theo command chứ không cho PATCH status tùy ý. Swagger đặt tại `/api/docs`.
+Prefix `/api` (đi qua rewrite). API thiết kế theo command chứ không cho PATCH status tùy ý. Swagger đặt tại `/api/docs`. Mọi mốc giờ trả về theo giờ nghiệp vụ (§4.6, BR-D05), trừ `expiresAt` của signed URL.
 
 ```http
 # Auth
@@ -658,7 +668,8 @@ POST /demo/sandboxes        POST /demo/switch-user {employeeId}   POST /demo/clo
                                               # switch-user: mọi vai; body sai 400 → ngoài sandbox 403 → người ngoài org 404 → chưa có tài khoản,
                                               # hoặc tài khoản bị khóa 409; chính mình → không đổi gì, không set cookie; còn lại: session mới cho người đó,
                                               # xóa session cũ; 200 trả shape như /auth/me
-                                              # clock/advance: days nguyên 1–30, mọi vai; ngoài sandbox 403; chạy tick của org ngay (BR-D03); trả {today}
+                                              # clock/advance: days nguyên 1–30, mọi vai; ngoài sandbox 403; ghi một dòng clock_advances cùng transaction (BR-D05),
+                                              # rồi chạy tick của org (BR-D03); trả {today}
 GET  /internal/cron/tick                      # Vercel Cron; Authorization: Bearer <CRON_SECRET>, sai hoặc thiếu → 401; purge sandbox hết hạn,
                                               # rồi tick mọi org → 204
 ```

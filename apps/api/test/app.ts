@@ -244,6 +244,15 @@ export async function seedOrg(app: INestApplication<App>) {
     // The org's business date, `offset` days on, while its demo clock is untouched.
     day: (offset: number) =>
       addDays(today(organization.timezone, 0, new Date()), offset),
+    // Back to the real date, as if the demo clock had never moved (BR-D05 keeps each move).
+    resetClock: () =>
+      prisma.$transaction([
+        prisma.organization.update({
+          where: { id: organizationId },
+          data: { clockOffsetDays: 0 },
+        }),
+        prisma.clockAdvance.deleteMany({ where: { organizationId } }),
+      ]),
     newHire,
     hireWithAccount,
     draftFor,
