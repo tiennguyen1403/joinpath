@@ -21,6 +21,16 @@ import type { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../prisma.js';
 import { recordAudit } from '../audit/audit.js';
 import type { AuthContext } from '../auth/session.js';
+import {
+  completed,
+  decided,
+  dueChanged,
+  newHireOf,
+  notify,
+  opened,
+  personOf,
+  reassigned,
+} from '../notifications/notify.js';
 import { orgToday } from '../org/org.service.js';
 import { canWorkOn, visibleOnboardings } from './onboarding.policy.js';
 import {
@@ -108,10 +118,13 @@ export class TaskService {
   /** The last task completed completes its onboarding, in the same transaction (BR-C01). */
   async complete(auth: AuthContext, id: string): Promise<OnboardingDetail> {
     const onboardingId = await this.prisma.$transaction(async (tx) => {
-      const { onboardingId } = await checkTask(tx, auth, id, 'CHECKLIST', [
-        'PENDING',
-        'IN_PROGRESS',
-      ]);
+      const { onboardingId, title } = await checkTask(
+        tx,
+        auth,
+        id,
+        'CHECKLIST',
+        ['PENDING', 'IN_PROGRESS'],
+      );
       const completedAt = new Date();
       await tx.task.update({
         where: { id },
@@ -123,6 +136,7 @@ export class TaskService {
         entityId: id,
         onboardingId,
       });
+      await notifyOpened(tx, auth, id, `${title} is done.`);
       await completeIfLast(tx, auth, onboardingId, completedAt);
       return onboardingId;
     });
@@ -136,7 +150,7 @@ export class TaskService {
     { submissionId }: ApproveSubmission,
   ): Promise<OnboardingDetail> {
     const onboardingId = await this.prisma.$transaction(async (tx) => {
-      const { onboardingId, revision } = await checkDecision(
+      const { onboardingId, documentId, revision, title } = await checkDecision(
         tx,
         auth,
         id,
@@ -165,6 +179,8 @@ export class TaskService {
         onboardingId,
         data: { taskId: id, revision },
       });
+      await tellUploader(tx, auth, onboardingId, documentId, revision);
+      await notifyOpened(tx, auth, id, `${title} is done.`);
       await completeIfLast(tx, auth, onboardingId, decidedAt);
       return onboardingId;
     });
@@ -232,6 +248,7 @@ export class TaskService {
         onboardingId,
         data: { taskId: id, revision },
       });
+      await tellUploader(tx, auth, onboardingId, documentId, revision, reason);
       return onboardingId;
     });
     return this.onboardings.get(auth, onboardingId);
@@ -304,6 +321,26 @@ export class TaskService {
         onboardingId,
         data: { from, to: employeeId },
       });
+      await notify(
+        tx,
+        organizationId,
+        reassigned(
+          {
+            newHire: await personOf(tx, newHireId),
+            actor: (await personOf(tx, auth.employeeId)).fullName,
+            today: await orgToday(tx, organizationId),
+          },
+          {
+            id,
+            title: task.title,
+            availableOn: toIsoDate(task.availableOn),
+            dueOn: toIsoDate(task.dueOn),
+          },
+          await personOf(tx, from),
+          await personOf(tx, employeeId),
+        ),
+        auth.employeeId,
+      );
       return onboardingId;
     });
     return this.onboardings.get(auth, onboardingId);
@@ -367,6 +404,20 @@ export class TaskService {
         onboardingId,
         data: { from, to },
       });
+      await notify(
+        tx,
+        organizationId,
+        [
+          dueChanged(
+            { id, ...task },
+            await newHireOf(tx, onboardingId),
+            (await personOf(tx, auth.employeeId)).fullName,
+            to,
+            !overridden,
+          ),
+        ],
+        auth.employeeId,
+      );
       return onboardingId;
     });
     return this.onboardings.get(auth, onboardingId);
@@ -394,6 +445,7 @@ async function openTask(
     select: {
       onboardingId: true,
       definitionKey: true,
+      title: true,
       type: true,
       status: true,
       assigneeEmployeeId: true,
@@ -409,6 +461,100 @@ async function openTask(
   return task;
 }
 
+/**
+ * Tells the assignee of each task that `id`, just done, lets start now (BR-N02): its last
+ * prerequisite. A task whose date is still to come waits for the tick (PLAN §6.5). The person
+ * who acted hears it too: what opened is another task.
+ */
+export async function notifyOpened(
+  tx: Prisma.TransactionClient,
+  { organizationId }: AuthContext,
+  id: string,
+  because: string,
+  // `because` names the new hire already.
+  named = false,
+) {
+  const dependents = await tx.task.findMany({
+    where: { dependsOn: { some: { dependsOnTaskId: id } }, status: 'PENDING' },
+    orderBy: [{ phaseOrder: 'asc' }, { position: 'asc' }],
+    select: {
+      id: true,
+      onboardingId: true,
+      title: true,
+      type: true,
+      assigneeEmployeeId: true,
+      reviewsTaskId: true,
+      availableOn: true,
+      dueOn: true,
+      dependsOn: { select: { dependsOn: { select: { status: true } } } },
+    },
+  });
+  const today = await orgToday(tx, organizationId);
+  const open = dependents.filter(
+    (task) =>
+      availability(
+        { status: 'PENDING', availableOn: toIsoDate(task.availableOn) },
+        'ACTIVE',
+        task.dependsOn.map((dep) => dep.dependsOn.status),
+        today,
+      ) === 'READY',
+  );
+  if (open.length === 0) return;
+  const newHire = await newHireOf(tx, open[0].onboardingId);
+  const notes = [];
+  for (const { reviewsTaskId, availableOn, dueOn, ...task } of open) {
+    notes.push(
+      opened(
+        {
+          ...task,
+          availableOn: toIsoDate(availableOn),
+          dueOn: toIsoDate(dueOn),
+          // An approval opens again for each revision of its document.
+          revision:
+            reviewsTaskId === null
+              ? undefined
+              : await tx.documentSubmission.count({
+                  where: { taskId: reviewsTaskId },
+                }),
+        },
+        newHire,
+        because,
+        named,
+      ),
+    );
+  }
+  await notify(tx, organizationId, notes);
+}
+
+/** The approver's decision, for whoever sent the document (BR-R05, BR-R06). */
+async function tellUploader(
+  tx: Prisma.TransactionClient,
+  auth: AuthContext,
+  onboardingId: string,
+  documentId: string,
+  revision: number,
+  reason?: string,
+) {
+  const document = await tx.task.findUniqueOrThrow({
+    where: { id: documentId },
+    select: { id: true, title: true, assigneeEmployeeId: true },
+  });
+  await notify(
+    tx,
+    auth.organizationId,
+    [
+      decided(
+        document,
+        await newHireOf(tx, onboardingId),
+        (await personOf(tx, auth.employeeId)).fullName,
+        revision,
+        reason,
+      ),
+    ],
+    auth.employeeId,
+  );
+}
+
 /** After a task completes: the last one completes its onboarding, in that transaction (BR-C01). */
 export async function completeIfLast(
   tx: Prisma.TransactionClient,
@@ -422,9 +568,12 @@ export async function completeIfLast(
     where: { onboardingId, status: { not: 'COMPLETED' } },
   });
   if (left > 0) return;
-  await tx.onboarding.update({
+  const { employee } = await tx.onboarding.update({
     where: { id: onboardingId },
     data: { status: 'COMPLETED', completedAt },
+    select: {
+      employee: { select: { id: true, fullName: true, managerId: true } },
+    },
   });
   await recordAudit(tx, auth, {
     action: 'onboarding.completed',
@@ -432,6 +581,30 @@ export async function completeIfLast(
     entityId: onboardingId,
     onboardingId,
   });
+  // HR and the new hire's manager hear of it, never the new hire, even one who is HR.
+  const hr = await tx.employee.findMany({
+    where: {
+      organizationId: auth.organizationId,
+      user: { role: 'HR', status: 'ACTIVE' },
+    },
+    select: { id: true },
+  });
+  const people = new Set([
+    ...hr.map((person) => person.id),
+    ...(employee.managerId ? [employee.managerId] : []),
+  ]);
+  people.delete(employee.id);
+  await notify(
+    tx,
+    auth.organizationId,
+    completed(
+      onboardingId,
+      employee,
+      [...people],
+      await tx.task.count({ where: { onboardingId } }),
+    ),
+    auth.employeeId,
+  );
 }
 
 /**
@@ -444,7 +617,7 @@ async function checkDecision(
   id: string,
   submissionId: string,
 ) {
-  const { onboardingId, reviewsTaskId } = await checkTask(
+  const { onboardingId, reviewsTaskId, title } = await checkTask(
     tx,
     auth,
     id,
@@ -468,7 +641,7 @@ async function checkDecision(
       message: `Revision ${newest} replaced this one`,
     });
   }
-  return { onboardingId, documentId, revision: submission.revision };
+  return { onboardingId, documentId, revision: submission.revision, title };
 }
 
 // A checklist is started and completed, a document takes files and is submitted, an approval
@@ -502,6 +675,7 @@ export async function findTask(
     },
     select: {
       onboardingId: true,
+      title: true,
       assigneeEmployeeId: true,
       type: true,
       reviewsTaskId: true,

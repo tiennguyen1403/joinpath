@@ -7,26 +7,17 @@ const DAY: Intl.DateTimeFormatOptions = {
 };
 const utc = (options: Intl.DateTimeFormatOptions) =>
   new Intl.DateTimeFormat('en-US', { ...options, timeZone: 'UTC' });
-const UTC_DAY = utc(DAY);
 const UTC_DAY_YEAR = utc({ ...DAY, year: 'numeric' });
 const UTC_MONTH_DAY = utc({ month: 'short', day: 'numeric' });
-const UTC_DAY_IN_FULL = utc({ weekday: 'long', month: 'long', day: 'numeric' });
 const atMidnight = (date: IsoDate) => new Date(`${date}T00:00:00Z`);
 
-/** "Mon, Oct 26". A business date is a calendar day (PLAN §4.6), so no time zone moves it. */
-export const formatDate = (date: IsoDate) => UTC_DAY.format(atMidnight(date));
-
-/** "Mon, Oct 26, 2026". */
+/** "Mon, Oct 26, 2026". A business date is a calendar day (PLAN §4.6), so no time zone moves it. */
 export const formatDateLong = (date: IsoDate) =>
   UTC_DAY_YEAR.format(atMidnight(date));
 
 /** "Oct 26". */
 export const formatMonthDay = (date: IsoDate) =>
   UTC_MONTH_DAY.format(atMidnight(date));
-
-/** "Monday, October 26". */
-export const formatDateInFull = (date: IsoDate) =>
-  UTC_DAY_IN_FULL.format(atMidnight(date));
 
 const zoned = (
   timestamp: string,
@@ -61,8 +52,14 @@ export const formatShortMomentIn = (timestamp: string, timeZone: string) =>
 export const formatTimeIn = (timestamp: string, timeZone: string) =>
   zoned(timestamp, timeZone, CLOCK);
 
-// The API words its emails the same way.
-export { capitalized, firstName, inWords } from '@joinpath/core';
+// The API words its emails and notifications the same way.
+export {
+  capitalized,
+  firstName,
+  formatDate,
+  formatDateInFull,
+  inWords,
+} from '@joinpath/core';
 
 /** Calendar days from one date to another, negative when it is sooner. */
 export const daysBetween = (from: IsoDate, to: IsoDate) =>

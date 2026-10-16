@@ -15,11 +15,13 @@ import {
 import { PrismaService } from '../../prisma.js';
 import { recordAudit } from '../audit/audit.js';
 import type { AuthContext } from '../auth/session.js';
+import { personOf } from '../notifications/notify.js';
 import { OnboardingService } from '../onboarding/onboarding.service.js';
 import {
   checkTask,
   completeIfLast,
   findTask,
+  notifyOpened,
 } from '../onboarding/task.service.js';
 import { canSeeFile } from './documents.policy.js';
 import { deleteObject, putObject, signedDownloadUrl } from './storage.js';
@@ -203,6 +205,14 @@ export class DocumentsService {
         onboardingId,
         data: { taskId, revision },
       });
+      // The approval reviewing it opens, unless its date is still to come.
+      await notifyOpened(
+        tx,
+        auth,
+        taskId,
+        `${(await personOf(tx, auth.employeeId)).fullName} sent revision ${revision}.`,
+        true,
+      );
       await completeIfLast(tx, auth, onboardingId, submittedAt);
       return onboardingId;
     });

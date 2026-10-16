@@ -24,5 +24,6 @@
   "rewrites": [
     { "source": "/api/(.*)", "destination": { "service": "api" } },
     { "source": "/(.*)", "destination": { "service": "web" } }
-  ]
+  ],
+  "crons": [{ "path": "/api/internal/cron/tick", "schedule": "0 1 * * *" }]
 }

@@ -2,12 +2,12 @@
 
 > File này được nạp vào mọi session qua `CLAUDE.md`. Giữ ngắn: chỉ trạng thái hiện tại. Lịch sử chi tiết nằm trong `docs/sessions/`.
 
-**Cập nhật:** 2026-10-16 · session 024 (M3.1b · Đổi ngày, hủy, reassign, deadline: web)
-**Mốc hiện tại:** M3 · Vận hành và demo, xong 2/8 session.
+**Cập nhật:** 2026-10-16 · session 025 (M3.2a · API thông báo và cron tick)
+**Mốc hiện tại:** M3 · Vận hành và demo, xong 3/8 session.
 
-M0, M1, M2 đã xong; demo public tại https://joinpath.vercel.app, đã push tới M2.4b (commit `M2.5`, `M3.1a`, `M3.1b` còn ở local). Golden path (PLAN §11) bước 2–9 chạy trọn ở local qua UI (M2.5). M3.1: HR đổi ngày bắt đầu, hủy (cả draft), reassign, đổi và reset deadline qua UI ở onboarding detail; lý do hủy chỉ HR thấy.
+M0, M1, M2 đã xong; demo public tại https://joinpath.vercel.app, đã push tới M2.4b (commit `M2.5`, `M3.1a`, `M3.1b`, `M3.2a` còn ở local). Golden path (PLAN §11) bước 2–9 chạy trọn ở local qua UI (M2.5). M3.1: HR đổi ngày bắt đầu, hủy (cả draft), reassign, đổi và reset deadline qua UI ở onboarding detail; lý do hủy chỉ HR thấy. M3.2a: API ghi thông báo trong app và email cho các sự kiện BR-N02 (người nhận ở PLAN §6.5); tick nhắc due-soon, overdue, báo task mở theo ngày, chạy khi tua ngày và mỗi ngày qua Vercel Cron (chưa có trên prod).
 
-**Session kế tiếp:** **M3.2a · API thông báo và cron tick** (xem bảng). Bước đầu: chốt người gọi cron và người nhận của từng sự kiện BR-N02. Handoff mới nhất: `docs/sessions/024-M3.1b-hr-changes-web.md`; dữ liệu đọc từ canvas nằm ở handoff 005, 008, 009, 016 và 019.
+**Session kế tiếp:** **M3.2b · Web: chuông và danh sách thông báo** (xem bảng). Bước đầu: canvas phương án cho chuông và danh sách (canvas chưa có bảng nào được duyệt cho phần này). Handoff mới nhất: `docs/sessions/025-M3.2a-notifications-api.md`; dữ liệu đọc từ canvas nằm ở handoff 005, 008, 009, 016, 019 và 025.
 
 ## Quy ước session
 
@@ -32,12 +32,12 @@ Trạng thái: ✅ xong · ▶ kế tiếp · ⏳ chưa làm. Mốc M4–M5 mớ
 | M2.5 | Golden path ở local, rà nhóm test P, push | Golden path bước 2–9 chạy trọn ở local (đăng nhập từng vai thay cho đổi vai, tua ngày bằng API); nhóm R, P pass | ✅ |
 | M3.1a | API: `planReschedule` trong `core`; reschedule, cancel, reassign, due-date; lệnh trên task kiểm lại assignee sau khi khóa | AT-06 (phần cancel), AT-19, AT-20 (dời muộn và dời sớm), AT-21, AT-22 pass; có test BR-S03, BR-S04 | ✅ |
 | M3.1b | Web: Change start date, Cancel onboarding ở header của detail; nút ⋯ trên dòng task (reassign, đổi và reset deadline); badge Canceled, Next step trống; nhãn riêng ở khung Invitation khi hủy | Qua UI, HR làm đủ 4 thao tác; khớp canvas | ✅ |
-| **M3.2a** | API: `notifications`, `notify(tx)` cho các sự kiện BR-N02 (submit, reject kèm lý do, approve, reassign, đổi deadline, hủy…); cron tick (due-soon, overdue, READY theo ngày, dọn session và lời mời hết hạn); tua ngày chạy tick (BR-D03); chốt người gọi cron | AT-24, AT-25 pass; mỗi sự kiện có test | ▶ |
-| M3.2b | Web: chuông và danh sách thông báo (app shell và header của portal), "N overdue" ở sidebar, các email mới trong mock inbox | Qua UI, mỗi vai thấy thông báo của mình và đánh dấu đã đọc | ⏳ |
+| M3.2a | API: `notifications`, `notify(tx)` cho các sự kiện BR-N02; cron tick (due-soon, overdue, task mở theo ngày, xóa session hết hạn); tua ngày chạy tick (BR-D03); người gọi cron là Vercel Cron | AT-24, AT-25 pass; mỗi sự kiện có test | ✅ |
+| **M3.2b** | Web: chuông và danh sách thông báo (app shell và header của portal), "N overdue" ở sidebar, các email mới trong mock inbox | Qua UI, mỗi vai thấy thông báo của mình và đánh dấu đã đọc | ▶ |
 | M3.3a | API sandbox: `POST /demo/sandboxes` (throttle theo IP hash lưu trong DB), `scenarios` A/B/C của seed (PLAN §11; A để start ≤ hôm nay + 5), purge sandbox hết hạn, `switch-user`; ngày "Finished" theo ngày nghiệp vụ (handoff 022) | AT-31 (phần đổi vai) pass; có test BR-D01, BR-P06 (phần sandbox) | ⏳ |
 | M3.3b | Web: Dynamic Island (đổi vai, ngày nghiệp vụ, +1 ngày, tới ngày bắt đầu, demo mới, inbox), cả trên portal; nút Try demo; đường từ portal sang My tasks cho người đã xong onboarding (handoff 020) | Golden path bước 1–9 chạy ở local chỉ bằng UI | ⏳ |
 | M3.4 | Dashboard HR + tab Activity (`GET /dashboard`, `GET /onboardings/:id/activity`); có thể tách a/b | Golden path bước 10 ở local | ⏳ |
-| M3.5 | Demo public end-to-end trên host; upload và xem file thật trên production (hoãn từ M2.5) | **Mốc an toàn:** golden path 1–10 chạy trên production | ⏳ |
+| M3.5 | Demo public end-to-end trên host; upload và xem file thật trên production (hoãn từ M2.5); đặt `CRON_SECRET`, kiểm Vercel Cron chạy với Services (không được thì GitHub Actions, handoff 025) | **Mốc an toàn:** golden path 1–10 chạy trên production | ⏳ |
 | M4.1 | Template editor dạng form + validate tức thì bằng `core` | | ⏳ |
 | M4.2 | Lịch sử version + luồng publish trên UI | | ⏳ |
 | M4.3 | Dependency graph (React Flow + dagre) | | ⏳ |
@@ -49,7 +49,6 @@ Trạng thái: ✅ xong · ▶ kế tiếp · ⏳ chưa làm. Mốc M4–M5 mớ
 
 ## Quyết định còn mở
 
-- Người gọi cron tick (PLAN §6.5): chốt ở M3.2. Vercel Hobby chỉ cho cron chạy mỗi ngày một lần, nên nhiều khả năng dùng GitHub Actions `schedule`.
 - Preview deployment: origin khác `APP_ORIGIN` nên mọi request ghi bị 403, preview dùng chung DB với production, và không có `S3_*` (chỉ đặt cho Production) nên API của preview không boot. Chốt khi bắt đầu dùng PR: tắt preview, hoặc cho phép origin của preview và dùng Neon branch.
 - Swagger `/api/docs` (PLAN §8) chưa thuộc session nào; khi thêm phải chỉnh CSP của `helmet`. Gắn vào session nào?
 - BR-R01 ở mức template: M1.4a chốt không thêm rule chặn publish. Còn mở cho M4.1: editor có gợi ý (không chặn) khi DOCUMENT và APPROVAL của nó cùng giao `DIRECT_MANAGER` không?
@@ -67,7 +66,9 @@ pnpm db:migrate        # prisma migrate dev (lần đầu, hoặc khi đổi sch
 pnpm db:seed           # tạo lại org acme: lan.pham@acme.joinpath.demo (HR), duc.tran@… (IT), minh.nguyen@… (MEMBER)
 pnpm dev               # web http://localhost:3000 (đăng nhập ở /login; thư mời ở /mock-inbox; portal của người mới ở /my-onboarding; duyệt tài liệu ở /tasks, nút Review documents) · api http://localhost:3001/api/health
 pnpm test              # cần Postgres + migration, RustFS + bucket; rồi pnpm lint · pnpm typecheck · pnpm format:check
-# Tua ngày nghiệp vụ: POST /api/demo/clock/advance {days} (1–30, org sandbox; acme là sandbox), chưa có UI (M3.3). Đưa đồng hồ local về hôm nay:
+# Tua ngày nghiệp vụ: POST /api/demo/clock/advance {days} (1–30, org sandbox; acme là sandbox), chạy luôn tick nhắc việc của org; chưa có UI (M3.3).
+# Tick mọi org bằng tay: đặt CRON_SECRET trong apps/api/.env rồi curl -H "Authorization: Bearer <secret>" http://localhost:3001/api/internal/cron/tick
+# Đưa đồng hồ local về hôm nay:
 docker compose exec -T postgres psql -U joinpath -d joinpath -c "UPDATE organizations SET clock_offset_days = 0 WHERE slug = 'acme'"
 pnpm exec playwright-cli -s=joinpath open http://localhost:3000/login   # Chrome có cửa sổ; `show` mở dashboard xem trực tiếp
 ```
@@ -84,6 +85,7 @@ Env trên Vercel:
 - Tự đặt: `APP_ORIGIN`, `TRUST_PROXY_HOPS=1`, `ENABLE_EXPERIMENTAL_COREPACK=1`.
 - Integration Neon cấp: `DATABASE_URL`, `DATABASE_URL_UNPOOLED`.
 - Storage R2 (M2.5), chỉ Production, loại Secret (không đọc lại được): `S3_ENDPOINT` (`https://<account id>.r2.cloudflarestorage.com`), `S3_REGION=auto`, `S3_BUCKET=joinpath`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` (token Object Read & Write, chỉ bucket `joinpath`). Thiếu thì API không boot.
+- `CRON_SECRET` (M3.2a), Production, loại Secret: **chưa đặt**. Vercel Cron gửi nó khi gọi `/api/internal/cron/tick` mỗi ngày (`vercel.json`); thiếu thì API vẫn boot, route trả 401.
 
 Secret của repo GitHub: `DATABASE_URL` (giá trị unpooled), `SEED_PASSWORD`.
 

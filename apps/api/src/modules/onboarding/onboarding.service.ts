@@ -31,6 +31,13 @@ import { recordAudit } from '../audit/audit.js';
 import { sendInvitation } from '../auth/invitation.js';
 import type { AuthContext } from '../auth/session.js';
 import { canSeeFile } from '../documents/documents.policy.js';
+import {
+  assigned,
+  canceled,
+  notify,
+  personOf,
+  rescheduled,
+} from '../notifications/notify.js';
 import { orgToday, personSelect } from '../org/org.service.js';
 import { visibleOnboardings } from './onboarding.policy.js';
 
@@ -471,7 +478,7 @@ export class OnboardingService {
           message: 'The template has a newer version: preview again',
         });
       }
-      const { tasks, sendsInvitation } = await planFor(
+      const { today, tasks, sendsInvitation } = await planFor(
         tx,
         organizationId,
         {
@@ -549,6 +556,25 @@ export class OnboardingService {
         onboardingId: id,
         data: input,
       });
+      await notify(
+        tx,
+        organizationId,
+        assigned(
+          {
+            newHire: await personOf(tx, draft.employeeId),
+            actor: (await personOf(tx, auth.employeeId)).fullName,
+            startDate: toIsoDate(draft.startDate),
+            today,
+          },
+          tasks.map((task) => ({
+            title: task.title,
+            assigneeEmployeeId: task.assigneeId!,
+            availableOn: task.availableOn,
+            dueOn: task.dueOn,
+          })),
+        ),
+        auth.employeeId,
+      );
       // BR-A07: a new hire with no account sets a password through the link.
       if (sendsInvitation) {
         await sendInvitation(tx, auth, id, 'invitation.sent');
@@ -577,7 +603,12 @@ export class OnboardingService {
       const [onboarding] = await tx.onboarding.updateManyAndReturn({
         where: { id, organizationId, status: { in: ['DRAFT', 'ACTIVE'] } },
         data: { version: { increment: 1 } },
-        select: { status: true, startDate: true, templateVersionId: true },
+        select: {
+          status: true,
+          startDate: true,
+          templateVersionId: true,
+          employeeId: true,
+        },
       });
       if (!onboarding) {
         throw new ConflictException('A finished onboarding keeps its dates');
@@ -604,6 +635,7 @@ export class OnboardingService {
             status: true,
             dueOn: true,
             dueOverridden: true,
+            assigneeEmployeeId: true,
           },
         })
       ).map((task) => ({ ...task, dueOn: toIsoDate(task.dueOn) }));
@@ -640,6 +672,17 @@ export class OnboardingService {
             })),
         },
       });
+      // The plan holds the open tasks, every one of them moved.
+      await notify(
+        tx,
+        organizationId,
+        rescheduled(
+          await personOf(tx, onboarding.employeeId),
+          startDate,
+          plan.map((task) => tasks.find((each) => each.id === task.id)!),
+        ),
+        auth.employeeId,
+      );
     });
     return this.get(auth, id);
   }
@@ -658,10 +701,11 @@ export class OnboardingService {
     await this.prisma.$transaction(async (tx) => {
       const onboarding = await tx.onboarding.findFirst({
         where: { id, organizationId },
-        select: { employeeId: true },
+        select: { employee: { select: { id: true, fullName: true } } },
       });
       if (!onboarding) throw new NotFoundException('Onboarding not found');
-      const { employeeId } = onboarding;
+      const { employee } = onboarding;
+      const employeeId = employee.id;
       const canceledAt = new Date();
       // Compare-and-set, which locks the row: a task command waits, then finds the onboarding
       // no longer active (PLAN §6.4).
@@ -672,9 +716,10 @@ export class OnboardingService {
       if (count === 0) {
         throw new ConflictException('This onboarding is already finished');
       }
-      await tx.task.updateMany({
+      const dropped = await tx.task.updateManyAndReturn({
         where: { onboardingId: id, status: { in: ['PENDING', 'IN_PROGRESS'] } },
         data: { status: 'CANCELED' },
+        select: { assigneeEmployeeId: true },
       });
       // Revoked first: that waits for an acceptance under way, so the count below sees it.
       await tx.invitation.updateMany({
@@ -700,6 +745,12 @@ export class OnboardingService {
         entityId: id,
         onboardingId: id,
       });
+      await notify(
+        tx,
+        organizationId,
+        canceled(id, employee, dropped),
+        auth.employeeId,
+      );
     });
     return this.get(auth, id);
   }

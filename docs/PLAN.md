@@ -1,4 +1,4 @@
-# Joinpath — Kế hoạch triển khai v0.30
+# Joinpath — Kế hoạch triển khai v0.31
 
 > **Joinpath**: Employee Onboarding & Workflow Management Platform, dự án portfolio Full-stack.
 > Bản này tinh chỉnh SRS v0.4 trong thread ChatGPT "Thiết kế dự án onboarding" (14/10/2026).
@@ -28,6 +28,7 @@
 > **v0.28 (16/10/2026):** storage của production là Cloudflare R2. Path-style URL không dùng được với mọi provider: Tigris bỏ path-style cho bucket tạo từ 19/02/2025 (§6.2, ADR 008). M2 xong sau 7 session (§13).
 > **v0.29 (16/10/2026):** M3 chia thành 8 session (§13). Hủy chỉ khóa tài khoản mà người mới có được qua lời mời; activate một onboarding mới cho người đó mở lại tài khoản (BR-C03). Assignee hiện tại của DOCUMENT xem được file và revision của nó (BR-P03, §9). Reschedule, cancel, reassign, due-date: thứ tự kiểm, mã lỗi, audit; task kèm `dueOverridden`; lệnh trên task kiểm lại assignee sau khi khóa (§8).
 > **v0.30 (16/10/2026):** onboarding kèm `canceledAt`; chi tiết kèm `cancelReason`, chỉ HR thấy (BR-C03, §8, §9). Onboarding detail: nút ⋯ trên dòng task mở `context-menu` bằng click, các dialog đổi ngày, hủy, reassign, đổi hạn dùng `center-morph-modal`; draft hủy được từ bước review của wizard (§10.1, ADR 010).
+> **v0.31 (16/10/2026):** người gọi cron là Vercel Cron, mỗi ngày 01:00 UTC, bằng `GET /internal/cron/tick` kèm `Authorization: Bearer` (§6.1, §6.2, §6.5, §8). Người nhận và email của từng sự kiện (§6.5); đổi ngày bắt đầu cũng báo (BR-N02). Nhắc việc bỏ qua task đang bị chặn (BR-N03); task mở theo ngày xét `available_on ≤ today`, để tua nhiều ngày không sót (§6.5); dedupe key theo task (BR-N04). Tick chỉ xóa session hết hạn, giữ lời mời (§6.5, §7). Route thông báo trả `{unread, notifications}` (§8).
 
 ## TL;DR: 6 thay đổi lớn nhất
 
@@ -96,7 +97,7 @@ Cột **Nguồn** ghi điểm bị thay đổi xuất phát từ đâu: `GPT` l�
 
 | # | v0.4 | v0.5 | Lý do |
 |---|---|---|---|
-| S1 | `outbox_events` + `apps/worker` polling bằng `SKIP LOCKED` | Ghi notification và mock email trong cùng transaction; các việc định kỳ gom vào `POST /internal/cron/tick` | Outbox chỉ cần khi có side effect ra ngoài DB. Khi gắn email thật, chỉ cần thêm cột `status` vào `mock_emails` là bảng này thành outbox |
+| S1 | `outbox_events` + `apps/worker` polling bằng `SKIP LOCKED` | Ghi notification và mock email trong cùng transaction; các việc định kỳ gom vào `/internal/cron/tick` | Outbox chỉ cần khi có side effect ra ngoài DB. Khi gắn email thật, chỉ cần thêm cột `status` vào `mock_emails` là bảng này thành outbox |
 | S2 | 3 bảng `phase/task/dependency_definitions`, CRUD từng dòng | `template_versions.definition` (JSON), validate bằng Zod + DAG validator dùng chung cho FE và BE; editor `PUT` nguyên bản định nghĩa | Định nghĩa là một document bất biến sau khi publish; chỉ phần execution mới cần relational |
 | S3 | Resource `/approvals/*` riêng | Approval là một `type` của task: `/tasks/:id/approve`, `/tasks/:id/reject`; bảng `approval_decisions` chỉ lưu lịch sử quyết định | Bớt một resource; dùng chung assignment, deadline, eligibility |
 | S4 | `assigneeType USER\|EMPLOYEE`, cặp `assignedUserId?` + `assignedEmployeeId?` | `tasks.assignee_employee_id NOT NULL` | HR, IT, Manager cũng là nhân viên công ty, nên chỉ cần một khóa ngoại. Nhân viên mới chưa có account vẫn được giao task, vòng lặp "activation ↔ invitation" tự biến mất |
@@ -372,9 +373,9 @@ ID ổn định theo từng nhóm: thêm rule mới không làm đổi số củ
 | ID | Rule |
 |---|---|
 | BR-N01 | Notification và mock email được ghi trong cùng transaction với thay đổi nghiệp vụ |
-| BR-N02 | Các sự kiện gây thông báo: invitation, được giao task, task READY, bị reject (kèm lý do), được approve, bị reassign, deadline đổi, onboarding hoàn thành hoặc bị hủy |
-| BR-N03 | Nhắc due-soon vào ngày `due_on − 1`; overdue nhắc mỗi ngày một lần; người nhận là assignee |
-| BR-N04 | Idempotent: `notifications.dedupe_key` là unique, insert dùng `ON CONFLICT DO NOTHING`. Ví dụ key: `due-soon:{taskId}:{date}`, `ready:{taskId}:{date}` |
+| BR-N02 | Các sự kiện gây thông báo: invitation, được giao task, task READY, bị reject (kèm lý do), được approve, bị reassign, deadline đổi (kể cả khi đổi ngày bắt đầu), onboarding hoàn thành hoặc bị hủy. Người nhận ở §6.5; không ai nhận thông báo về việc chính mình vừa làm |
+| BR-N03 | Nhắc due-soon vào ngày `due_on − 1`; overdue nhắc mỗi ngày một lần; người nhận là assignee. Chỉ nhắc task người đó làm được ngay (READY, kể cả đang làm); task đang chờ task khác thì không, vì task nó chờ đã được nhắc |
+| BR-N04 | Idempotent: `notifications.dedupe_key` là unique, insert dùng `ON CONFLICT DO NOTHING`; email đi kèm chỉ ghi khi thông báo được ghi. Key: `ready:{taskId}` (APPROVAL: `ready:{taskId}:{revision}`, mở lại cho mỗi revision), `due-soon:{taskId}:{due_on}`, `overdue:{taskId}:{today}` |
 
 **P: Phân quyền và bảo mật**
 
@@ -408,7 +409,7 @@ flowchart LR
     W -->|proxy| API["NestJS API<br/>modular monolith"]
     API --> DB[(PostgreSQL)]
     API --> S3[("S3-compatible<br/>private bucket")]
-    CRON["Cron của host<br/>hoặc GitHub Actions"] -->|"POST /internal/cron/tick + secret"| API
+    CRON["Vercel Cron<br/>mỗi ngày"] -->|"GET /internal/cron/tick + secret"| API
 ```
 
 Sơ đồ trên là ở local. Trên Vercel (ADR 011), router của Vercel chia `/api/*` sang service `api` và phần còn lại sang service `web`, nên rewrite của Next không chạy. Code server của web gọi API qua binding `API_URL`.
@@ -426,7 +427,7 @@ Sơ đồ trên là ở local. Trên Vercel (ADR 011), router của Vercel chia 
 | Schema và types | Zod trong `packages/core` | Dùng chung FE/BE |
 | DB | PostgreSQL 18 + Prisma 7.10 (pin cố định) | Tag `latest` của prisma CLI đang trỏ vào bản 8.0 RC, nên phải pin. Partial unique index khai báo ngay trong schema bằng preview `partialIndexes` (`@@unique([...], where: {...})`, dùng từ M1.3). CHECK thì Prisma schema chưa biểu diễn được, nên viết SQL tay trong migration (`migrate dev --create-only`) |
 | Storage | Bucket private S3-compatible: local và CI dùng RustFS 1.0.1, production dùng Cloudflare R2; client `aws4fetch` 1.0.20 | MinIO ngừng phát hành image từ 10/2025 và archive repo năm 2026; image cũ không còn tải được (M2.2). `aws4fetch` (MIT, không dependency) ký request `fetch` có sẵn của Node, kể cả presigned URL. Gọi bằng path-style URL qua cùng các biến env `S3_*`: RustFS, R2 và Amazon S3 đều nhận, Tigris thì không (bucket tạo từ 19/02/2025). R2 (chốt ở M2.5): `S3_REGION=auto`, location hint APAC, egress miễn phí, free 10 GB không hết hạn |
-| Việc định kỳ | Cron gọi `POST /internal/cron/tick` | Không dùng Redis, queue hay worker |
+| Việc định kỳ | Vercel Cron gọi `GET /internal/cron/tick` mỗi ngày (M3.2a) | Không dùng Redis, queue hay worker |
 | Test | Vitest 4, Supertest, Playwright | Một test runner cho cả repo. Vite 8 tự xử lý decorator metadata của Nest nên không cần plugin SWC |
 | Repo | pnpm workspaces, oxlint (type-aware), Prettier | Không dùng Turborepo. oxlint và Prettier mỗi công cụ một config ở gốc; Prettier có sẵn trong template Nest 12 nên giữ lại và áp cho code cả repo (không áp cho docs nội bộ) |
 | Runtime | Node 24 LTS, TypeScript 6.0 (pin cố định), pnpm 12 | TypeScript 7 chỉ còn `tsc` native, không có JS API mà Next.js và Nest CLI cần. Các thư viện khác lấy bản ổn định mới nhất lúc bắt đầu |
@@ -476,13 +477,29 @@ joinpath/
 
 ### 6.5 Thông báo và việc định kỳ
 
-- Trong transaction: gọi `notify(tx, …)` để ghi `notifications`, và ghi `mock_emails` cho invitation, reject, v.v.
-- `POST /internal/cron/tick` (yêu cầu header secret, idempotent, gọi mỗi giờ) làm các việc sau cho từng org:
-  - Nhắc due-soon (`due_on = today + 1`) và overdue (`today > due_on`).
-  - Thông báo READY theo ngày (`available_on = today` và prerequisite đã xong).
-  - Purge sandbox hết hạn (cascade trong DB + xóa prefix `orgs/{orgId}/`), dọn session và invitation hết hạn.
-- Nút "+1 ngày" trong sandbox gọi đúng hàm tick của org đó, ngay lập tức.
-- Ai gọi cron sẽ chốt ở M3.2. Vercel Hobby chỉ cho cron chạy mỗi ngày một lần, nên tick hàng giờ nhiều khả năng dùng GitHub Actions `schedule`.
+- Trong transaction của lệnh, `notify(tx, …)` ghi `notifications`, và ghi `mock_emails` cho các email ở bảng dưới (BR-N01). Email chỉ gửi người có tài khoản ACTIVE, vì link trong email cần đăng nhập; người mới chưa nhận lời mời vẫn có thông báo trong app.
+- Người nhận (chốt ở M3.2a). Link: người mới tới `/my-onboarding`, người khác tới `/tasks` hoặc trang onboarding.
+
+  | Sự kiện | Người nhận | Email |
+  |---|---|---|
+  | Activate | Mỗi người được giao, trừ người mới (đã có lời mời); mỗi người một thông báo gộp | ✓ |
+  | Lời mời | Người mới | ✓ |
+  | Task mở: task trước vừa xong; submit (người duyệt, mỗi revision); tới ngày (tick) | Assignee của task vừa mở | |
+  | Approve; reject kèm lý do | Assignee của DOCUMENT | Reject ✓ |
+  | Reassign | Người nhận task và người bị lấy task | Người nhận ✓ |
+  | Đổi hoặc reset deadline | Assignee | |
+  | Đổi ngày bắt đầu | Mỗi người có task mở bị dời (gộp theo người), cả người mới | |
+  | Hoàn thành | Mọi HR và manager của người mới | |
+  | Hủy | Người có task bị hủy, trừ người mới (tài khoản đã bị khóa); không kèm lý do | |
+  | Due-soon, overdue (tick) | Assignee | Overdue ✓ |
+
+- `GET /internal/cron/tick`: Vercel Cron gọi mỗi ngày lúc 01:00 UTC (khoảng 08:00 giờ VN), kèm `Authorization: Bearer <CRON_SECRET>` (env của API; không đặt thì route từ chối mọi lần gọi). Với từng org, theo `today(org)`:
+  - Báo task mở theo ngày: task PENDING có `available_on ≤ today` và prerequisite đã xong. Xét `≤` chứ không phải `=`, nên tua nhiều ngày một lúc không sót task nào; dedupe key giữ mỗi task một lần.
+  - Nhắc due-soon (`due_on = today + 1`) và overdue (`today > due_on`), chỉ cho task READY (BR-N03). Due-soon rơi vào ngày bị tua qua thì bỏ: task đó đã thành overdue.
+  - Sau các org: xóa session hết hạn. Lời mời hết hạn giữ nguyên: khung Invitation cần trạng thái Expired, và §7 không xóa bản ghi nghiệp vụ.
+  - Purge sandbox hết hạn (cascade trong DB + xóa prefix `orgs/{orgId}/`): M3.3a.
+- Tua ngày (`POST /demo/clock/advance`, nút "+1 ngày" trong sandbox) chạy tick của org đó ngay (BR-D03).
+- Vercel Hobby chỉ cho cron chạy mỗi ngày một lần; ngày nghiệp vụ tính theo ngày nên vậy là đủ. Chưa kiểm được cron có chạy với Vercel Services không: kiểm ở lần push đầu, không chạy thì chuyển sang GitHub Actions `schedule` (nhược điểm: GitHub tự tắt lịch chạy sau 60 ngày repo không có hoạt động).
 
 ### 6.6 Triển khai (đã chọn A ở M0.4)
 
@@ -532,7 +549,7 @@ Mọi bảng nghiệp vụ đều có `organization_id` và `created_at`. Không
 | `document_files` | task_id, submission_id?, storage_key, file_name, mime_type, size_bytes, uploaded_by | Reject chép file của revision sang bản nháp: dòng mới, cùng storage_key, uploaded_by và created_at; object chỉ bị xóa khi không còn dòng nào trỏ tới |
 | `document_submissions` | task_id, revision, submitted_by, submitted_at | unique(task_id, revision) |
 | `approval_decisions` | approval_task_id, submission_id, decision, reason?, decided_by, decided_at | unique(approval_task_id, submission_id); CHECK(decision = 'APPROVED' OR reason IS NOT NULL) |
-| `notifications` | recipient_employee_id, kind, task_id?, title, body, link, read_at?, dedupe_key? | unique(dedupe_key) |
+| `notifications` | recipient_employee_id, kind (11 loại, §6.5), task_id?, title, body, link (đường dẫn trong web), read_at?, dedupe_key? | unique(dedupe_key); index(recipient_employee_id, created_at) |
 | `mock_emails` | to_email, to_name, subject, body (chữ thường, các đoạn cách nhau một dòng trống), link, link_label (nút dưới thân email), footer (chữ dưới nút, cùng cách viết với body; đoạn cuối nằm dưới đường kẻ) | Khi gắn email thật thì thêm `status`, bảng này thành outbox |
 | `audit_events` | actor_user_id?, action, entity_type, entity_id, onboarding_id?, data jsonb | Append-only |
 
@@ -617,13 +634,15 @@ GET  /files/:id/download-url                  # {url, expiresAt}: signed URL s�
 
 # Thông báo, dashboard
 GET /notifications          POST /notifications/:id/read  POST /notifications/read-all
+                                              # {unread, notifications}: 50 thông báo mới nhất của chính mình, mới nhất trước;
+                                              # read, read-all trả cùng shape; đã đọc thì giữ read_at cũ; của người khác → 404
 GET /mock-inbox             GET /dashboard
                                               # mock-inbox: mọi email của org, mới nhất trước; HR luôn xem được, vai khác chỉ trong sandbox (403)
 
 # Demo (chỉ sandbox) và internal
 POST /demo/sandboxes        POST /demo/switch-user {employeeId}   POST /demo/clock/advance {days}
-                                              # clock/advance: days nguyên 1–30, mọi vai; ngoài sandbox 403; trả {today}; từ M3.2 chạy kèm tick
-POST /internal/cron/tick                      # yêu cầu header secret
+                                              # clock/advance: days nguyên 1–30, mọi vai; ngoài sandbox 403; chạy tick của org ngay (BR-D03); trả {today}
+GET  /internal/cron/tick                      # Vercel Cron; Authorization: Bearer <CRON_SECRET>, sai hoặc thiếu → 401; tick mọi org → 204
 ```
 
 Lỗi luôn trả về dạng `{ code, message, details? }`:

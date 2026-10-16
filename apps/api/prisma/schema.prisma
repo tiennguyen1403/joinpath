@@ -26,20 +26,21 @@ model Organization {
   createdIpHash   String?   @map("created_ip_hash")
   createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
 
-  departments      Department[]
-  employees        Employee[]
-  users            User[]
-  templates        Template[]
-  templateVersions TemplateVersion[]
-  onboardings      Onboarding[]
-  tasks            Task[]
-  taskDependencies TaskDependency[]
+  departments       Department[]
+  employees         Employee[]
+  users             User[]
+  templates         Template[]
+  templateVersions  TemplateVersion[]
+  onboardings       Onboarding[]
+  tasks             Task[]
+  taskDependencies  TaskDependency[]
   documentFiles     DocumentFile[]
   submissions       DocumentSubmission[]
   approvalDecisions ApprovalDecision[]
   invitations       Invitation[]
-  mockEmails       MockEmail[]
-  auditEvents      AuditEvent[]
+  mockEmails        MockEmail[]
+  notifications     Notification[]
+  auditEvents       AuditEvent[]
 
   @@map("organizations")
 }
@@ -67,16 +68,17 @@ model Employee {
   managerId      String?  @map("manager_id") @db.Uuid
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
-  organization  Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  department    Department?  @relation(fields: [departmentId], references: [id], onDelete: Cascade)
-  manager       Employee?    @relation("Reports", fields: [managerId], references: [id], onDelete: Cascade)
-  reports       Employee[]   @relation("Reports")
+  organization  Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  department    Department?          @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  manager       Employee?            @relation("Reports", fields: [managerId], references: [id], onDelete: Cascade)
+  reports       Employee[]           @relation("Reports")
   user          User?
   onboardings   Onboarding[]
   assignedTasks Task[]
   uploadedFiles DocumentFile[]
   submissions   DocumentSubmission[]
   decisions     ApprovalDecision[]
+  notifications Notification[]
 
   @@unique([organizationId, email])
   @@map("employees")
@@ -262,18 +264,19 @@ model Task {
   completedAt        DateTime?  @map("completed_at") @db.Timestamptz(3)
   createdAt          DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
 
-  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  onboarding   Onboarding       @relation(fields: [onboardingId], references: [id], onDelete: Cascade)
-  assignee     Employee         @relation(fields: [assigneeEmployeeId], references: [id], onDelete: Cascade)
-  reviews      Task?            @relation("Reviews", fields: [reviewsTaskId], references: [id], onDelete: Cascade)
-  reviewedBy   Task[]           @relation("Reviews")
-  dependsOn    TaskDependency[] @relation("Dependent")
-  dependents   TaskDependency[] @relation("Prerequisite")
+  organization  Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  onboarding    Onboarding           @relation(fields: [onboardingId], references: [id], onDelete: Cascade)
+  assignee      Employee             @relation(fields: [assigneeEmployeeId], references: [id], onDelete: Cascade)
+  reviews       Task?                @relation("Reviews", fields: [reviewsTaskId], references: [id], onDelete: Cascade)
+  reviewedBy    Task[]               @relation("Reviews")
+  dependsOn     TaskDependency[]     @relation("Dependent")
+  dependents    TaskDependency[]     @relation("Prerequisite")
   /// DOCUMENT only.
-  files        DocumentFile[]
-  submissions  DocumentSubmission[]
+  files         DocumentFile[]
+  submissions   DocumentSubmission[]
   /// APPROVAL only.
-  decisions    ApprovalDecision[]
+  decisions     ApprovalDecision[]
+  notifications Notification[]
 
   @@unique([onboardingId, definitionKey])
   @@map("tasks")
@@ -417,6 +420,46 @@ model MockEmail {
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@map("mock_emails")
+}
+
+enum NotificationKind {
+  ASSIGNED
+  UNASSIGNED
+  READY
+  APPROVED
+  REJECTED
+  DUE_CHANGED
+  RESCHEDULED
+  COMPLETED
+  CANCELED
+  DUE_SOON
+  OVERDUE
+
+  @@map("notification_kind")
+}
+
+/// In-app, for one person, written in the transaction of the change it tells of (BR-N01).
+model Notification {
+  id                  String           @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  organizationId      String           @map("organization_id") @db.Uuid
+  recipientEmployeeId String           @map("recipient_employee_id") @db.Uuid
+  kind                NotificationKind
+  taskId              String?          @map("task_id") @db.Uuid
+  title               String
+  body                String
+  /// A path in the web app.
+  link                String
+  readAt              DateTime?        @map("read_at") @db.Timestamptz(3)
+  /// A reminder or a task's opening goes out once: the insert skips a key already used (BR-N04).
+  dedupeKey           String?          @unique @map("dedupe_key")
+  createdAt           DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  recipient    Employee     @relation(fields: [recipientEmployeeId], references: [id], onDelete: Cascade)
+  task         Task?        @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([recipientEmployeeId, createdAt])
+  @@map("notifications")
 }
 
 /// Append-only (PLAN §7): the audit trail and the onboarding timeline.

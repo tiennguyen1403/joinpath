@@ -19,4 +19,7 @@ export const env = {
   APP_ORIGIN: new URL(required('APP_ORIGIN')).origin,
   // Proxies between the browser and the API: 0 locally, set per host (ADR 007).
   TRUST_PROXY_HOPS: count('TRUST_PROXY_HOPS'),
+  // What Vercel Cron sends as a bearer token to the tick (PLAN §6.5). Unset, the tick
+  // route refuses every call; the demo clock still runs the tick.
+  CRON_SECRET: process.env.CRON_SECRET || null,
 };

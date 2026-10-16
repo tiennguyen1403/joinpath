@@ -97,6 +97,43 @@ export const mockEmailSchema = z.object({
 });
 export type MockEmail = z.infer<typeof mockEmailSchema>;
 
+// What a notification tells (BR-N02, BR-N03), for the web to pick its icon.
+export const notificationKindSchema = z.enum([
+  'ASSIGNED',
+  'UNASSIGNED',
+  'READY',
+  'APPROVED',
+  'REJECTED',
+  'DUE_CHANGED',
+  'RESCHEDULED',
+  'COMPLETED',
+  'CANCELED',
+  'DUE_SOON',
+  'OVERDUE',
+]);
+export type NotificationKind = z.infer<typeof notificationKindSchema>;
+
+export const notificationSchema = z.object({
+  id: z.uuid(),
+  kind: notificationKindSchema,
+  // The task it is about, if one.
+  taskId: z.uuid().nullable(),
+  title: z.string(),
+  body: z.string(),
+  // A path in the web app: /my-onboarding, /tasks or an onboarding's page.
+  link: z.string(),
+  readAt: z.iso.datetime().nullable(),
+  createdAt: z.iso.datetime(),
+});
+export type Notification = z.infer<typeof notificationSchema>;
+
+// GET /notifications, and what marking them read answers: the newest, and how many are unread.
+export const notificationsSchema = z.object({
+  unread: z.number().int().nonnegative(),
+  notifications: z.array(notificationSchema),
+});
+export type Notifications = z.infer<typeof notificationsSchema>;
+
 export const meSchema = z.object({
   id: z.uuid(),
   email: z.email(),
