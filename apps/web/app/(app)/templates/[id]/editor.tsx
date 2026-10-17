@@ -108,8 +108,12 @@ import {
   assigneeRule,
   dayOf,
   signed,
+  tabPanel,
   TaskSummary,
+  TemplateGraph,
   titleOf,
+  type View,
+  ViewTabs,
 } from './phases';
 
 const list = new Intl.ListFormat('en-US');
@@ -197,14 +201,19 @@ export type Draft = ReturnType<typeof useDraft>;
 
 /**
  * HR edits a draft (FR-04): its phases and their tasks, added, renamed, reordered and deleted
- * in place, and each task in the panel.
+ * in place, and each task in the panel. Once it has tasks, the Graph tab draws what waits for
+ * what as it stands, unsaved changes and problems too (FR-23).
  */
 export function Editor({
   version,
   draft,
+  view,
+  onView,
 }: {
   version: TemplateVersion;
   draft: Draft;
+  view: View;
+  onView: (view: View) => void;
 }) {
   const { definition, setDefinition, issues, save } = draft;
   const [selectedKey, setSelectedKey] = useState(definition.tasks[0]?.key);
@@ -216,6 +225,7 @@ export function Editor({
   const opener = useRef<HTMLElement | null>(null);
   const reopen = useRef(false);
   const emptyId = useId();
+  const tabs = useId();
   const wide = useWide();
   const saveLine = (
     <SaveLine state={save.state} draft={version.version} onRetry={save.retry} />
@@ -322,65 +332,86 @@ export function Editor({
       <Trash3 aria-hidden className="size-4" />
     </Button>
   );
+  const hasTasks = definition.tasks.length > 0;
+  const graph = hasTasks && view === 'graph';
   return (
     <>
-      {!wide && saveLine}
+      {hasTasks && (
+        <ViewTabs
+          id={tabs}
+          value={graph ? 'graph' : 'phases'}
+          onChange={onView}
+        />
+      )}
+      {/* Under the tabs below 1280 px, and on the graph, which has no panel to hold it. */}
+      {(!wide || graph) && saveLine}
       {issues.length > 0 && <Problems issues={issues} />}
-      <div className="flex flex-wrap items-start gap-5">
-        <div className="flex min-w-0 flex-[1_1_420px] flex-col gap-3 text-sm">
-          {definition.phases.map((phase, index) => (
-            <PhaseCard
-              key={phase.key}
-              phase={phase}
-              index={index}
+      {graph ? (
+        <TemplateGraph
+          definition={definition}
+          issues={issues}
+          panel={tabPanel(tabs, 'graph')}
+        />
+      ) : (
+        <div
+          className="flex flex-wrap items-start gap-5"
+          {...(hasTasks && tabPanel(tabs, 'phases'))}
+        >
+          <div className="flex min-w-0 flex-[1_1_420px] flex-col gap-3 text-sm">
+            {definition.phases.map((phase, index) => (
+              <PhaseCard
+                key={phase.key}
+                phase={phase}
+                index={index}
+                definition={definition}
+                issues={issues}
+                current={wide || drawerOpen ? selected?.key : undefined}
+                onChange={setDefinition}
+                onPick={pick}
+                adding={adding === phase.key}
+                onAdding={(open) => setAdding(open ? phase.key : null)}
+                onAdded={setSelectedKey}
+                onDelete={(from) =>
+                  askDelete({ kind: 'phase', key: phase.key }, from)
+                }
+              />
+            ))}
+            <AddPhase
               definition={definition}
-              issues={issues}
-              current={wide || drawerOpen ? selected?.key : undefined}
               onChange={setDefinition}
-              onPick={pick}
-              adding={adding === phase.key}
-              onAdding={(open) => setAdding(open ? phase.key : null)}
-              onAdded={setSelectedKey}
-              onDelete={(from) =>
-                askDelete({ kind: 'phase', key: phase.key }, from)
-              }
+              onAdded={setAdding}
             />
-          ))}
-          <AddPhase
-            definition={definition}
-            onChange={setDefinition}
-            onAdded={setAdding}
-          />
-        </div>
-        {wide &&
-          (selected ? (
-            <TaskPanel
-              key={selected.key}
-              task={selected}
-              definition={definition}
-              issues={issues}
-              onChange={setDefinition}
-              actions={deleteButton}
-              footer={saveLine}
-            />
-          ) : (
-            <section
-              aria-labelledby={emptyId}
-              className="flex min-w-0 flex-[999_1_480px] flex-col gap-4 rounded-2xl border border-border p-6"
-            >
-              <h2
-                id={emptyId}
-                className="text-[15px] leading-[21px] font-semibold"
+          </div>
+          {wide &&
+            (selected ? (
+              <TaskPanel
+                key={selected.key}
+                task={selected}
+                definition={definition}
+                issues={issues}
+                onChange={setDefinition}
+                actions={deleteButton}
+                footer={saveLine}
+              />
+            ) : (
+              <section
+                aria-labelledby={emptyId}
+                className="flex min-w-0 flex-[999_1_480px] flex-col gap-4 rounded-2xl border border-border p-6"
               >
-                Edit task
-              </h2>
-              <p className="text-muted-foreground">
-                Add a task to a phase, and it opens here.
-              </p>
-              {saveLine}
-            </section>
-          ))}
-      </div>
+                <h2
+                  id={emptyId}
+                  className="text-[15px] leading-[21px] font-semibold"
+                >
+                  Edit task
+                </h2>
+                <p className="text-muted-foreground">
+                  Add a task to a phase, and it opens here.
+                </p>
+                {saveLine}
+              </section>
+            ))}
+        </div>
+      )}
       {!wide && selected && (
         <Drawer
           open={drawerOpen}

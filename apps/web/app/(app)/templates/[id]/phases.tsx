@@ -1,7 +1,27 @@
-import type { AssigneeRule, TaskDef, TemplateDefinition } from '@joinpath/core';
-import type { ReactNode } from 'react';
+import type {
+  AssigneeRule,
+  TaskDef,
+  TemplateDefinition,
+  TemplateIssue,
+} from '@joinpath/core';
+import {
+  type HTMLAttributes,
+  type ReactNode,
+  useCallback,
+  useMemo,
+} from 'react';
+import { XCircle } from 'reicon-react';
 import { cn } from '@/components/beui/lib/utils';
+import { AnimatedBadge } from '@/components/beui/motion/animated-badge';
+import { Tabs, TabsList, TabsTrigger } from '@/components/beui/motion/tabs';
+import {
+  ArrowLine,
+  type ArrowTone,
+  DependencyGraph,
+  GraphSection,
+} from '@/components/dependency-graph';
 import { TASK_TYPES } from '@/components/task-status';
+import { graphTasks, linksToFix, type TemplateGraphTask } from './graph';
 
 /** Who a template gives a task to (BR-T11), keyed for a select. */
 export const ASSIGNEES = {
@@ -108,5 +128,153 @@ export function TaskSummary({
         </span>
       </span>
     </>
+  );
+}
+
+/** How a version shows: its phases, or what waits for what (M4.3b). */
+export type View = 'phases' | 'graph';
+
+/** Phases | Graph, under the version tabs; `id` ties each tab to the panel of `tabPanel`. */
+export function ViewTabs({
+  id,
+  value,
+  onChange,
+}: {
+  id: string;
+  value: View;
+  onChange: (view: View) => void;
+}) {
+  return (
+    <Tabs
+      value={value}
+      onValueChange={(view) => onChange(view as View)}
+      className="max-w-full self-start"
+    >
+      <TabsList aria-label="Template views">
+        {(['phases', 'graph'] as const).map((view) => (
+          <TabsTrigger
+            key={view}
+            value={view}
+            id={`${id}-${view}`}
+            aria-controls={`${id}-panel`}
+            // White on the stronger blue (ADR 009).
+            indicatorClassName="bg-primary-strong"
+          >
+            {view === 'phases' ? 'Phases' : 'Graph'}
+          </TabsTrigger>
+        ))}
+      </TabsList>
+    </Tabs>
+  );
+}
+
+/** The panel that `ViewTabs` shows, on `view`. */
+export const tabPanel = (id: string, view: View) => ({
+  role: 'tabpanel',
+  id: `${id}-panel`,
+  'aria-labelledby': `${id}-${view}`,
+});
+
+// Four rows, so taller than an onboarding's card: the title, its type and who does it, its days,
+// its problems.
+const CARD = { width: 168, height: 132 };
+
+/**
+ * What waits for what in a version (FR-23): each phase a band, each task a card, an arrow from
+ * each prerequisite. A draft's `issues` give each card its problem count and draw the links to
+ * fix in red; a version read only gets neither, as its list doesn't.
+ */
+export function TemplateGraph({
+  definition,
+  issues,
+  panel,
+}: {
+  definition: TemplateDefinition;
+  issues?: TemplateIssue[];
+  panel: HTMLAttributes<HTMLElement>;
+}) {
+  const tasks = useMemo(() => graphTasks(definition), [definition]);
+  const fix = useMemo(
+    () => (issues ? linksToFix(definition, issues) : new Set<string>()),
+    [definition, issues],
+  );
+  const card = useCallback(
+    ({ def }: TemplateGraphTask) => (
+      <GraphCard
+        task={def}
+        problems={
+          issues?.filter(({ taskKeys }) => taskKeys.includes(def.key)).length ??
+          0
+        }
+      />
+    ),
+    [issues],
+  );
+  const arrow = useCallback(
+    (from: TemplateGraphTask, to: TemplateGraphTask): ArrowTone =>
+      fix.has(`${from.id}>${to.id}`) ? 'problem' : 'plain',
+    [fix],
+  );
+  return (
+    <GraphSection
+      panel={panel}
+      list="Phases"
+      legend={
+        <>
+          <li className="flex items-center gap-2">
+            <ArrowLine tone="plain" />
+            Waits for
+          </li>
+          {fix.size > 0 && (
+            <li className="flex items-center gap-2">
+              <ArrowLine tone="problem" />
+              Link to fix
+            </li>
+          )}
+        </>
+      }
+    >
+      <DependencyGraph
+        tasks={tasks}
+        label={(phase) => definition.phases[phase].name}
+        card={card}
+        arrow={arrow}
+        size={CARD}
+      />
+    </GraphSection>
+  );
+}
+
+/** A task on the graph: what its row says, in four rows, 10 px in so the longest pair fits. */
+function GraphCard({ task, problems }: { task: TaskDef; problems: number }) {
+  return (
+    <div className="flex size-full flex-col justify-center gap-1 rounded-xl border border-border bg-background px-2.5 py-3 text-[13px] leading-[17px]">
+      <span
+        className={cn(
+          'line-clamp-2 font-semibold',
+          !task.title.trim() && 'text-muted-foreground',
+        )}
+      >
+        {titleOf(task)}
+      </span>
+      <span className="truncate text-xs text-muted-foreground">
+        {TASK_TYPES[task.type].label} · {ASSIGNEES[assigneeKey(task.assignee)]}
+      </span>
+      <span className="truncate font-mono text-xs text-muted-foreground">
+        {signed(task.availableOffsetDays)}d → {signed(task.dueOffsetDays)}d
+      </span>
+      {problems > 0 && (
+        <span className="mt-1 flex">
+          <AnimatedBadge
+            size="sm"
+            status="danger"
+            icon={<XCircle className="size-3" />}
+            className="text-danger-strong"
+          >
+            {problems} {problems === 1 ? 'problem' : 'problems'}
+          </AnimatedBadge>
+        </span>
+      )}
+    </div>
   );
 }

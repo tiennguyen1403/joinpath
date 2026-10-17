@@ -12,7 +12,7 @@ import {
   Position,
   ReactFlow,
 } from '@xyflow/react';
-import { type ReactNode, useMemo } from 'react';
+import { type HTMLAttributes, type ReactNode, useMemo } from 'react';
 import {
   CARD,
   type GraphTask,
@@ -20,11 +20,17 @@ import {
   type Point,
 } from '@/components/graph-layout';
 
+export type ArrowTone = 'plain' | 'waiting' | 'problem';
 type Card = Node<{ card: ReactNode }, 'card'>;
-type Arrow = Edge<{ path: string; waiting: boolean }, 'arrow'>;
+type Arrow = Edge<{ path: string; tone: ArrowTone }, 'arrow'>;
 
-// Arrow colours: grey once the prerequisite is done, orange (--warning-strong) while it waits.
-export const ARROW = { done: '#8a8a8a', waiting: '#904a00' };
+// Arrows are grey; orange (--warning-strong) and dashed while a task still waits for them, red
+// (--danger-strong) for a link a draft has to fix.
+const ARROW: Record<ArrowTone, { color: string; dash?: string }> = {
+  plain: { color: '#8a8a8a' },
+  waiting: { color: '#904a00', dash: '6 6' },
+  problem: { color: '#a5292b' },
+};
 // Room under the bands for React Flow's attribution.
 const ATTRIBUTION = 20;
 
@@ -40,15 +46,12 @@ function CardNode({ data }: NodeProps<Card>) {
 }
 
 function ArrowEdge({ data, markerEnd }: EdgeProps<Arrow>) {
+  const { color, dash } = ARROW[data!.tone];
   return (
     <BaseEdge
       path={data!.path}
       markerEnd={markerEnd}
-      style={{
-        stroke: data!.waiting ? ARROW.waiting : ARROW.done,
-        strokeWidth: 2,
-        strokeDasharray: data!.waiting ? '6 6' : undefined,
-      }}
+      style={{ stroke: color, strokeWidth: 2, strokeDasharray: dash }}
     />
   );
 }
@@ -56,25 +59,85 @@ function ArrowEdge({ data, markerEnd }: EdgeProps<Arrow>) {
 const NODE_TYPES = { card: CardNode };
 const EDGE_TYPES = { arrow: ArrowEdge };
 
+/** An arrow's line as a legend shows it. */
+export function ArrowLine({ tone }: { tone: ArrowTone }) {
+  const { color, dash } = ARROW[tone];
+  return (
+    <svg width="22" height="8" viewBox="0 0 22 8" className="shrink-0">
+      <path
+        d="M 1 4 L 21 4"
+        stroke={color}
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeDasharray={dash}
+      />
+    </svg>
+  );
+}
+
 /**
- * What waits for what (FR-23), laid out by `layoutGraph`: each phase a band named by `label`,
- * each task the card `card` draws, and an arrow from each prerequisite, dashed orange while
- * `waiting` says the task still waits for it. Only to look at: nothing moves, pans or zooms,
- * and it is inert, so it scrolls with the page and screen readers skip it for the task list.
+ * The graph's card, as its tab panel (`panel`): what the graph is, the graph, scrolling
+ * sideways when wider than the page, then `legend`. The `list` tab has the same tasks for
+ * screen readers.
+ */
+export function GraphSection({
+  panel,
+  list,
+  legend,
+  children,
+}: {
+  panel: HTMLAttributes<HTMLElement>;
+  list: string;
+  legend: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <section {...panel} className="rounded-2xl border border-border p-2">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-3 pt-2.5 pb-3.5">
+        <h2 className="text-[15px] leading-[21px] font-semibold">
+          What waits for what
+        </h2>
+        <p className="text-[13px] text-muted-foreground">
+          Arrows point from a prerequisite to the task that waits for it
+        </p>
+      </div>
+      <div className="overflow-x-auto pb-1">
+        <p className="sr-only">
+          The {list} tab lists the same tasks and what each waits for.
+        </p>
+        {children}
+      </div>
+      <ul
+        aria-hidden
+        className="flex flex-wrap gap-x-5 gap-y-2.5 px-3 pt-1.5 pb-1.5 text-[13px] leading-5 text-muted-foreground"
+      >
+        {legend}
+      </ul>
+    </section>
+  );
+}
+
+/**
+ * What waits for what (FR-23), laid out by `layoutGraph` with cards of `size`: each phase a
+ * band named by `label`, each task the card `card` draws, and an arrow from each prerequisite
+ * as `arrow` says, red ones drawn last. Only to look at: nothing moves, pans or zooms, and it
+ * is inert, so it scrolls with the page and screen readers skip it for the task list.
  */
 export function DependencyGraph<T extends GraphTask>({
   tasks,
   label,
   card,
-  waiting,
+  arrow,
+  size = CARD,
 }: {
   tasks: T[];
   label: (phase: number) => string;
   card: (task: T) => ReactNode;
-  waiting: (from: T, to: T) => boolean;
+  arrow: (from: T, to: T) => ArrowTone;
+  size?: { width: number; height: number };
 }) {
   const { layout, nodes, edges } = useMemo(() => {
-    const layout = layoutGraph(tasks);
+    const layout = layoutGraph(tasks, size);
     const byId = new Map(tasks.map((task) => [task.id, task]));
     const nodes: Card[] = tasks
       .map((task) => {
@@ -83,8 +146,8 @@ export function DependencyGraph<T extends GraphTask>({
           id: task.id,
           type: 'card' as const,
           position: { x, y },
-          width: CARD.width,
-          height: CARD.height,
+          width: size.width,
+          height: size.height,
           data: { card: card(task) },
         };
       })
@@ -92,24 +155,30 @@ export function DependencyGraph<T extends GraphTask>({
       .sort(
         (a, b) => a.position.x - b.position.x || a.position.y - b.position.y,
       );
-    const edges: Arrow[] = layout.arrows.map(({ from, to, points }) => {
-      const still = waiting(byId.get(from)!, byId.get(to)!);
-      return {
-        id: `${from}-${to}`,
-        source: from,
-        target: to,
-        type: 'arrow' as const,
-        data: { path: pathThrough(points), waiting: still },
-        markerEnd: {
-          type: MarkerType.ArrowClosed,
-          color: still ? ARROW.waiting : ARROW.done,
-          width: 14,
-          height: 14,
-        },
-      };
-    });
+    const edges: Arrow[] = layout.arrows
+      .map(({ from, to, points }) => {
+        const tone = arrow(byId.get(from)!, byId.get(to)!);
+        return {
+          // Keys may hold "-", never ">".
+          id: `${from}>${to}`,
+          source: from,
+          target: to,
+          type: 'arrow' as const,
+          data: { path: pathThrough(points), tone },
+          markerEnd: {
+            type: MarkerType.ArrowClosed,
+            color: ARROW[tone].color,
+            width: 14,
+            height: 14,
+          },
+        };
+      })
+      .sort(
+        (a, b) =>
+          Number(a.data.tone === 'problem') - Number(b.data.tone === 'problem'),
+      );
     return { layout, nodes, edges };
-  }, [tasks, card, waiting]);
+  }, [tasks, card, arrow, size]);
 
   return (
     <div

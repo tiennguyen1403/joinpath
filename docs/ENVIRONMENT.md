@@ -19,6 +19,7 @@
   - CLI chặn URL `file:`: mở file local qua `python -m http.server <port> --bind 127.0.0.1 --directory <thư mục>` (M3.3a).
 - `eval` của Playwright CLI: hàm viết nhiều dòng, hoặc đối số có `"` lồng bên trong, bị Windows từ chối ("batch file arguments are invalid"). Viết hàm trên một dòng, bên trong dùng nháy đơn (M3.2b).
   - Hàm dài thì ghi vào file rồi `run-code --filename <file>`. `page.waitForResponse` trong đó đo được một request, kể cả khi trang chuyển bằng `window.location.assign` (vd tạo sandbox, M3.5).
+  - `run-code` không có `import()` động (ERR_VM_DYNAMIC_IMPORT_CALLBACK_MISSING): hàm dùng chung thì chép vào từng script trước khi chạy (M4.3b).
 - `getByRole('alert').first()` bắt trúng route announcer rỗng của Next (cũng `role="alert"`): tìm Alert của trang theo chữ (M4.1a).
 - Playwright với control của beUI (M4.2a):
   - `click` coi nút `aria-disabled="true"` là đang khóa và chờ tới timeout: thử bấm nút khóa thì `click({ force: true })`;
@@ -31,6 +32,9 @@
   - Khung cố định chiều cao (vd 1024 × 768) có cột flex tràn thì header co lại: header thêm `flex-shrink: 0` (M4.2a).
   - Chép bảng cũ rồi thêm style: kiểm tên class chưa bị dùng. `.jp-more` của các bảng editor là nút ⋯ 28 px của phase; thêm `.jp-more` 40 px cho header làm mọi phase cao thêm (bảng 390 px dài hơn bảng "before" 33 px). Nút ⋯ của header dùng `.jp-hmore` (M4.2b).
   - Bảng có graph: lấy tọa độ card và mũi tên từ chính `layoutGraph`. Node 24 chạy thẳng file `.ts` (bỏ type), nên một script trong scratchpad import được `apps/web/components/graph-layout.ts` (chạy trong `apps/web` để tìm thấy `@dagrejs/dagre`; `--no-warnings` tắt cảnh báo MODULE_TYPELESS_PACKAGE_JSON). Bảng khi đó khớp bản build tới từng px (M4.3a).
+    File chỉ có `import type` từ `@/` cũng chạy được (vd `templates/[id]/graph.ts`, M4.3b).
+  - Chữ phải vừa một card: đo bằng `canvas.measureText` sau `document.fonts.ready`; vùng chữ = rộng card − padding − 2 px viền (M4.3b).
+  - Bảng của template editor (hàng 15–18 của canvas chính) cách các khối 20 px, còn cột của app shell là `gap-6` (24 px): lệch có từ trước, khi so bản build với bảng thì bỏ qua (M4.3b).
 - Kéo thả của `sortable-stack` (motion `Reorder`) chạy với `page.mouse`: `down` trên tay nắm, `move` từng bước nhỏ (vd 8 px, chờ 16 ms), rồi `up`. Bàn phím: `focus` tay nắm rồi `ArrowUp`, `ArrowDown`, `Home`, `End` (M4.1b).
 - `click` nhận locator thay cho ref: `click "getByRole('button', { name: 'Lan Pham, HR' })"`, đỡ phải `snapshot` trước mỗi bước (M3.3d).
   - Tên khớp theo chuỗi con, không phân biệt hoa thường: "Mock inbox" khớp cả "Open mock inbox", locator trùng hai phần tử thì không bấm gì. Thêm `exact: true`.
@@ -51,6 +55,7 @@
 - Đừng `pnpm build` khi `pnpm dev` đang chạy (`nest build` xóa `dist`, api dev chết). Dừng `pnpm dev` chạy nền không tắt node của next và nest: `Stop-Process` theo command line.
   - Chỉ lọc theo `next`, `nest`, `apps\api`, `tsc`: lọc theo `pnpm` hay `joinpath` khớp cả trình duyệt của Playwright CLI (`node_modules\.pnpm\playwright-core…`) và tắt nó (M4.1b).
 - Prettier với đường dẫn có `[id]`: truyền đúng đường dẫn (`prettier --write "apps/web/app/(app)/templates/[id]/editor.tsx"`); escape kiểu glob `[[]id]` thì không khớp file nào (M4.1b).
+- Vitest của `apps/web` tìm cả test trong `app/(app)/templates/[id]/`; import lúc chạy phải là đường dẫn tương đối, vì Vitest không biết alias `@/` (`import type` thì được) (M4.3b).
 - Script Python sửa file repo: đọc, ghi với `newline=""` (không thì thành CRLF); in output vitest cần `PYTHONIOENCODING=utf-8` (`python -I` bỏ qua biến này: dùng `sys.stdout.reconfigure(encoding='utf-8')`).
   - Heredoc `python - <<'EOF'` dài, có nhiều dấu nháy đơn, có lúc bị Bash tool báo "unexpected EOF while looking for matching `''": ghi script vào scratchpad bằng Write rồi chạy `python -I <file>` (M3.1a).
   - `$TMP` của Git Bash không phải scratchpad của session: file tạm, bản sao lưu thì dùng đường dẫn scratchpad tuyệt đối.
@@ -68,6 +73,7 @@
 - Playwright với graph (React Flow, M4.3a):
   - edge là `<g>` trong SVG, `waitFor()` coi là ẩn và chờ tới timeout: chờ bằng `waitFor({ state: 'attached' })`;
   - span nhãn của tab beUI cũng có `inert`, nên `querySelector('[inert]')` bắt nhầm nó: tìm khung graph qua `.react-flow`;
+  - `style.strokeDasharray` của edge đọc lại là `6, 6`, không phải `6 6` (M4.3b);
   - `Input.synthesizeScrollGesture` kiểu touch (CDP) không cuộn gì trong Chrome headed ở máy này, cả ở vùng không có graph. Kiểm vuốt bằng `document.elementFromPoint` tại điểm trên graph rồi đọc `touch-action` từ phần tử đó lên tới khung cuộn.
 - Chrome trên Windows, cửa sổ 1440 px: thanh cuộn chiếm 15 px, nên trên trang chi tiết onboarding vùng trong card của graph chỉ rộng 1087 px. Graph 1080 px vừa khít khi khung cuộn không có padding ngang; thêm 4 px là hiện thanh cuộn ngang vì 1 px (M4.3a).
 - Thử trạng thái chờ và lỗi mạng trên UI: Playwright `eval` thay `window.fetch` bằng một promise reject sau vài giây (một dòng, nháy đơn). Thử 429 của Try demo: chèn org giả có `created_ip_hash = encode(sha256('::1'::bytea), 'hex')` (IP local qua proxy dev là `::1`), thử xong thì xóa (M3.3c).

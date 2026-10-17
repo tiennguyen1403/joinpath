@@ -30,22 +30,30 @@ type Path = { from: GraphTask; to: GraphTask; ys: number[]; back: boolean };
  * Lays the tasks out left to right, each phase a band of columns as the canvas draws them
  * (PLAN §10): a task sits one column right of the furthest prerequisite in its own phase.
  * dagre orders the cards in each column and finds the arrows a way between them; an arrow
- * back to an earlier phase runs below the cards. `tasks` come in template order and never
- * wait for each other in a loop (BR-T05).
+ * back to an earlier phase runs below the cards. `tasks` come in template order. A draft's
+ * may wait for each other in a loop (BR-T05 stops one only at publish): the link that
+ * closes it runs back below the cards too.
  */
-export function layoutGraph(tasks: GraphTask[]): GraphLayout {
+export function layoutGraph(
+  tasks: GraphTask[],
+  size: { width: number; height: number } = CARD,
+): GraphLayout {
   const byId = new Map(tasks.map((task) => [task.id, task]));
   const depth = new Map<string, number>();
+  const visiting = new Set<string>();
   const depthOf = (task: GraphTask): number => {
     let d = depth.get(task.id);
     if (d === undefined) {
       d = 0;
+      visiting.add(task.id);
       for (const id of task.dependsOn) {
         const prerequisite = byId.get(id);
-        if (prerequisite?.phase === task.phase) {
+        // A prerequisite still being placed waits for this task: a loop, so this link runs back.
+        if (prerequisite?.phase === task.phase && !visiting.has(id)) {
           d = Math.max(d, depthOf(prerequisite) + 1);
         }
       }
+      visiting.delete(task.id);
       depth.set(task.id, d);
     }
     return d;
@@ -65,7 +73,7 @@ export function layoutGraph(tasks: GraphTask[]): GraphLayout {
   const links = tasks.flatMap((to) =>
     to.dependsOn.flatMap((id) => {
       const from = byId.get(id);
-      return from ? [{ from, to }] : [];
+      return from && from !== to ? [{ from, to }] : [];
     }),
   );
   // An arrow back runs down the gap after its prerequisite's column and up the gap before
@@ -76,7 +84,7 @@ export function layoutGraph(tasks: GraphTask[]): GraphLayout {
   const outset = back.some(({ from }) => column(from) === columns - 1)
     ? margin
     : 0;
-  const left = (c: number) => PAD + inset + c * (CARD.width + GAP.x);
+  const left = (c: number) => PAD + inset + c * (size.width + GAP.x);
 
   // dagre leaves a rank between two for edge labels, so a column is every second rank; with
   // the ranks given, it skips ranking ("none" is missing from its types).
@@ -91,8 +99,8 @@ export function layoutGraph(tasks: GraphTask[]): GraphLayout {
   g.setDefaultEdgeLabel(() => ({}));
   for (const task of tasks) {
     g.setNode(task.id, {
-      width: CARD.width,
-      height: CARD.height,
+      width: size.width,
+      height: size.height,
       rank: 2 * column(task),
     });
   }
@@ -102,16 +110,16 @@ export function layoutGraph(tasks: GraphTask[]): GraphLayout {
   dagre.layout(g);
 
   const shift =
-    TOP + CARD.height / 2 - Math.min(...tasks.map(({ id }) => g.node(id).y));
+    TOP + size.height / 2 - Math.min(...tasks.map(({ id }) => g.node(id).y));
   const cards = new Map<string, Point>(
     tasks.map((task) => [
       task.id,
-      [left(column(task)), g.node(task.id).y - CARD.height / 2 + shift],
+      [left(column(task)), g.node(task.id).y - size.height / 2 + shift],
     ]),
   );
-  const middle = (task: GraphTask) => cards.get(task.id)![1] + CARD.height / 2;
+  const middle = (task: GraphTask) => cards.get(task.id)![1] + size.height / 2;
   const bottom =
-    Math.max(...[...cards.values()].map(([, y]) => y)) + CARD.height;
+    Math.max(...[...cards.values()].map(([, y]) => y)) + size.height;
 
   // An arrow's height at each column it crosses: where dagre put its dummy node there.
   const paths: Path[] = links.map(({ from, to }) => {
@@ -134,7 +142,7 @@ export function layoutGraph(tasks: GraphTask[]): GraphLayout {
       const own = paths
         .filter((path) => path[end] === task)
         .sort((p, q) => toward(p) - toward(q));
-      const step = Math.min(PORT, (CARD.height - 32) / (own.length - 1 || 1));
+      const step = Math.min(PORT, (size.height - 32) / (own.length - 1 || 1));
       own.forEach(({ ys }, i) => {
         ys[end === 'from' ? 0 : ys.length - 1] =
           middle(task) + (i - (own.length - 1) / 2) * step;
@@ -147,7 +155,7 @@ export function layoutGraph(tasks: GraphTask[]): GraphLayout {
   // A vertical run takes the middle of its gap, or steps aside from one it would overlap.
   const runs = new Map<number, { lo: number; hi: number; lane: number }[]>();
   const runIn = (c: number, y1: number, y2: number) => {
-    const middleOfGap = left(c) + CARD.width + GAP.x / 2;
+    const middleOfGap = left(c) + size.width + GAP.x / 2;
     if (y1 === y2) return middleOfGap;
     const [lo, hi] = [Math.min(y1, y2), Math.max(y1, y2)];
     const taken = runs.get(c) ?? [];
@@ -167,7 +175,7 @@ export function layoutGraph(tasks: GraphTask[]): GraphLayout {
   const arrows = paths.map(({ from, to, ys, back }) => {
     const a = column(from);
     const end: Point = [left(column(to)), ys[ys.length - 1]];
-    const points: Point[] = [[left(a) + CARD.width, ys[0]]];
+    const points: Point[] = [[left(a) + size.width, ys[0]]];
     if (back) {
       // Into the gap after it, down below every card, along to the gap before the task.
       channel += LANE;
@@ -192,10 +200,10 @@ export function layoutGraph(tasks: GraphTask[]): GraphLayout {
   const bands = phases.map((phase) => {
     const own = tasks.filter((task) => task.phase === phase).map(column);
     const x = left(Math.min(...own)) - PAD;
-    return { phase, x, width: left(Math.max(...own)) + CARD.width + PAD - x };
+    return { phase, x, width: left(Math.max(...own)) + size.width + PAD - x };
   });
   return {
-    width: left(columns - 1) + CARD.width + PAD + outset,
+    width: left(columns - 1) + size.width + PAD + outset,
     height: Math.max(bottom + 24, channel + PAD),
     cards,
     bands,

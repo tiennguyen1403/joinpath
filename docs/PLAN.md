@@ -1,4 +1,4 @@
-# Joinpath — Kế hoạch triển khai v0.44
+# Joinpath — Kế hoạch triển khai v0.45
 
 > **Joinpath**: Employee Onboarding & Workflow Management Platform, dự án portfolio Full-stack.
 > Bản này tinh chỉnh SRS v0.4 trong thread ChatGPT "Thiết kế dự án onboarding" (14/10/2026).
@@ -42,6 +42,7 @@
 > **v0.42 (17/10/2026):** M4 chia thành 6 session: M4.2 tách thành Publish, Discard và tab version (M4.2a) và Archive (M4.2b) (§13). Mỗi version trong response template kèm `running` và `used`; `DELETE /template-versions/:id` trả template (§8); AT-33, AT-34 (§12). `tooltip` của beUI kéo theo `@floating-ui/dom` 1.8.0 (§6.2). Template editor: tab version, bản published chỉ đọc kèm chi tiết task, Publish kèm tooltip, Discard draft, lưu bị 404 (§10, §10.1).
 > **v0.43 (17/10/2026):** Archive (M4.2b): nút ⋯ trên header trang template, hộp xác nhận nêu onboarding đang chạy, draft onboarding và draft version (§10, §10.1). Template của mọi onboarding kèm `archivedAt`; dashboard không đếm draft trên template đã archive là "ready to activate", `unassigned` của nó rỗng (§8); trang của draft đó mở ở bước chọn template (§10).
 > **v0.44 (17/10/2026):** M4 chia thành 7 session: M4.3 tách thành graph trên trang onboarding (M4.3a) và xem trước trong editor (M4.3b) (§13). Pin `@xyflow/react` 12.12.0 và `@dagrejs/dagre` 3.1.1; `apps/web` có Vitest cho logic thuần (§6.2). Trang onboarding có hai tab Tasks | Graph, cho mọi người xem được onboarding: mỗi phase một dải cột, card viền theo trạng thái, mũi tên nét đứt khi còn chờ; Activity vẫn là card của tab Tasks (§10, §10.1).
+> **v0.45 (17/10/2026):** graph trong template editor và ở bản chỉ đọc (M4.3b): hai tab Phases | Graph dưới tab version, giữ khi đổi version và sau Publish; card của template 168 × 132 (tên, loại · người làm, ngày, badge lỗi); approval có mũi tên từ document nó duyệt; link cần sửa (vòng BR-T05, chờ document thay vì approval BR-T09) màu đỏ; draft có vòng trong một phase vẫn dựng được (§10, §10.1).
 
 ## TL;DR: 6 thay đổi lớn nhất
 
@@ -795,6 +796,13 @@ Dependency graph trên trang chi tiết (M4.3a, FR-23):
 - **Mũi tên** từ prerequisite tới task chờ nó: xám khi prerequisite đã xong, cam nét đứt khi task vẫn còn chờ; onboarding đã xong hoặc đã hủy chỉ có mũi tên xám. Legend dưới graph chỉ ghi những gì graph đang có.
 - **Chỉ để xem:** không kéo, pan, zoom; khung graph `inert`, nên vuốt trên graph cuộn trang, còn trình đọc màn hình bỏ qua graph và dùng danh sách ở tab Tasks. Graph rộng hơn trang thì cuộn ngang trong khung của nó (1024 px, điện thoại). Bỏ ô "still waiting on IT" của bảng S0: dashboard đã chỉ ra task gốc đang chặn.
 
+Dependency graph của template (M4.3b, FR-23), dùng lại layout và `DependencyGraph` của trang onboarding:
+- **Hai tab** `Phases | Graph` dưới tab version (dưới header khi chỉ có một version), ở draft và ở bản chỉ đọc, khi version có task. Tab đang chọn giữ khi đổi tab version và sau Publish, Discard, Archive; không ghi vào URL. Tab Graph rộng hết trang. Trên draft, thứ tự là: hàng tab, dòng trạng thái lưu (tab Graph không có panel để chứa nó), Alert lỗi, rồi graph.
+- **Card** 168 × 132, cách mép ngang 10 px để "Checklist · Direct manager" vừa (cặp dài hơn bị cắt "…"): tên (tối đa 2 dòng; "Untitled task" xám), loại · người làm, ngày mở → hạn như dòng task của editor, badge đỏ "N problems" khi task có lỗi. Một kiểu viền, vì task của template chưa có trạng thái. Phase không có task thì không có dải.
+- **Mũi tên** xám, kể cả từ document tới approval duyệt nó (BR-T08), dù Waits for không ghi document đó. Đỏ cho link cần sửa: mọi link trên một vòng (BR-T05, kể cả link `reviews`) và task chờ document thay vì approval duyệt nó (BR-T09), như các chip đỏ dưới Waits for. Legend: "Waits for", thêm "Link to fix" khi có.
+- **Draft** vẽ từ trạng thái đang sửa, kể cả phần chưa lưu. Vòng trong một phase vẫn dựng được: link khép vòng đi dưới các card như mũi tên về phase trước; mũi tên ngược từ cột cuối làm graph rộng thêm 36 px, nên Engineering có vòng ở hàng 15 của canvas cuộn ngang khoảng 29 px ở 1440 px.
+- **Bản chỉ đọc** (bản đã publish, và draft được giữ của template đã archive): chỉ mũi tên xám, không badge, như danh sách chỉ đọc. Chỉ để xem, `inert`, như graph của onboarding.
+
 Template editor (M4.1a), mở từ một dòng của bảng Templates (`/templates/:id`):
 - Template chưa có draft: bản published mới nhất, chỉ đọc, kèm nút Edit tạo DRAFT kế tiếp (BR-T02). Đã archive: chỉ đọc, không có Edit.
 - Draft: các phase bên trái; bên phải là panel Edit task (title, loại, tài liệu mà APPROVAL duyệt, người làm, phase, ngày mở và hạn, Waits for, Instructions). Publish, Discard và tab version ở M4.2a, mục dưới.
@@ -830,7 +838,7 @@ Nguyên tắc (ADR 010): có component beUI thì dùng, không tự vẽ và kh�
 | Điều khiển demo (ngày nghiệp vụ, đổi vai) | `dynamic-island` (sửa tại chỗ: không có live region, `compactClassName`, hộp đo không co, ADR 010) | Mọi màn trong sandbox: app shell (M3.3c), portal và mock inbox (M3.3d); vị trí theo độ rộng ở §10 |
 | Đang ở đâu | `breadcrumb` | Header các trang |
 | Trạng thái task, onboarding và template | `animated-badge` | Danh sách, bảng, header |
-| Đổi chế độ xem, lọc danh sách | `tabs` | Onboarding detail (Tasks, Graph; M4.3a), My tasks, Mock inbox, Template editor, Review, Employees (People, Departments) |
+| Đổi chế độ xem, lọc danh sách | `tabs` | Onboarding detail (Tasks, Graph; M4.3a), My tasks, Mock inbox, Template editor (version; Phases, Graph: M4.3b), Review, Employees (People, Departments) |
 | Chọn một người | `select` | New onboarding (ô chọn và nút Change ở bước 3), Template editor, Employees (manager; phòng ban cũng dùng `select`) |
 | Chọn một mục trong danh sách | `radio` | New onboarding (nhân viên ở bước 1, template ở bước 2) |
 | Ngày bắt đầu | `date-range-picker` với prop `single` (sửa tại chỗ, ADR 010) | New onboarding |
@@ -853,7 +861,7 @@ Nguyên tắc (ADR 010): có component beUI thì dùng, không tự vẽ và kh�
 | Danh sách onboarding, nhân viên, phòng ban, template; bảng task theo phase | tự dựng (`components/table.tsx`), không dùng `table` của beUI | Dashboard, Onboardings, New onboarding, Employees, Templates |
 | Bề mặt, thông báo, công tắc, nút | `card`, `alert`, `switch`, `button-base` | Mọi nơi |
 
-Tự dựng theo token vì beUI không có: thanh tiến độ onboarding, avatar chữ cái đầu, các bước của wizard, textarea, dependency graph (React Flow chỉ vẽ card và mũi tên; card, dải phase và legend dựng theo token, M4.3a), thanh độ mạnh mật khẩu (chép cách chấm điểm và thanh 4 nấc của `signup-form`, MIT), danh sách thông báo (M3.2b: `notification-stack` của beUI là một nút duy nhất xổ ra 3 thẻ không bấm được, không mở được từng thông báo), timeline Activity và các khối của dashboard: thẻ số, Needs your attention, Due in the next 7 days, Recent activity (M3.4b). Bảng cũng tự dựng (M1.6a, ADR 010): `table` của beUI là data grid ảo hóa, khung cuộn cao cố định, mọi dòng cao bằng nhau và cần `@tanstack/react-virtual`, trong khi bảng của Joinpath ngắn và các dòng cao khác nhau.
+Tự dựng theo token vì beUI không có: thanh tiến độ onboarding, avatar chữ cái đầu, các bước của wizard, textarea, dependency graph (React Flow chỉ vẽ card và mũi tên; card, dải phase và legend dựng theo token, M4.3a; template dùng chung ở M4.3b), thanh độ mạnh mật khẩu (chép cách chấm điểm và thanh 4 nấc của `signup-form`, MIT), danh sách thông báo (M3.2b: `notification-stack` của beUI là một nút duy nhất xổ ra 3 thẻ không bấm được, không mở được từng thông báo), timeline Activity và các khối của dashboard: thẻ số, Needs your attention, Due in the next 7 days, Recent activity (M3.4b). Bảng cũng tự dựng (M1.6a, ADR 010): `table` của beUI là data grid ảo hóa, khung cuộn cao cố định, mọi dòng cao bằng nhau và cần `@tanstack/react-virtual`, trong khi bảng của Joinpath ngắn và các dòng cao khác nhau.
 
 ---
 

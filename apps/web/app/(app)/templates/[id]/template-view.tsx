@@ -66,8 +66,12 @@ import {
   dayOf,
   Phases,
   signed,
+  tabPanel,
   TaskSummary,
+  TemplateGraph,
   titleOf,
+  type View,
+  ViewTabs,
 } from './phases';
 
 type VersionSummary = Template['versions'][number];
@@ -107,6 +111,9 @@ export function TemplateView({
     queryFn: () => api(`/templates/${id}`, templateSchema),
   });
   const { toasts, showToast, dismissToast } = useAnimatedToastStack();
+  // Phases or Graph, whichever version shows, and still after a publish; not in the URL, so a
+  // reload opens the phases.
+  const [view, setView] = useState<View>('phases');
   usePageCrumb(template?.name);
 
   if (!template) {
@@ -136,12 +143,16 @@ export function TemplateView({
           draftId={draft.id}
           timeZone={timeZone}
           showToast={showToast}
+          view={view}
+          onView={setView}
         />
       ) : (
         <PublishedView
           template={template}
           timeZone={timeZone}
           showToast={showToast}
+          view={view}
+          onView={setView}
         />
       )}
       <AnimatedToastStack toasts={toasts} onDismiss={dismissToast} fixed />
@@ -154,10 +165,14 @@ function PublishedView({
   template,
   timeZone,
   showToast,
+  view,
+  onView,
 }: {
   template: Template;
   timeZone: string;
   showToast: (toast: ToastInput) => void;
+  view: View;
+  onView: (view: View) => void;
 }) {
   const current = currentOf(template);
   const [tab, setTab] = useState(
@@ -175,7 +190,13 @@ function PublishedView({
         menu={<TemplateMenu template={template} showToast={showToast} />}
       />
       <VersionTabs template={template} value={shown.id} onChange={setTab} />
-      <ReadOnly key={shown.id} template={template} versionId={shown.id} />
+      <ReadOnly
+        key={shown.id}
+        template={template}
+        versionId={shown.id}
+        view={view}
+        onView={onView}
+      />
     </>
   );
 }
@@ -185,11 +206,15 @@ function DraftView({
   draftId,
   timeZone,
   showToast,
+  view,
+  onView,
 }: {
   template: Template;
   draftId: string;
   timeZone: string;
   showToast: (toast: ToastInput) => void;
+  view: View;
+  onView: (view: View) => void;
 }) {
   const { data: version, error } = useQuery({
     queryKey: ['template-version', draftId],
@@ -202,6 +227,8 @@ function DraftView({
       version={version}
       timeZone={timeZone}
       showToast={showToast}
+      view={view}
+      onView={onView}
     />
   );
 }
@@ -215,11 +242,15 @@ function Drafting({
   version,
   timeZone,
   showToast,
+  view,
+  onView,
 }: {
   template: Template;
   version: TemplateVersion;
   timeZone: string;
   showToast: (toast: ToastInput) => void;
+  view: View;
+  onView: (view: View) => void;
 }) {
   const queryClient = useQueryClient();
   const draft = useDraft(version);
@@ -298,10 +329,16 @@ function Drafting({
       {editing ? (
         // Nothing changes while it publishes, so what goes out is what's on screen.
         <div inert={publish.isPending} className="contents">
-          <Editor version={version} draft={draft} />
+          <Editor version={version} draft={draft} view={view} onView={onView} />
         </div>
       ) : (
-        <ReadOnly key={shown.id} template={template} versionId={shown.id} />
+        <ReadOnly
+          key={shown.id}
+          template={template}
+          versionId={shown.id}
+          view={view}
+          onView={onView}
+        />
       )}
     </>
   );
@@ -866,13 +903,20 @@ function VersionTabs({
   );
 }
 
-/** A version as it stands: its phases, and the picked task's details beside them or in a drawer. */
+/**
+ * A version as it stands: its phases, and the picked task's details beside them or in a drawer,
+ * or on the Graph tab what waits for what (FR-23).
+ */
 function ReadOnly({
   template,
   versionId,
+  view,
+  onView,
 }: {
   template: Template;
   versionId: string;
+  view: View;
+  onView: (view: View) => void;
 }) {
   const { data: version, error } = useQuery({
     queryKey: ['template-version', versionId],
@@ -882,6 +926,7 @@ function ReadOnly({
   const wide = useWide();
   const [selectedKey, setSelectedKey] = useState<string>();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const tabs = useId();
   if (!version) return error ? <LoadFailed /> : null;
   const { tasks } = version.definition;
   if (tasks.length === 0) {
@@ -906,28 +951,40 @@ function ReadOnly({
   };
   return (
     <>
-      <div className="flex flex-wrap items-start gap-5">
-        <div className="flex min-w-0 flex-[1_1_420px] flex-col">
-          <Phases
-            definition={version.definition}
-            row={(task) => (
-              <button
-                type="button"
-                data-pick={task.key}
-                aria-current={task.key === current || undefined}
-                onClick={() => pick(task.key)}
-                className={cn(
-                  ROW,
-                  task.key === current && 'border-primary ring-1 ring-primary',
-                )}
-              >
-                <TaskSummary task={task} selected={task.key === current} />
-              </button>
-            )}
-          />
+      <ViewTabs id={tabs} value={view} onChange={onView} />
+      {view === 'graph' ? (
+        <TemplateGraph
+          definition={version.definition}
+          panel={tabPanel(tabs, 'graph')}
+        />
+      ) : (
+        <div
+          className="flex flex-wrap items-start gap-5"
+          {...tabPanel(tabs, 'phases')}
+        >
+          <div className="flex min-w-0 flex-[1_1_420px] flex-col">
+            <Phases
+              definition={version.definition}
+              row={(task) => (
+                <button
+                  type="button"
+                  data-pick={task.key}
+                  aria-current={task.key === current || undefined}
+                  onClick={() => pick(task.key)}
+                  className={cn(
+                    ROW,
+                    task.key === current &&
+                      'border-primary ring-1 ring-primary',
+                  )}
+                >
+                  <TaskSummary task={task} selected={task.key === current} />
+                </button>
+              )}
+            />
+          </div>
+          {wide && <TaskFacts task={selected} version={version} next={next} />}
         </div>
-        {wide && <TaskFacts task={selected} version={version} next={next} />}
-      </div>
+      )}
       {!wide && (
         <Drawer
           open={drawerOpen}

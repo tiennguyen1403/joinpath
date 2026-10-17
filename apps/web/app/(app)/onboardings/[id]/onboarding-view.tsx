@@ -41,7 +41,12 @@ import {
 } from '@/components/beui/motion/animated-toast-stack';
 import { Button, ButtonLink } from '@/components/beui/motion/button/base';
 import { Tabs, TabsList, TabsTrigger } from '@/components/beui/motion/tabs';
-import { ARROW, DependencyGraph } from '@/components/dependency-graph';
+import {
+  ArrowLine,
+  type ArrowTone,
+  DependencyGraph,
+  GraphSection,
+} from '@/components/dependency-graph';
 import { EmptyState } from '@/components/empty-state';
 import { Notice } from '@/components/notice';
 import { TaskBadge, waitsFor } from '@/components/task-status';
@@ -580,6 +585,8 @@ function lookOf({ status, availability }: Task): Look {
 const waits = (from: Task, to: Task) =>
   from.status !== 'COMPLETED' &&
   (to.status === 'PENDING' || to.status === 'IN_PROGRESS');
+const arrow = (from: Task, to: Task): ArrowTone =>
+  waits(from, to) ? 'waiting' : 'plain';
 
 /**
  * What waits for what (FR-23, PLAN §10): each phase a band, each task a card, arrows from
@@ -611,57 +618,46 @@ function Graph({
     tasks.flatMap((to) => to.dependsOn.map((id) => waits(byId.get(id)!, to))),
   );
   return (
-    <section {...panel} className="rounded-2xl border border-border p-2">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-3 pt-2.5 pb-3.5">
-        <h2 className="text-[15px] leading-[21px] font-semibold">
-          What waits for what
-        </h2>
-        <p className="text-[13px] text-muted-foreground">
-          Arrows point from a prerequisite to the task that waits for it
-        </p>
-      </div>
-      <div className="overflow-x-auto pb-1">
-        <p className="sr-only">
-          The Tasks tab lists the same tasks and what each waits for.
-        </p>
-        <DependencyGraph
-          tasks={nodes}
-          label={(phase) => phaseTitle(phases.get(phase)!)}
-          card={card}
-          waiting={waits}
-        />
-      </div>
-      <ul
-        aria-hidden
-        className="flex flex-wrap gap-x-5 gap-y-2.5 px-3 pt-1.5 pb-1.5 text-[13px] leading-5 text-muted-foreground"
-      >
-        {(Object.keys(LOOKS) as Look[])
-          .filter((look) => looks.has(look))
-          .map((look) => (
-            <li key={look} className="flex items-center gap-2">
-              <span
-                className={cn(
-                  'h-3.5 w-5.5 shrink-0 rounded-sm border bg-background',
-                  LOOKS[look].swatch,
-                )}
-              />
-              {LOOKS[look].legend}
+    <GraphSection
+      panel={panel}
+      list="Tasks"
+      legend={
+        <>
+          {(Object.keys(LOOKS) as Look[])
+            .filter((look) => looks.has(look))
+            .map((look) => (
+              <li key={look} className="flex items-center gap-2">
+                <span
+                  className={cn(
+                    'h-3.5 w-5.5 shrink-0 rounded-sm border bg-background',
+                    LOOKS[look].swatch,
+                  )}
+                />
+                {LOOKS[look].legend}
+              </li>
+            ))}
+          {arrows.has(false) && (
+            <li className="flex items-center gap-2">
+              <ArrowLine tone="plain" />
+              Prerequisite done
             </li>
-          ))}
-        {arrows.has(false) && (
-          <li className="flex items-center gap-2">
-            <Line color={ARROW.done} />
-            Prerequisite done
-          </li>
-        )}
-        {arrows.has(true) && (
-          <li className="flex items-center gap-2">
-            <Line color={ARROW.waiting} dashed />
-            Still waiting
-          </li>
-        )}
-      </ul>
-    </section>
+          )}
+          {arrows.has(true) && (
+            <li className="flex items-center gap-2">
+              <ArrowLine tone="waiting" />
+              Still waiting
+            </li>
+          )}
+        </>
+      }
+    >
+      <DependencyGraph
+        tasks={nodes}
+        label={(phase) => phaseTitle(phases.get(phase)!)}
+        card={card}
+        arrow={arrow}
+      />
+    </GraphSection>
   );
 }
 
@@ -686,20 +682,6 @@ function GraphCard({ task, tasks }: { task: Task; tasks: Task[] }) {
         <TaskBadge task={task} tasks={tasks} done compact />
       </span>
     </div>
-  );
-}
-
-function Line({ color, dashed = false }: { color: string; dashed?: boolean }) {
-  return (
-    <svg width="22" height="8" viewBox="0 0 22 8" className="shrink-0">
-      <path
-        d="M 1 4 L 21 4"
-        stroke={color}
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeDasharray={dashed ? '6 6' : undefined}
-      />
-    </svg>
   );
 }
 
