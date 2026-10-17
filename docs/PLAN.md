@@ -1,4 +1,4 @@
-# Joinpath — Kế hoạch triển khai v0.45
+# Joinpath — Kế hoạch triển khai v0.46
 
 > **Joinpath**: Employee Onboarding & Workflow Management Platform, dự án portfolio Full-stack.
 > Bản này tinh chỉnh SRS v0.4 trong thread ChatGPT "Thiết kế dự án onboarding" (14/10/2026).
@@ -43,6 +43,7 @@
 > **v0.43 (17/10/2026):** Archive (M4.2b): nút ⋯ trên header trang template, hộp xác nhận nêu onboarding đang chạy, draft onboarding và draft version (§10, §10.1). Template của mọi onboarding kèm `archivedAt`; dashboard không đếm draft trên template đã archive là "ready to activate", `unassigned` của nó rỗng (§8); trang của draft đó mở ở bước chọn template (§10).
 > **v0.44 (17/10/2026):** M4 chia thành 7 session: M4.3 tách thành graph trên trang onboarding (M4.3a) và xem trước trong editor (M4.3b) (§13). Pin `@xyflow/react` 12.12.0 và `@dagrejs/dagre` 3.1.1; `apps/web` có Vitest cho logic thuần (§6.2). Trang onboarding có hai tab Tasks | Graph, cho mọi người xem được onboarding: mỗi phase một dải cột, card viền theo trạng thái, mũi tên nét đứt khi còn chờ; Activity vẫn là card của tab Tasks (§10, §10.1).
 > **v0.45 (17/10/2026):** graph trong template editor và ở bản chỉ đọc (M4.3b): hai tab Phases | Graph dưới tab version, giữ khi đổi version và sau Publish; card của template 168 × 132 (tên, loại · người làm, ngày, badge lỗi); approval có mũi tên từ document nó duyệt; link cần sửa (vòng BR-T05, chờ document thay vì approval BR-T09) màu đỏ; draft có vòng trong một phase vẫn dựng được (§10, §10.1).
+> **v0.46 (17/10/2026):** analytics theo phòng ban (M4.4, FR-24): khối "Onboardings by department" trên dashboard HR, giữa Needs your attention / Due in the next 7 days và bảng Onboardings; web đếm từ `GET /onboardings`, không đổi API; phòng ban là phòng ban hiện tại của người mới (§10, §10.1). Rà FR mức Must: đủ 26/26; M4 xong sau 7 session (§13).
 
 ## TL;DR: 6 thay đổi lớn nhất
 
@@ -765,7 +766,7 @@ Lỗi luôn trả về dạng `{ code, message, details? }`:
 | Nhận invitation (đặt mật khẩu) | Nhân viên mới | P0 | M2 |
 | Portal nhân viên mới: tiến độ, task, lịch sử duyệt | Nhân viên mới | P0 | M2 |
 | Trung tâm thông báo + mock inbox | Tất cả | P0 | M2–M3 |
-| Dashboard HR: overdue, bị chặn, sắp tới hạn, đang chạy | HR | P0 | M3 → M4 |
+| Dashboard HR: overdue, bị chặn, sắp tới hạn, đang chạy, theo phòng ban | HR | P0 | M3 → M4 |
 | Demo controls (Dynamic Island của beUI, nổi giữa đầu trang; khi header không đủ chỗ thì ở một hàng riêng dưới header): đổi vai, ngày nghiệp vụ, "+1 ngày", "Tới ngày bắt đầu", "Demo mới", link inbox | Sandbox | P0 | M3 |
 | Template editor dạng form + validate tức thì + xem trước graph | HR | P0 | M4 |
 | Dependency graph (template và onboarding, tô màu theo trạng thái) | Onboarding: HR, Manager, IT (ai xem được onboarding); template: HR | P1 | M4 |
@@ -780,8 +781,15 @@ Dashboard HR (M3.4b), từ `GET /dashboard`, web tự đếm và viết câu:
 - **Câu dưới lời chào:** điều đầu tiên đúng trong: task quá hạn đang chặn task khác, task quá hạn, draft, onboarding đang chạy, không có gì.
 - **Needs your attention:** mỗi task quá hạn hiện thành task gốc nó chờ (`blockersOf` trong `core`; chính nó nếu không bị chặn), hạn sớm nhất trước, rồi tới các draft. Task của chính người xem mở My tasks, của người khác mở trang onboarding.
 - **Due in the next 7 days:** task đang mở có hạn từ hôm nay tới hôm nay + 6; mỗi dòng mở trang onboarding.
-- **Rồi bảng Onboardings** (`GET /onboardings`) và **Recent activity** (10 event).
+- **Rồi** khối Onboardings by department (M4.4, đoạn dưới), **bảng Onboardings** (`GET /onboardings`) và **Recent activity** (10 event).
 - Org chưa có onboarding nào: chỉ còn empty state của bảng. Tải lỗi: một Alert, bảng tải riêng.
+
+Onboardings by department (M4.4, FR-24): một card trên dashboard HR, giữa lưới Needs your attention / Due in the next 7 days và bảng Onboardings.
+- **Dữ liệu:** web đếm từ `GET /onboardings` (HR thấy mọi onboarding, mọi trạng thái), cùng query với bảng nên không thêm request; API không đổi. Phòng ban là phòng ban hiện tại của người mới (onboarding không lưu phòng ban): đổi phòng ban của một người thì các onboarding cũ của họ chuyển theo.
+- **Mỗi phòng ban một dòng:** tên và số đếm cùng một hàng ("1 draft · 1 active · 1 completed"; hẹp thì số đếm xuống dưới tên), thanh bên dưới dài theo tỉ lệ với phòng ban nhiều onboarding nhất. Các đoạn theo vòng đời Draft → Active → Completed → Canceled, cách nhau 2 px, mỗi đoạn tối thiểu 8 px: Draft `muted-foreground`, Active `primary`, Completed `success`, Canceled `foreground/15` (Draft và Canceled cùng xám như badge, khác nhau ở độ đậm, vị trí và chữ). Không ghi tổng mỗi phòng ban.
+- **Thứ tự:** nhiều onboarding nhất trước, bằng nhau thì theo tên; "No department" chữ xám, luôn cuối; phòng ban chưa có onboarding nào thì không có dòng. Legend chỉ ghi các trạng thái đang có, `aria-hidden` vì chữ của từng dòng đã đủ.
+- **Không có khối** khi đang tải, khi `GET /onboardings` lỗi (bảng có Alert riêng) và khi chưa có onboarding. `GET /dashboard` lỗi thì vẫn có Alert của dashboard, rồi khối và bảng.
+- Không có thời gian hoàn thành, tỉ lệ đúng hạn, lọc theo khoảng thời gian, tooltip, bấm dòng để lọc bảng.
 
 Activity trên trang chi tiết (M3.4b) là card ở cột phải, dưới Invitation (chỉ HR thấy Invitation), cho mọi người xem được onboarding; màn hẹp thì xuống dưới các phase. Từ M4.3a card này thuộc tab Tasks (đoạn Dependency graph, ngay dưới). Câu chữ:
 - tên người đậm; trên dashboard thêm "for <người mới>", trừ khi chính người mới làm;
@@ -861,7 +869,7 @@ Nguyên tắc (ADR 010): có component beUI thì dùng, không tự vẽ và kh�
 | Danh sách onboarding, nhân viên, phòng ban, template; bảng task theo phase | tự dựng (`components/table.tsx`), không dùng `table` của beUI | Dashboard, Onboardings, New onboarding, Employees, Templates |
 | Bề mặt, thông báo, công tắc, nút | `card`, `alert`, `switch`, `button-base` | Mọi nơi |
 
-Tự dựng theo token vì beUI không có: thanh tiến độ onboarding, avatar chữ cái đầu, các bước của wizard, textarea, dependency graph (React Flow chỉ vẽ card và mũi tên; card, dải phase và legend dựng theo token, M4.3a; template dùng chung ở M4.3b), thanh độ mạnh mật khẩu (chép cách chấm điểm và thanh 4 nấc của `signup-form`, MIT), danh sách thông báo (M3.2b: `notification-stack` của beUI là một nút duy nhất xổ ra 3 thẻ không bấm được, không mở được từng thông báo), timeline Activity và các khối của dashboard: thẻ số, Needs your attention, Due in the next 7 days, Recent activity (M3.4b). Bảng cũng tự dựng (M1.6a, ADR 010): `table` của beUI là data grid ảo hóa, khung cuộn cao cố định, mọi dòng cao bằng nhau và cần `@tanstack/react-virtual`, trong khi bảng của Joinpath ngắn và các dòng cao khác nhau.
+Tự dựng theo token vì beUI không có: thanh tiến độ onboarding, avatar chữ cái đầu, các bước của wizard, textarea, dependency graph (React Flow chỉ vẽ card và mũi tên; card, dải phase và legend dựng theo token, M4.3a; template dùng chung ở M4.3b), thanh độ mạnh mật khẩu (chép cách chấm điểm và thanh 4 nấc của `signup-form`, MIT), danh sách thông báo (M3.2b: `notification-stack` của beUI là một nút duy nhất xổ ra 3 thẻ không bấm được, không mở được từng thông báo), timeline Activity và các khối của dashboard: thẻ số, Needs your attention, Due in the next 7 days, Recent activity (M3.4b), Onboardings by department với thanh xếp chồng theo trạng thái (M4.4, CSS như thanh tiến độ, không thư viện chart). Bảng cũng tự dựng (M1.6a, ADR 010): `table` của beUI là data grid ảo hóa, khung cuộn cao cố định, mọi dòng cao bằng nhau và cần `@tanstack/react-virtual`, trong khi bảng của Joinpath ngắn và các dòng cao khác nhau.
 
 ---
 
@@ -957,7 +965,7 @@ Tự dựng theo token vì beUI không có: thanh tiến độ onboarding, avata
 | **M1** Workflow engine | 1–2 | 11 (thực tế) | `core`: schema + `validateTemplate` + tính ngày + availability + activation plan, unit test kỹ. API template (tạo, `PUT` JSON, publish, archive; chưa có editor, template lấy từ seed). Nhân viên (CRUD tối thiểu). Draft → preview → activate. Checklist. Business clock + endpoint tua ngày (để tự test; UI demo bar làm ở M3). Ghi audit. Wizard, Onboarding detail, My Tasks | Activate được template seed; IT và Manager làm checklist; khóa theo ngày/dependency chạy đúng; onboarding tự COMPLETED; nhóm test T, A, E pass |
 | **M2** Tài liệu và duyệt | 3 | 7 (thực tế) | Invitation + mock inbox + nhận lời mời + resend; thêm RustFS vào docker compose và CI; upload (magic bytes → S3); submit revision; approve/reject/rework; signed download; need-to-know; portal nhân viên mới | Golden path (§11) chạy trọn vẹn ở local; nhóm test R, P pass |
 | **M3** Vận hành và demo | 4 | 11 (thực tế; chia ở M3.1; M3.3 tách ba ở M3.3a, M3.3c và M3.4 tách đôi) | Đổi ngày, reassign, override deadline, hủy; thông báo in-app; cron tick; sandbox + demo bar; dashboard HR cơ bản; timeline | **Mốc an toàn:** demo public chạy được end-to-end trên host |
-| **M4** Editor và trực quan | 5 | 7 (dự kiến; M4.1, M4.2, M4.3 mỗi cái tách đôi ở M4.1a, M4.2a, M4.3a) | Template editor dạng form (phases, tasks, chọn `dependsOn`, rule, offset) + validate tức thì bằng `core` + lịch sử version; dependency graph; analytics theo phòng ban | **MVP cut line:** đủ mọi FR mức Must |
+| **M4** Editor và trực quan | 5 | 7 (thực tế; M4.1, M4.2, M4.3 mỗi cái tách đôi ở M4.1a, M4.2a, M4.3a) | Template editor dạng form (phases, tasks, chọn `dependsOn`, rule, offset) + validate tức thì bằng `core` + lịch sử version; dependency graph; analytics theo phòng ban | **MVP cut line:** đủ mọi FR mức Must |
 | **M5** Hoàn thiện | 6 | 4 | Playwright golden path; rà lại ma trận quyền, cross-tenant, upload; trạng thái rỗng và lỗi; a11y; checklist hướng dẫn demo; landing page; README, ADR, sơ đồ, video demo | Sẵn sàng đưa vào portfolio |
 | Dự phòng | 7 | — | Dành cho phần bị trễ. Nếu đúng tiến độ: launch sớm, hoặc làm các mục Could | — |
 

@@ -5,6 +5,9 @@ import {
   blockersOf,
   type Dashboard as DashboardData,
   dashboardSchema,
+  type OnboardingStatus,
+  onboardingStatusSchema,
+  onboardingSummarySchema,
 } from '@joinpath/core';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
@@ -42,7 +45,9 @@ import {
 import {
   NewOnboardingButton,
   OnboardingsTable,
+  STATUS_BADGE,
 } from '../onboardings/onboardings-table';
+import { byDepartment } from './by-department';
 
 type Task = DashboardData['tasks'][number];
 type Onboarding = DashboardData['onboardings'][number];
@@ -77,8 +82,9 @@ const dependentsOf = ({ tasks }: DashboardData, task: Task) =>
   tasks.filter(({ dependsOn }) => dependsOn.includes(task.id));
 
 /**
- * HR's home (PLAN §10): the counts, what needs attention and what is due this week, then every
- * onboarding and the latest events. The API sends lists; the counting and the words are here.
+ * HR's home (PLAN §10): the counts, what needs attention and what is due this week, the
+ * onboardings by department, then every onboarding and the latest events. The API sends lists;
+ * the counting and the words are here.
  */
 export function Dashboard({
   greeting,
@@ -129,6 +135,7 @@ export function Dashboard({
           </>
         )
       )}
+      <ByDepartment />
       <OnboardingsTable
         heading="Onboardings"
         timeZone={timeZone}
@@ -685,6 +692,109 @@ function DueBadge({ task }: { task: Task }) {
         </AnimatedBadge>
       );
   }
+}
+
+// A department's bar by status. A draft and a canceled one are both grey, told apart by shade.
+const STATUS_BAR: Record<OnboardingStatus, string> = {
+  DRAFT: 'bg-muted-foreground',
+  ACTIVE: 'bg-primary',
+  COMPLETED: 'bg-success',
+  CANCELED: 'bg-foreground/15',
+};
+
+/**
+ * Every onboarding by its new hire's department and status (FR-24), from the list the
+ * Onboardings table shows: nothing while it loads, when it fails (the table says so) or is empty.
+ */
+function ByDepartment() {
+  const { data } = useQuery({
+    queryKey: ['onboardings'],
+    queryFn: () => api('/onboardings', onboardingSummarySchema.array()),
+  });
+  if (!data?.length) return null;
+  const rows = byDepartment(data);
+  const most = Math.max(...rows.map(({ total }) => total));
+  const shown = new Set(
+    rows.flatMap(({ counts }) => counts.map(({ status }) => status)),
+  );
+  return (
+    <section
+      aria-labelledby="departments"
+      className="flex flex-col rounded-2xl border border-border p-2"
+    >
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-3 pt-3 pb-2">
+        <h2
+          id="departments"
+          className="text-[15px] leading-[21px] font-semibold"
+        >
+          Onboardings by department
+        </h2>
+        <p className="text-[13px] leading-5 text-muted-foreground">
+          All onboardings, by each new hire&apos;s department
+        </p>
+      </div>
+      <ul className="flex flex-col text-sm">
+        {rows.map(({ department, total, counts }) => (
+          <li
+            key={department?.id ?? 'none'}
+            className="flex flex-col gap-2 px-3 py-2.5"
+          >
+            <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5">
+              <span
+                className={cn(
+                  'font-medium',
+                  !department && 'text-muted-foreground',
+                )}
+              >
+                {department?.name ?? 'No department'}
+              </span>
+              <span className="text-[13px] leading-5 text-muted-foreground tabular-nums">
+                {counts
+                  .map(
+                    ({ status, count }) =>
+                      `${count} ${STATUS_BADGE[status].label.toLowerCase()}${status === 'DRAFT' && count > 1 ? 's' : ''}`,
+                  )
+                  .join(' · ')}
+              </span>
+            </div>
+            {/* As long as its share of the largest; a share too small to see keeps 8 px a piece. */}
+            <div
+              aria-hidden
+              className="flex gap-0.5"
+              style={{
+                width: `${(total / most) * 100}%`,
+                minWidth: counts.length * 10 - 2,
+              }}
+            >
+              {counts.map(({ status, count }) => (
+                <span
+                  key={status}
+                  className={cn('h-2 min-w-2 rounded-full', STATUS_BAR[status])}
+                  style={{ flex: `${count} 1 0px` }}
+                />
+              ))}
+            </div>
+          </li>
+        ))}
+      </ul>
+      {/* The words in each row say it all; the legend only names the colors. */}
+      <ul
+        aria-hidden
+        className="flex flex-wrap gap-x-5 gap-y-2 px-3 pt-1.5 pb-2.5 text-[13px] leading-5 text-muted-foreground"
+      >
+        {onboardingStatusSchema.options
+          .filter((status) => shown.has(status))
+          .map((status) => (
+            <li key={status} className="inline-flex items-center gap-2">
+              <span
+                className={cn('h-2 w-4 rounded-full', STATUS_BAR[status])}
+              />
+              {STATUS_BADGE[status].label}
+            </li>
+          ))}
+      </ul>
+    </section>
+  );
 }
 
 function RecentActivity({
