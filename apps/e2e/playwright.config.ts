@@ -2,12 +2,17 @@ import { defineConfig } from '@playwright/test';
 
 /**
  * E2E (PLAN §12) against the API and the web app as `pnpm build` left them, started here; the API
- * reads apps/api/.env, so the local Postgres and RustFS. Locally, servers already running on
- * those ports (`pnpm dev`) are used instead.
+ * reads apps/api/.env, so the local Postgres and RustFS (in CI, the job's env and services).
+ * Locally, servers already running on those ports (`pnpm dev`) are used instead.
  */
 export default defineConfig({
   testDir: '.',
   timeout: 240_000,
+  forbidOnly: !!process.env.CI,
+  // No retries: a run makes 3 of the 5 sandboxes an IP may make in an hour (PLAN §9), so a
+  // retry could be refused.
+  retries: 0,
+  reporter: process.env.CI ? [['github'], ['list']] : 'list',
   // Pages refetch after each change, and the business date moves with a page refresh.
   expect: { timeout: 15_000 },
   use: {

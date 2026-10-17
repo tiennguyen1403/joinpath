@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { card, island, openReview, play, startDemo } from './demo.js';
 
 // What An uploads. The API looks at the first bytes only (BR-P04).
 const PDF = {
@@ -18,24 +19,6 @@ const PNG = {
 const PASSWORD = 'golden-path-e2e';
 const REASON = 'The photo of the back is missing.';
 
-// The demo controls (PLAN §10): closed, a pill that says who the guest plays.
-const pill = (page: Page) =>
-  page.getByRole('button', { name: /^Demo controls:/ });
-
-async function island(page: Page) {
-  await pill(page).click();
-  return page.getByRole('dialog', { name: 'Demo controls' });
-}
-
-/** Plays someone else, as "Duc Tran, IT": the app loads their first page. */
-async function play(page: Page, person: string) {
-  const controls = await island(page);
-  await controls.getByRole('button', { name: person, exact: true }).click();
-  await expect(pill(page)).toHaveAccessibleName(
-    new RegExp(`viewing as ${person}$`),
-  );
-}
-
 /** Moves the business date with one of the island's controls, `times` over. */
 async function moveDate(page: Page, control: string | RegExp, times = 1) {
   const controls = await island(page);
@@ -51,27 +34,13 @@ async function moveDate(page: Page, control: string | RegExp, times = 1) {
   await page.keyboard.press('Escape');
 }
 
-// A card on My tasks of a task for An; Lan, Duc and Minh have Bao's too.
-const card = (page: Page, title: string) =>
-  page
-    .getByRole('list', { name: 'Tasks to do' })
-    .getByRole('button')
-    .filter({ hasText: title })
-    .filter({ hasText: 'An Vo' });
-
 async function completeOnMyTasks(page: Page, ...titles: string[]) {
   await page.goto('/tasks');
   for (const title of titles) {
-    await card(page, title).click();
+    await card(page, title, 'An Vo').click();
     await page.getByRole('button', { name: 'Mark complete' }).click();
-    await expect(card(page, title)).toHaveCount(0);
+    await expect(card(page, title, 'An Vo')).toHaveCount(0);
   }
-}
-
-async function openReview(page: Page) {
-  await page.goto('/tasks');
-  await card(page, 'Review ID documents').click();
-  await page.getByRole('button', { name: 'Review documents' }).click();
 }
 
 // One of An's tasks on the portal, its work under it. Exact, as a task waiting for another
@@ -97,10 +66,7 @@ test('golden path, from Try demo to a finished onboarding (PLAN §11, AT-10, AT-
   let anOnboarding = '';
 
   await test.step('1 · Try demo signs in as HR in a sandbox of its own', async () => {
-    await page.goto('/login');
-    await page.getByRole('button', { name: 'Start a demo instead' }).click();
-    await page.waitForURL('**/dashboard');
-    await expect(pill(page)).toHaveAccessibleName(/viewing as Lan Pham, HR$/);
+    await startDemo(page);
   });
 
   await test.step("2 · Lan activates An's draft, with Duc for IT's two tasks", async () => {
@@ -155,7 +121,7 @@ test('golden path, from Try demo to a finished onboarding (PLAN §11, AT-10, AT-
 
   await test.step('5 · Lan requests changes, saying why', async () => {
     await play(page, 'Lan Pham, HR');
-    await openReview(page);
+    await openReview(page, 'An Vo');
     await page.getByPlaceholder('What should An fix?').fill(REASON);
     const [rejected] = await Promise.all([
       page.waitForResponse('**/api/tasks/*/reject'),
@@ -173,9 +139,13 @@ test('golden path, from Try demo to a finished onboarding (PLAN §11, AT-10, AT-
     await expect(upload.getByText('In review', { exact: true })).toBeVisible();
   });
 
-  await test.step('7 · Lan approves revision 2, which opens a task for Duc', async () => {
+  await test.step('7 · Lan sees the back and approves revision 2, which opens a task for Duc', async () => {
     await play(page, 'Lan Pham, HR');
-    await openReview(page);
+    await openReview(page, 'An Vo');
+    // A preview is the image itself, loaded by its signed link.
+    await expect(
+      page.getByRole('button', { name: `Open ${PNG.name}` }),
+    ).toBeVisible();
     const [approved] = await Promise.all([
       page.waitForResponse('**/api/tasks/*/approve'),
       page.getByRole('button', { name: 'Approve revision 2' }).click(),

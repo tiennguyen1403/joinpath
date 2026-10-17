@@ -8,7 +8,7 @@ on:
 jobs:
   check:
     runs-on: ubuntu-latest
-    services:
+    services: &services
       postgres:
         image: postgres:18
         env:
@@ -35,7 +35,7 @@ jobs:
           --health-interval 2s
           --health-timeout 5s
           --health-retries 15
-    env:
+    env: &env
       DATABASE_URL: postgresql://joinpath:joinpath@localhost:5432/joinpath
       APP_ORIGIN: http://localhost:3000
       S3_ENDPOINT: http://localhost:9000
@@ -60,3 +60,29 @@ jobs:
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm format:check
+
+  # The E2E specs (PLAN §12) on what reaches main, beside the checks: the API and the web app
+  # as `pnpm build` leaves them, in the runner's Chrome, with the same Postgres and storage.
+  e2e:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    services: *services
+    env: *env
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm --filter @joinpath/api exec prisma migrate deploy
+      - run: pnpm storage:init
+      - run: pnpm e2e
+      # Traces show invitation links with their tokens, for a database gone with the job.
+      - if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-test-results
+          path: apps/e2e/test-results
