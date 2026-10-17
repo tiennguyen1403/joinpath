@@ -24,6 +24,9 @@ Thumbs.db
 
 # Playwright CLI snapshots and screenshots (.playwright/cli.config.json)
 .playwright-cli/
+# E2E results and traces (apps/e2e); a trace holds the invitation link with its token
+test-results/
+playwright-report/
 
 # Vercel CLI link (vercel link); its .env.local is covered by .env.* above
 .vercel/

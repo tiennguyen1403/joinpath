@@ -2,12 +2,12 @@
 
 > File này được nạp vào mọi session qua `CLAUDE.md`. Giữ ngắn: chỉ trạng thái hiện tại. Lịch sử chi tiết nằm trong `docs/sessions/`.
 
-**Cập nhật:** 2026-10-17 · session 040 (M4.4 · Analytics theo phòng ban + rà FR mức Must)
-**Mốc hiện tại:** M5 · Hoàn thiện, 0/4 session. M4 xong sau 7 session: MVP cut line đạt ở local (đủ 26/26 FR mức Must, bảng bằng chứng ở handoff 040), lên prod khi push.
+**Cập nhật:** 2026-10-17 · session 041 (M5.1a · E2E: golden path)
+**Mốc hiện tại:** M5 · Hoàn thiện, 1/9 session. M4 xong sau 7 session (MVP cut line: đủ 26/26 FR mức Must, bảng bằng chứng ở handoff 040), đã lên prod và kiểm ở M5.1a.
 
-M0–M4 đã xong. Demo public tại https://joinpath.vercel.app, đã push tới M3.4b (`a254d2d`); golden path (PLAN §11) bước 1–10 chạy trên production chỉ bằng UI (M3.5): đổi ngày, hủy, reassign, đổi deadline; thông báo trong app và email; Vercel Cron tick mỗi ngày 01:00 UTC (`CRON_SECRET` đã đặt); sandbox 24 giờ kèm A, B, C, purge cả file trên R2; mốc giờ theo ngày nghiệp vụ; Dynamic Island; dashboard HR và Activity. Chỉ ở local (chưa push): template editor (M4.1a–M4.2b: sửa task và cấu trúc, validate tức thì, tự lưu, version, Publish, Discard, Archive); dependency graph ở trang onboarding và trang template (M4.3a–M4.3b); khối Onboardings by department trên dashboard (M4.4, FR-24).
+M0–M4 đã xong và chạy tại https://joinpath.vercel.app, đã push tới M4.4 (`8ce0502`). Golden path (PLAN §11) bước 1–10 chạy trên production chỉ bằng UI (M3.5): đổi ngày, hủy, reassign, đổi deadline; thông báo trong app và email; Vercel Cron tick mỗi ngày 01:00 UTC (`CRON_SECRET` đã đặt); sandbox 24 giờ kèm A, B, C, purge cả file trên R2; mốc giờ theo ngày nghiệp vụ; Dynamic Island; dashboard HR và Activity; template editor; dependency graph; khối Onboardings by department. Chỉ ở local (chưa push): E2E golden path (`apps/e2e`, M5.1a).
 
-**Session kế tiếp:** **M5.1 · Playwright: golden path + quyền xem file**. Bước đầu: user push (`! git push origin main`: M4.1a–M4.4, không migration), rồi kiểm trên prod khối By department, editor và graph; kiểm cron nếu mở session trong 01:00–02:00 UTC (log Vercel chỉ giữ khoảng 1 giờ; chưa kiểm từ handoff 033); chi tiết hóa M5 (session đầu của mốc) trước khi code. Handoff mới nhất: `docs/sessions/040-M4.4-analytics-by-department.md`.
+**Session kế tiếp:** **M5.1b · Spec quyền xem file + job E2E trong CI**. Bước đầu: đọc `apps/e2e/golden-path.spec.ts` (helper `island`, `play`, `card`); spec dùng ID documents của Bao (scenario B), 404 cho IT, manager, người mới khác, sandbox khác (AT-26 → AT-28); job `e2e` chỉ khi push vào main, rồi user push. Kiểm cron nếu mở session trong 01:00–02:00 UTC (chưa kiểm từ handoff 033). Handoff mới nhất: `docs/sessions/041-M5.1a-e2e-golden-path.md`.
 
 ## Quy ước session
 
@@ -16,7 +16,7 @@ M0–M4 đã xong. Demo public tại https://joinpath.vercel.app, đã push tớ
 
 ## Bảng session
 
-Trạng thái: ✅ xong · ▶ kế tiếp · ⏳ chưa làm. Mốc M5 mới ở mức khung.
+Trạng thái: ✅ xong · ▶ kế tiếp · ⏳ chưa làm.
 
 | ID | Nội dung | Xong khi | TT |
 |---|---|---|---|
@@ -24,22 +24,21 @@ Trạng thái: ✅ xong · ▶ kế tiếp · ⏳ chưa làm. Mốc M5 mới ở
 | M0.1–M0.4 | Walking skeleton: khung repo, Prisma + đăng nhập bằng cookie session, web shell (beUI, reicon), CI + deploy Vercel Services + Neon | URL public đăng nhập được; CI xanh (handoff 001–004) | ✅ |
 | M1.1–M1.9 | Workflow engine: `core` (validate template, ngày, availability, `planActivation`); API template, onboarding, task, employees; web Onboardings, wizard, detail, My Tasks, Employees, Templates | Tiêu chí M1 (PLAN §13) đạt trên production; nhóm test T, A, E pass (handoff 005–015) | ✅ |
 | M2.1a–M2.5 | Tài liệu và duyệt: lời mời, mock inbox, resend; RustFS, upload (magic bytes, 4 MB, 5 file), signed download, need-to-know; submit, approve / reject / rework; web: nhận lời mời, portal người mới, drawer review | Golden path bước 2–9 chạy trọn ở local qua UI; nhóm test R, P pass (handoff 016–022) | ✅ |
-| M3.1a–M3.2b | Đổi ngày bắt đầu, hủy, reassign, đổi deadline (`planReschedule` trong `core`, API, web); thông báo trong app và email, cron tick, trang Notifications và chuông trên portal | AT-06, AT-19–AT-22, AT-24, AT-25 pass; qua UI mỗi vai làm được việc của mình (handoff 023–026) | ✅ |
-| M3.3a–M3.3d | Sandbox (`POST /demo/sandboxes`, scenarios A/B/C, purge, `switch-user`); mốc giờ theo ngày nghiệp vụ (`clock_advances`); Dynamic Island trên mọi trang của sandbox, cả 390 px; Try demo; notice dữ liệu giả; portal → My tasks | AT-31, BR-D01, BR-D05, BR-P06 pass; golden path bước 1–9 chạy ở local chỉ bằng UI (handoff 027–030) | ✅ |
-| M3.4a–M3.4b | API `GET /dashboard`, `GET /onboardings/:id/activity` (từ `audit_events`), schema và `blockersOf` trong `core`; web: dashboard HR, Activity là card ở cột phải trang chi tiết | Test FR-19 pass; golden path bước 10 ở local (handoff 031–032) | ✅ |
-| M3.5 | Push, demo public end-to-end; upload và xem file thật trên production; `CRON_SECRET`, Vercel Cron với Services; thời gian tạo sandbox, purge với R2 | **Mốc an toàn:** golden path 1–10 chạy trên production (handoff 033) | ✅ |
+| M3.1a–M3.5 | Đổi ngày, hủy, reassign, đổi deadline (`planReschedule`); thông báo trong app và email, cron tick; sandbox (scenarios A/B/C, purge, `switch-user`), mốc giờ theo ngày nghiệp vụ, Dynamic Island, Try demo; dashboard HR, Activity; push, Vercel Cron, R2 | **Mốc an toàn:** golden path 1–10 chạy trên production; AT-06, AT-19–AT-22, AT-24, AT-25, AT-31, BR-D01, BR-D05, BR-P06, FR-19 pass (handoff 023–033) | ✅ |
 | M4.1a–M4.4 | Template editor (sửa task và cấu trúc, validate tức thì bằng `core`, tự lưu, tab version, Publish, Discard, Archive); dependency graph (React Flow + dagre, Vitest cho `apps/web`) ở trang onboarding và template; rà FR mức Must; khối Onboardings by department trên dashboard (FR-24) | **MVP cut line** ở local: đủ 26/26 FR mức Must; test FR-23, FR-24, BR-T05, BR-T09 pass; 1440, 1024, 390 px không tràn ngang (handoff 034–040) | ✅ |
-| **M5.1** | Playwright: golden path + quyền xem file | | ▶ |
-| M5.2 | Rà ma trận quyền, cross-tenant, upload; trạng thái rỗng và lỗi; a11y | | ⏳ |
-| M5.3 | Checklist hướng dẫn demo + landing page | | ⏳ |
-| M5.4 | README, ADR, sơ đồ, kịch bản video | Sẵn sàng đưa vào portfolio | ⏳ |
+| M5.1a | `@playwright/test`, config chạy api + web bản build production; spec golden path 1–10 (§11) từ Try demo, chỉ qua UI | Spec pass headless ở local 2 lần liền (handoff 041) | ✅ |
+| **M5.1b** | Spec quyền xem file: HR xem, tải được; IT, manager, người mới khác, sandbox khác nhận 404, UI không hiện file. Job E2E trong CI khi push vào main | 2 spec pass ở local; job CI xanh sau push | ▶ |
+| M5.2a | Rà ma trận quyền §9 × route §8, cross-tenant, upload (tên file NFC, body JSON hỏng) | Bảng route × vai trong handoff, mỗi ô có test hoặc lý do | ⏳ |
+| M5.2b | Trạng thái tải, rỗng, lỗi; 390 px: 4 thẻ số, tab Tasks cắt tên | Canvas trước/sau được duyệt; kiểm 1440, 1024, 390 px | ⏳ |
+| M5.2c | a11y: nợ từ các handoff, link React Flow | Kiểm bằng bàn phím và Narrator; mỗi mục nợ đóng hoặc ghi lý do | ⏳ |
+| M5.3a–M5.3b | Checklist hướng dẫn demo (FR-29); landing page (FR-30) | Canvas được duyệt; kiểm 3 cỡ màn | ⏳ |
+| M5.4a–M5.4b | README, sơ đồ Mermaid, bảng BR → test, Swagger nếu giữ; ADR 001–006, kịch bản video | Sẵn sàng đưa vào portfolio | ⏳ |
 
 ## Quyết định còn mở
 
 - Preview deployment: origin khác `APP_ORIGIN` nên mọi request ghi bị 403, preview dùng chung DB với production, và không có `S3_*` (chỉ đặt cho Production) nên API của preview không boot. Chốt khi bắt đầu dùng PR: tắt preview, hoặc cho phép origin của preview và dùng Neon branch.
-- Swagger `/api/docs` (PLAN §8) chưa thuộc session nào; khi thêm phải chỉnh CSP của `helmet`. Gắn vào session nào?
-- Dòng "React Flow" trên graph hiện nhưng không bấm được, vì cả khung graph `inert` (để vuốt cuộn được trang và trình đọc màn hình bỏ qua graph). Muốn link bấm được thì phải bỏ `inert` khỏi riêng panel đó: chốt ở M5.2?
-- Khung `DashboardInUse` trên canvas chính cao 1660 px, nội dung đo được 1735 px (cắt khoảng 75 px cuối của Recent activity). Sửa `h` của khung đó không? (skill session-end không cho tự sửa bảng cũ; M4.4)
+- Swagger `/api/docs` (PLAN §8): giữ hay bỏ, chốt ở M5.4a; khi thêm phải chỉnh CSP của `helmet`.
+- Dòng "React Flow" trên graph hiện nhưng không bấm được, vì cả khung graph `inert` (để vuốt cuộn được trang và trình đọc màn hình bỏ qua graph). Muốn link bấm được thì phải bỏ `inert` khỏi riêng panel đó: chốt ở M5.2c.
 
 ## Chạy dự án
 
@@ -54,6 +53,8 @@ pnpm db:seed           # tạo lại org acme: lan.pham@acme.joinpath.demo (HR),
                        # A (An, nháp), B (Bao, chờ Lan duyệt ID), C (Chi, đã xong); cần RustFS + bucket. --no-scenarios: chỉ người và template
 pnpm dev               # web http://localhost:3000 (đăng nhập ở /login; thư mời ở /mock-inbox; portal của người mới ở /my-onboarding; duyệt tài liệu ở /tasks, nút Review documents; thông báo ở /notifications; sửa, publish, discard, archive (nút ⋯) template: bấm một dòng ở /templates, New template ở đó; graph: tab Graph ở trang chi tiết onboarding và trang template; analytics: khối Onboardings by department ở /dashboard) · api http://localhost:3001/api/health
 pnpm test              # cần Postgres + migration, RustFS + bucket; rồi pnpm lint · pnpm typecheck · pnpm format:check
+pnpm e2e               # Playwright (apps/e2e) tự chạy api + web bản build: pnpm build trước, pnpm dev dừng; Chrome có sẵn; mỗi lượt một sandbox, nên giữa các lượt
+                       # docker compose exec -T postgres psql -U joinpath -d joinpath -c "UPDATE organizations SET created_ip_hash = NULL WHERE is_sandbox AND slug LIKE 'demo-%'"
 # Tua ngày: +1 day, Jump trên island (mọi trang trong sandbox, cả portal và mock inbox), hoặc POST /api/demo/clock/advance {days} (1–30, chỉ sandbox; acme là sandbox); ghi clock_advances rồi chạy tick.
 # Try demo: "Start a demo instead" ở /login (5 sandbox mỗi giờ mỗi IP; IP local là ::1). Đổi vai: island, hoặc POST /api/demo/switch-user {employeeId}, cả trong acme.
 # Tick mọi org bằng tay: đặt CRON_SECRET trong apps/api/.env rồi curl -H "Authorization: Bearer <secret>" http://localhost:3001/api/internal/cron/tick

@@ -11,6 +11,12 @@
 - Node trên Windows bỏ qua `TZ`: thử code ngày với timezone có DST thì chạy trên Linux (container hoặc CI).
 - Kiểm tra UI bằng Playwright CLI (headed), không dùng Claude in Chrome (Chrome của extension ở máy khác). `open` không tự trả về trong Bash tool: ghi output ra file (`> .playwright-cli/cmd.log 2>&1`); `--filename` tính từ thư mục hiện tại. Phiên gắn với thư mục chạy `open` (thư mục `.playwright-cli` ở đó): gọi `run-code` từ thư mục khác (vd scratchpad) báo "The browser '<tên>' is not open", nên chạy mọi lệnh từ gốc repo, `--filename` là đường dẫn tuyệt đối (M4.4). Đăng nhập không lộ mật khẩu: storage state + `state-load` (handoff 011). Trong `snapshot`, nút có phần tử con (vd avatar `aria-hidden` + tên) hiện là `button [ref=…]` không kèm tên: tìm ref theo dòng nhãn ngay trên nó.
 - Playwright trên prod: đăng nhập như handoff 011 nhưng gọi `https://joinpath.vercel.app/api/auth/login`, header `origin` cùng host, cookie domain `joinpath.vercel.app` (handoff 015). Script đăng nhập dùng chung `apps/api/.env` cho cả local và prod. Từ máy dev, JS của prod có lúc tải rất chậm dù CDN báo HIT: chờ `find` thấy nội dung rồi mới chụp. Lệnh xem request là `requests`, không phải `network`.
+- E2E (`pnpm e2e`, package `apps/e2e`, M5.1a):
+  - chạy trên bản build: `pnpm build` trước, `pnpm dev` dừng (dev còn chạy ở 3000/3001 thì Playwright dùng luôn dev). `webServer` tắt sạch cây process của pnpm trên Windows: chạy liền nhiều lần không bị EADDRINUSE;
+  - `channel: 'chrome'`: Playwright 1.64.1 cần Chromium bản 1248, trong `%LOCALAPPDATA%\ms-playwright` chỉ có 1228, 1234, 1243, nên dùng Chrome có sẵn như Playwright CLI;
+  - mỗi lần chạy tạo một sandbox, mà Try demo giới hạn 5 sandbox mỗi giờ cho IP `::1`. Trước mỗi lần chạy lại: `docker compose exec -T postgres psql -U joinpath -d joinpath -c "UPDATE organizations SET created_ip_hash = NULL WHERE is_sandbox AND slug LIKE 'demo-%'"` (sandbox tự purge sau 24 giờ, kèm file);
+  - test fail thì `apps/e2e/test-results/<test>/error-context.md` có aria snapshot của trang: sửa locator theo đó, khỏi dò lại bằng CLI. Trace và snapshot chứa link mời kèm token (đã gitignore);
+  - danh sách thông báo nằm trong `region "Notifications, newest first"`, `list` bên trong không có tên.
 - Lời mời trong Playwright: output của `click`, `goto` (dòng `Page URL`) và file snapshot `.yml` chứa token sau `#` của link mời. Lọc trước khi in (`| sed 's/#.*//'`), lấy ref bằng `grep -o` thay cho in cả snapshot. Ở dev, StrictMode chạy effect hai lần, nên mỗi lần mở `/invite` gọi lookup 2 lần, tốn 2 trong 10 lượt/phút/IP mà login, lookup và accept dùng chung.
 - Playwright với file (M2.4a):
   - bấm vùng thả file rồi chạy `upload <file…>` để trả lời hộp chọn file đang mở;
@@ -20,6 +26,7 @@
 - `eval` của Playwright CLI: hàm viết nhiều dòng, hoặc đối số có `"` lồng bên trong, bị Windows từ chối ("batch file arguments are invalid"). Viết hàm trên một dòng, bên trong dùng nháy đơn (M3.2b).
   - Hàm dài thì ghi vào file rồi `run-code --filename <file>`. `page.waitForResponse` trong đó đo được một request, kể cả khi trang chuyển bằng `window.location.assign` (vd tạo sandbox, M3.5).
   - `run-code` không có `import()` động (ERR_VM_DYNAMIC_IMPORT_CALLBACK_MISSING): hàm dùng chung thì chép vào từng script trước khi chạy (M4.3b).
+  - File của `run-code --filename` là một biểu thức hàm: có `;` sau `}` cuối thì báo "SyntaxError: Unexpected token ';'" (M5.1a).
 - `getByRole('alert').first()` bắt trúng route announcer rỗng của Next (cũng `role="alert"`): tìm Alert của trang theo chữ (M4.1a).
 - Playwright với control của beUI (M4.2a):
   - `click` coi nút `aria-disabled="true"` là đang khóa và chờ tới timeout: thử bấm nút khóa thì `click({ force: true })`;
@@ -36,6 +43,7 @@
   - Chữ phải vừa một card: đo bằng `canvas.measureText` sau `document.fonts.ready`; vùng chữ = rộng card − padding − 2 px viền (M4.3b).
   - Bảng của template editor (hàng 15–18 của canvas chính) cách các khối 20 px, còn cột của app shell là `gap-6` (24 px): lệch có từ trước, khi so bản build với bảng thì bỏ qua (M4.3b).
   - Bảng ngắn hơn khung nhìn: `scrollHeight` bằng chiều cao khung nhìn, nên đo phần tử gốc (`x-dc > div`) (M4.4).
+  - Publish lên canvas: `read` với `url` trong session trước đã (chỉ đọc theo `paths` thì bị từ chối "haven't viewed the latest version"); rồi publish với `root`, `file_path` là một file dữ liệu (vd `project/canvas.json`), file còn lại trong `files`. Chỉ có `files` thì bị từ chối (M5.1a).
   - Màu của biểu đồ: kiểm bằng `scripts/validate_palette.js` của skill dataviz (`node --no-warnings validate_palette.js "<hex,…>" --mode light --surface "#FCFCFC" --pairs all`). Màu trạng thái có xám (Draft, Canceled) luôn FAIL ở Lightness band và Chroma floor vì xám không có sắc độ: chỉ đọc CVD separation và Normal-vision floor; tương phản dưới 3:1 thì cần chữ đi kèm (M4.4).
 - Kéo thả của `sortable-stack` (motion `Reorder`) chạy với `page.mouse`: `down` trên tay nắm, `move` từng bước nhỏ (vd 8 px, chờ 16 ms), rồi `up`. Bàn phím: `focus` tay nắm rồi `ArrowUp`, `ArrowDown`, `Home`, `End` (M4.1b).
 - `click` nhận locator thay cho ref: `click "getByRole('button', { name: 'Lan Pham, HR' })"`, đỡ phải `snapshot` trước mỗi bước (M3.3d).

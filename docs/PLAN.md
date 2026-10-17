@@ -1,4 +1,4 @@
-# Joinpath — Kế hoạch triển khai v0.46
+# Joinpath — Kế hoạch triển khai v0.47
 
 > **Joinpath**: Employee Onboarding & Workflow Management Platform, dự án portfolio Full-stack.
 > Bản này tinh chỉnh SRS v0.4 trong thread ChatGPT "Thiết kế dự án onboarding" (14/10/2026).
@@ -44,6 +44,7 @@
 > **v0.44 (17/10/2026):** M4 chia thành 7 session: M4.3 tách thành graph trên trang onboarding (M4.3a) và xem trước trong editor (M4.3b) (§13). Pin `@xyflow/react` 12.12.0 và `@dagrejs/dagre` 3.1.1; `apps/web` có Vitest cho logic thuần (§6.2). Trang onboarding có hai tab Tasks | Graph, cho mọi người xem được onboarding: mỗi phase một dải cột, card viền theo trạng thái, mũi tên nét đứt khi còn chờ; Activity vẫn là card của tab Tasks (§10, §10.1).
 > **v0.45 (17/10/2026):** graph trong template editor và ở bản chỉ đọc (M4.3b): hai tab Phases | Graph dưới tab version, giữ khi đổi version và sau Publish; card của template 168 × 132 (tên, loại · người làm, ngày, badge lỗi); approval có mũi tên từ document nó duyệt; link cần sửa (vòng BR-T05, chờ document thay vì approval BR-T09) màu đỏ; draft có vòng trong một phase vẫn dựng được (§10, §10.1).
 > **v0.46 (17/10/2026):** analytics theo phòng ban (M4.4, FR-24): khối "Onboardings by department" trên dashboard HR, giữa Needs your attention / Due in the next 7 days và bảng Onboardings; web đếm từ `GET /onboardings`, không đổi API; phòng ban là phòng ban hiện tại của người mới (§10, §10.1). Rà FR mức Must: đủ 26/26; M4 xong sau 7 session (§13).
+> **v0.47 (17/10/2026):** M5 chia thành 9 session: E2E tách thành golden path (M5.1a) và quyền xem file kèm job CI (M5.1b); rà quyền (M5.2a), trạng thái tải, rỗng, lỗi (M5.2b), a11y (M5.2c); M5.3, M5.4 mỗi cái tách đôi (§13). E2E nằm ở package `apps/e2e`: `@playwright/test` 1.64.1 (pin) chạy Chrome có sẵn trên bản build production, mỗi lần chạy một sandbox mới (§6.2, §6.3, §12).
 
 ## TL;DR: 6 thay đổi lớn nhất
 
@@ -458,7 +459,7 @@ Sơ đồ trên là ở local. Trên Vercel (ADR 011), router của Vercel chia 
 | DB | PostgreSQL 18 + Prisma 7.10 (pin cố định) | Tag `latest` của prisma CLI đang trỏ vào bản 8.0 RC, nên phải pin. Partial unique index khai báo ngay trong schema bằng preview `partialIndexes` (`@@unique([...], where: {...})`, dùng từ M1.3). CHECK thì Prisma schema chưa biểu diễn được, nên viết SQL tay trong migration (`migrate dev --create-only`) |
 | Storage | Bucket private S3-compatible: local và CI dùng RustFS 1.0.1, production dùng Cloudflare R2; client `aws4fetch` 1.0.20 | MinIO ngừng phát hành image từ 10/2025 và archive repo năm 2026; image cũ không còn tải được (M2.2). `aws4fetch` (MIT, không dependency) ký request `fetch` có sẵn của Node, kể cả presigned URL. Gọi bằng path-style URL qua cùng các biến env `S3_*`: RustFS, R2 và Amazon S3 đều nhận, Tigris thì không (bucket tạo từ 19/02/2025). R2 (chốt ở M2.5): `S3_REGION=auto`, location hint APAC, egress miễn phí, free 10 GB không hết hạn |
 | Việc định kỳ | Vercel Cron gọi `GET /internal/cron/tick` mỗi ngày (M3.2a) | Không dùng Redis, queue hay worker |
-| Test | Vitest 4, Supertest, Playwright | Một test runner cho cả repo. Vite 8 tự xử lý decorator metadata của Nest nên không cần plugin SWC. `apps/web` chạy Vitest cho logic thuần không cần trình duyệt, vd layout của graph (từ M4.3a) |
+| Test | Vitest 4, Supertest, Playwright | Một test runner cho unit và integration của cả repo. Vite 8 tự xử lý decorator metadata của Nest nên không cần plugin SWC. `apps/web` chạy Vitest cho logic thuần không cần trình duyệt, vd layout của graph (từ M4.3a). E2E dùng runner của Playwright: `@playwright/test` 1.64.1 (pin, M5.1a) trong `apps/e2e`, chạy Chrome có sẵn trên máy (`channel: 'chrome'`), không tải browser riêng |
 | Repo | pnpm workspaces, oxlint (type-aware), Prettier | Không dùng Turborepo. oxlint và Prettier mỗi công cụ một config ở gốc; Prettier có sẵn trong template Nest 12 nên giữ lại và áp cho code cả repo (không áp cho docs nội bộ) |
 | Runtime | Node 24 LTS, TypeScript 6.0 (pin cố định), pnpm 12 | TypeScript 7 chỉ còn `tsc` native, không có JS API mà Next.js và Nest CLI cần. Các thư viện khác lấy bản ổn định mới nhất lúc bắt đầu |
 | Host | Vercel Hobby, Services (web + api trong một project, region `sin1`) + Neon Postgres Free (Singapore, qua Vercel Marketplace) | Chọn ở M0.4 (§6.6, ADR 011). Không dùng được gói Nest dạng CommonJS (vd `@nestjs/throttler`), vì trên Vercel code CJS không `require()` được ESM của Nest 12 |
@@ -469,6 +470,7 @@ Sơ đồ trên là ở local. Trên Vercel (ADR 011), router của Vercel chia 
 joinpath/
 ├── apps/
 │   ├── web/                Next.js: UI cho mọi vai trò
+│   ├── e2e/                Playwright: golden path, quyền xem file (§12)
 │   └── api/                NestJS
 │       ├── prisma/         schema + migrations
 │       └── src/modules/
@@ -914,7 +916,7 @@ Tự dựng theo token vì beUI không có: thanh tiến độ onboarding, avata
 
 - **Unit** cho `packages/core`: `validateTemplate` (BR-T04–T10) và schema template (BR-T11), tính ngày, availability, activation plan, reschedule plan. Không cần mock gì, vì các hàm thuần nhận `today` làm tham số.
 - **Integration** chạy với Postgres và RustFS thật (docker compose ở local, service container trong CI), gọi qua HTTP bằng Supertest. Mỗi file test tự tạo một org bằng `seedDemoOrg` với slug ngẫu nhiên, không bật `scenarios` (chỉ seed nhân sự và template, cho nhanh), và purge org đó khi chạy xong (`purgeOrg`: file trong storage, rồi cascade), nên các test độc lập và chạy song song an toàn: cô lập tenant cho ta cô lập test miễn phí. Test concurrency gửi 2 request cùng lúc bằng `Promise.all` và kiểm tra đúng 1 request thành công.
-- **E2E (Playwright):** 1 spec cho golden path, 1 spec kiểm tra quyền xem file.
+- **E2E (Playwright):** 1 spec cho golden path, 1 spec kiểm tra quyền xem file. Package `apps/e2e` (`pnpm e2e`): Playwright tự chạy api và web bản build production (`webServer`), với Postgres và RustFS local; mỗi lần chạy tạo một sandbox mới qua Try demo. Spec golden path đi đủ 10 bước ở §11, chỉ qua UI (M5.1a).
 - **CI (GitHub Actions):** lint, typecheck, unit, integration (service container cho Postgres và RustFS); Playwright chạy khi merge vào main.
 - **Traceability:** tên test chứa ID của BR; README có bảng ánh xạ BR → test.
 
@@ -966,7 +968,7 @@ Tự dựng theo token vì beUI không có: thanh tiến độ onboarding, avata
 | **M2** Tài liệu và duyệt | 3 | 7 (thực tế) | Invitation + mock inbox + nhận lời mời + resend; thêm RustFS vào docker compose và CI; upload (magic bytes → S3); submit revision; approve/reject/rework; signed download; need-to-know; portal nhân viên mới | Golden path (§11) chạy trọn vẹn ở local; nhóm test R, P pass |
 | **M3** Vận hành và demo | 4 | 11 (thực tế; chia ở M3.1; M3.3 tách ba ở M3.3a, M3.3c và M3.4 tách đôi) | Đổi ngày, reassign, override deadline, hủy; thông báo in-app; cron tick; sandbox + demo bar; dashboard HR cơ bản; timeline | **Mốc an toàn:** demo public chạy được end-to-end trên host |
 | **M4** Editor và trực quan | 5 | 7 (thực tế; M4.1, M4.2, M4.3 mỗi cái tách đôi ở M4.1a, M4.2a, M4.3a) | Template editor dạng form (phases, tasks, chọn `dependsOn`, rule, offset) + validate tức thì bằng `core` + lịch sử version; dependency graph; analytics theo phòng ban | **MVP cut line:** đủ mọi FR mức Must |
-| **M5** Hoàn thiện | 6 | 4 | Playwright golden path; rà lại ma trận quyền, cross-tenant, upload; trạng thái rỗng và lỗi; a11y; checklist hướng dẫn demo; landing page; README, ADR, sơ đồ, video demo | Sẵn sàng đưa vào portfolio |
+| **M5** Hoàn thiện | 6 | 9 (kế hoạch, chia ở M5.1a; ước lượng đầu là 4) | Playwright golden path; rà lại ma trận quyền, cross-tenant, upload; trạng thái rỗng và lỗi; a11y; checklist hướng dẫn demo; landing page; README, ADR, sơ đồ, video demo | Sẵn sàng đưa vào portfolio |
 | Dự phòng | 7 | — | Dành cho phần bị trễ. Nếu đúng tiến độ: launch sớm, hoặc làm các mục Could | — |
 
 Mỗi mốc được chia thành các session ngắn, mỗi session một lát cắt kiểm chứng được và kết thúc bằng handoff. Bảng session và trạng thái hiện tại nằm ở `docs/STATUS.md`; biên bản từng session nằm ở `docs/sessions/`.
