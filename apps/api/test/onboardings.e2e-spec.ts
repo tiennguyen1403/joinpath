@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { INestApplication } from '@nestjs/common';
 import {
   activationPreviewSchema,
+  dashboardSchema,
   meSchema,
   type Onboarding,
   onboardingDetailSchema,
@@ -134,7 +135,11 @@ describe('onboardings', () => {
         department: { id: chi.departmentId, name: 'Engineering' },
         manager: { id: managerId, fullName: 'Minh Nguyen' },
       },
-      template: { id: engineering.id, name: 'Engineering Onboarding' },
+      template: {
+        id: engineering.id,
+        name: 'Engineering Onboarding',
+        archivedAt: null,
+      },
       // Activating now would copy v2, the newest published (BR-A03).
       templateVersion: { id: engineering.versions[0].id, version: 2 },
     });
@@ -315,7 +320,26 @@ describe('onboardings', () => {
     const templateId = await publishedTemplate(definition);
     const draft = await draftFor(await newHire(), templateId);
     const another = await draftFor(await newHire());
-    await hr.post(`/templates/${templateId}/archive`).expect(200);
+    expect(draft.template.archivedAt).toBeNull();
+    const { archivedAt } = templateSchema.parse(
+      (await hr.post(`/templates/${templateId}/archive`).expect(200)).body,
+    );
+
+    // Every read of the draft says so, for the web to stop offering to activate it.
+    expect(archivedAt).not.toBeNull();
+    expect((await read(hr, draft.id)).template.archivedAt).toBe(archivedAt);
+    const rows = onboardingSummarySchema
+      .array()
+      .parse((await hr.get('/onboardings').expect(200)).body);
+    expect(rows.find(({ id }) => id === draft.id)?.template.archivedAt).toBe(
+      archivedAt,
+    );
+    const dashboard = dashboardSchema.parse(
+      (await hr.get('/dashboard').expect(200)).body,
+    );
+    expect(
+      dashboard.onboardings.find(({ id }) => id === draft.id),
+    ).toMatchObject({ template: { archivedAt }, unassigned: [] });
 
     const res = await create({
       employeeId: await newHire(),
@@ -347,7 +371,10 @@ describe('onboardings', () => {
     await hr
       .patch(`/onboardings/${draft.id}`, { templateId: general.id })
       .expect(200);
-    expect((await activate(draft)).template.id).toBe(general.id);
+    expect((await activate(draft)).template).toMatchObject({
+      id: general.id,
+      archivedAt: null,
+    });
   });
 
   it('FR-07 a template without a published version takes no onboarding', async () => {

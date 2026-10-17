@@ -1,4 +1,4 @@
-# Joinpath — Kế hoạch triển khai v0.42
+# Joinpath — Kế hoạch triển khai v0.43
 
 > **Joinpath**: Employee Onboarding & Workflow Management Platform, dự án portfolio Full-stack.
 > Bản này tinh chỉnh SRS v0.4 trong thread ChatGPT "Thiết kế dự án onboarding" (14/10/2026).
@@ -40,6 +40,7 @@
 > **v0.40 (17/10/2026):** M4 chia thành 5 session: M4.1 tách thành sửa task (M4.1a) và sửa cấu trúc template (M4.1b) (§13). Editor gợi ý, không chặn, khi APPROVAL và DOCUMENT mà nó duyệt cùng giao `DIRECT_MANAGER` (§4.2). Bỏ bản nháp template bằng `DELETE /template-versions/:id`: chỉ DRAFT của template đã có bản published, xóa hẳn và ghi audit; thêm một ngoại lệ vào quy tắc không xóa bản ghi nghiệp vụ (§7, §8). Template editor của M4.1a: trang của template, Edit tạo draft, panel sửa task, validate trên trình duyệt, tự lưu; `adaptive-stepper` và `multi-select` sửa tại chỗ (§10, §10.1).
 > **v0.41 (17/10/2026):** sửa cấu trúc template (M4.1b). Key của task và phase sinh từ title lúc thêm (`keyFor`); xóa task gỡ mọi link tới nó (`withoutTasks`), xóa phase kéo theo các task của nó (§4.2). Editor: thêm task, phase bằng ô nhập tại chỗ, menu ⋯ của phase (Rename, Move up, Move down, Delete), kéo thả task trong phase, hộp xác nhận xóa, New template từ trang Templates, draft rỗng, dưới 1280 px panel mở trong drawer, lưu bị 409 thì dừng (§10, §10.1).
 > **v0.42 (17/10/2026):** M4 chia thành 6 session: M4.2 tách thành Publish, Discard và tab version (M4.2a) và Archive (M4.2b) (§13). Mỗi version trong response template kèm `running` và `used`; `DELETE /template-versions/:id` trả template (§8); AT-33, AT-34 (§12). `tooltip` của beUI kéo theo `@floating-ui/dom` 1.8.0 (§6.2). Template editor: tab version, bản published chỉ đọc kèm chi tiết task, Publish kèm tooltip, Discard draft, lưu bị 404 (§10, §10.1).
+> **v0.43 (17/10/2026):** Archive (M4.2b): nút ⋯ trên header trang template, hộp xác nhận nêu onboarding đang chạy, draft onboarding và draft version (§10, §10.1). Template của mọi onboarding kèm `archivedAt`; dashboard không đếm draft trên template đã archive là "ready to activate", `unassigned` của nó rỗng (§8); trang của draft đó mở ở bước chọn template (§10).
 
 ## TL;DR: 6 thay đổi lớn nhất
 
@@ -629,6 +630,7 @@ POST /template-versions/:id/publish
 GET  /onboardings           GET /onboardings/:id         # theo phạm vi (§9); draft hiện bản published mới nhất, tức bản activate sẽ dùng
                                               # /:id kèm today và task (availability, overdue tính theo today(org); dueOverridden: hạn do HR đặt); POST, PATCH, activate trả đúng shape này
                                               # mọi onboarding kèm canceledAt; /:id kèm cancelReason, chỉ HR thấy, người khác nhận null (BR-C03)
+                                              # template của mọi onboarding kèm archivedAt (M4.2b): draft trên template đã archive không activate được (BR-T12)
                                               # list: start date muộn nhất trước, cùng ngày thì mới tạo trước; mỗi dòng kèm progress {completed, total, overdue}
                                               # và nextTask {id, title} | null: task chưa xong có dueOn sớm nhất, hòa thì theo thứ tự template
 POST /onboardings                             {employeeId, templateId, startDate}
@@ -683,7 +685,7 @@ GET /mock-inbox             GET /dashboard
                                               # mock-inbox: mọi email của org, mới nhất trước; HR luôn xem được, vai khác chỉ trong sandbox (403)
                                               # dashboard: chỉ HR (403); {today, onboardings, tasks, activity}, web tự đếm và viết chữ (§10)
                                               # onboardings: ACTIVE và DRAFT, start date sớm nhất trước (khác GET /onboardings); draft kèm unassigned [{title, assignee}]:
-                                              # task mà activate lúc này còn thiếu người, tính như preview; tasks: task PENDING, IN_PROGRESS của mọi onboarding ACTIVE,
+                                              # task mà activate lúc này còn thiếu người, tính như preview (template đã archive: rỗng); tasks: task PENDING, IN_PROGRESS của mọi onboarding ACTIVE,
                                               # theo dueOn, kèm onboardingId, dependsOn, availability, overdue, submittedAt (APPROVAL: lúc nộp revision mới nhất, còn lại null)
                                               # activity: 10 event mới nhất của org, cùng shape với /onboardings/:id/activity
 
@@ -800,6 +802,11 @@ Template editor (M4.1a), mở từ một dòng của bảng Templates (`/templat
   - **Bản đã publish chỉ đọc:** các phase bên trái; bấm một task thì chi tiết hiện ở panel bên phải (dưới 1280 px trong `drawer`): loại, người làm, ngày mở và hạn, Waits for, Instructions là các bước đánh số.
   - **Publish** không hỏi xác nhận: gửi nốt thay đổi chưa lưu rồi mới publish, trong lúc chờ editor không nhận thao tác; xong thì trang đọc bản vừa publish, kèm toast. Nút khóa bằng `aria-disabled` (vẫn focus được) và `tooltip` nói lý do: "Fix N problems to publish", "Give every task a title to publish", "Add a phase and a task to publish" (draft rỗng). Publish bị 409/404: câu dưới nút kèm Reload, dừng tự lưu; lỗi mạng: thử lại được.
   - **Discard draft** (chỉ khi template đã có bản published) hỏi trong `center-morph-modal`; dừng tự lưu trước khi xóa; xong thì trang đọc bản published mới nhất, kèm toast. Lỗi hiện trong hộp; lỗi mạng thì tự lưu chạy lại.
+- Archive (M4.2b):
+  - **Nút ⋯** (`context-menu`) cuối hàng nút của header, ở mọi tab khi template chưa archive; menu có nhãn là tên template và một mục "Archive template…". Khóa trong lúc Publish chạy. Đã archive thì không có nút.
+  - **Hộp xác nhận** (`center-morph-modal`): không tạo onboarding mới, không sửa hay publish được nữa, không hoàn tác; rồi số onboarding đang chạy (cộng `running` các version) hoặc "never published"; draft version được giữ như lần lưu cuối; draft onboarding dùng template này (web đếm từ `GET /onboardings`: một thì nêu tên, từ hai thì nêu số; đang tải, tải lỗi có câu riêng). Từ tab draft: gửi nốt thay đổi chưa lưu, dừng tự lưu, rồi mới archive. 409: "archived elsewhere"; lỗi mạng: tự lưu chạy lại.
+  - **Sau khi archive:** toast; trang mở bản published mới nhất, không tab nào ghi current, draft version thành tab chỉ đọc.
+- Draft onboarding trên template đã archive (BR-T12): trang của nó mở ở bước 2 của wizard, chưa chọn template, kèm Notice nói template đã archive; chọn template khác và Continue thì review như thường. Dashboard: thẻ "Drafts ready to activate" chỉ đếm draft activate được (không còn draft nào activate được mà có draft kẹt: "N needs another template"); câu dưới lời chào thêm "…needs another template" trước "ready to activate"; Needs your attention có dòng riêng kèm "Choose template".
 - Mỗi thay đổi chạy `templateDefinitionSchema` rồi `validateTemplate` ngay trên trình duyệt: Alert "Fix N problems to publish" liệt kê câu của `core`, badge "N problems" trên task, câu đó dưới field sửa được nó. Vòng phụ thuộc dùng câu của canvas, viết từ phía task đang sửa, và tô đỏ link gây vòng; gợi ý BR-R01 ở §4.2.
 - Draft tự lưu 600 ms sau thay đổi cuối (PUT cả definition); title trống thì chưa lưu; rời trang thì gửi nốt phần chưa gửi.
 
@@ -829,10 +836,10 @@ Nguyên tắc (ADR 010): có component beUI thì dùng, không tự vẽ và kh�
 | Xem file đã nộp | `morphing-lightbox` cho ảnh; PDF tải về | Review |
 | Upload giấy tờ | `file-upload` (sửa tại chỗ: `note`, `queueLabel`, ADR 010) | New-hire portal |
 | Đặt mật khẩu | `input` (không dùng `signup-form`: bản này luôn có ô Name, Email sửa được và checkbox Terms; M2.1b) | Accept invitation |
-| Báo kết quả vừa xảy ra | `animated-toast-stack` | Sau khi activate, Landing; Publish, Discard draft (M4.2a) |
+| Báo kết quả vừa xảy ra | `animated-toast-stack` | Sau khi activate, Landing; Publish, Discard draft (M4.2a); Archive (M4.2b) |
 | Chuông thông báo và danh sách mở từ nó | `popover-morph`, mọi độ rộng (M3.2b) | Header của New-hire portal |
-| Thao tác trên dòng task; ⋯ của phase (Rename, Move up, Move down, Delete) | `context-menu` (sửa tại chỗ: nút ⋯ mở bằng click, ADR 010) | Onboarding detail; Template editor (M4.1b) |
-| Đổi ngày bắt đầu, hủy, reassign, đổi hạn; xác nhận xóa task, phase; New template; Discard draft | `center-morph-modal` (sửa tại chỗ: Esc nhường `select` đang mở, ADR 010) | Onboarding detail, review của draft; Template editor, Templates (M4.1b, M4.2a) |
+| Thao tác trên dòng task; ⋯ của phase (Rename, Move up, Move down, Delete); ⋯ của template (Archive) | `context-menu` (sửa tại chỗ: nút ⋯ mở bằng click, ADR 010) | Onboarding detail; Template editor (M4.1b, M4.2b) |
+| Đổi ngày bắt đầu, hủy, reassign, đổi hạn; xác nhận xóa task, phase; New template; Discard draft; Archive | `center-morph-modal` (sửa tại chỗ: Esc nhường `select` đang mở, ADR 010) | Onboarding detail, review của draft; Template editor, Templates (M4.1b, M4.2a, M4.2b) |
 | Panel Edit task, chi tiết task của bản đã publish, dưới 1280 px | `drawer` (480 px, điện thoại hết chiều ngang) | Template editor (M4.1b, M4.2a) |
 | Giải thích vì sao nút bị khóa | `tooltip` (`side="bottom"`, có mũi tên; nút khóa bằng `aria-disabled`, M4.2a) | Nút Publish của Template editor |
 | Danh sách onboarding, nhân viên, phòng ban, template; bảng task theo phase | tự dựng (`components/table.tsx`), không dùng `table` của beUI | Dashboard, Onboardings, New onboarding, Employees, Templates |

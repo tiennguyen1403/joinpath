@@ -24,10 +24,12 @@
   - `click` coi nút `aria-disabled="true"` là đang khóa và chờ tới timeout: thử bấm nút khóa thì `click({ force: true })`;
   - toast của `animated-toast-stack` là `ol[aria-live] li`, không có `role="status"`;
   - `innerText` của tab trong `tabs` (pill) lặp nhãn hai lần, vì có lớp chữ trắng `data-tabs-label` vẽ trên indicator.
+- Thử lỗi mạng của một query bằng `page.route(…, (route) => route.abort())`: app thử lại 3 lần khi không có response (`components/query-provider.tsx`), nên trạng thái lỗi hiện sau khoảng 7 s; chờ ít nhất 8 s (M4.2b).
 - Tự kiểm bảng phương án trước khi đưa user duyệt (M4.1a): bảng `.dc.html` là HTML tĩnh, trình duyệt thường dựng được như canvas.
   - `python -m http.server <port> --bind 127.0.0.1 --directory <scratchpad>`, rồi `run-code --filename` một script: mỗi bảng đặt viewport bằng chiều rộng khung, chờ `document.fonts.ready`, ẩn thanh cuộn (`addStyleTag` `html{scrollbar-width:none}`), đo `scrollHeight`, `scrollWidth` so với `clientWidth`, chụp `fullPage`.
   - Đặt `h` của khung trong `canvas.json` và `$preview` của bảng bằng chiều cao đo được. Hướng dẫn của loại canvas Design bảo không tự kiểm khi user chưa yêu cầu: dự án này thì kiểm.
   - Khung cố định chiều cao (vd 1024 × 768) có cột flex tràn thì header co lại: header thêm `flex-shrink: 0` (M4.2a).
+  - Chép bảng cũ rồi thêm style: kiểm tên class chưa bị dùng. `.jp-more` của các bảng editor là nút ⋯ 28 px của phase; thêm `.jp-more` 40 px cho header làm mọi phase cao thêm (bảng 390 px dài hơn bảng "before" 33 px). Nút ⋯ của header dùng `.jp-hmore` (M4.2b).
 - Kéo thả của `sortable-stack` (motion `Reorder`) chạy với `page.mouse`: `down` trên tay nắm, `move` từng bước nhỏ (vd 8 px, chờ 16 ms), rồi `up`. Bàn phím: `focus` tay nắm rồi `ArrowUp`, `ArrowDown`, `Home`, `End` (M4.1b).
 - `click` nhận locator thay cho ref: `click "getByRole('button', { name: 'Lan Pham, HR' })"`, đỡ phải `snapshot` trước mỗi bước (M3.3d).
   - Tên khớp theo chuỗi con, không phân biệt hoa thường: "Mock inbox" khớp cả "Open mock inbox", locator trùng hai phần tử thì không bấm gì. Thêm `exact: true`.
@@ -57,6 +59,7 @@
 - Vercel CLI 62.2.0 (global, đã đăng nhập; hook đầu session báo "not installed" là sai). MCP Vercel trả 403 với team này: dùng `vercel api`, `vercel logs`, `vercel inspect --logs`, `vercel crons list`. Không chạy `vercel deploy` từ máy (CLI upload cả `apps/api/.env`).
   - `vercel logs <url>` trả tối đa 100 dòng (`--json` khoảng 50): tìm một request bằng khoảng `--since`/`--until` dạng ISO; lọc bằng `--status-code 4xx`, `--query`, `--level`.
   - Request mà cold start in cảnh báo SSL của `pg` ra stderr bị gắn mức `error`, dù trả 200 (M3.5).
+  - Gói hiện tại chỉ giữ request log khoảng 1 giờ: khoảng `--since`/`--until` cũ hơn trả 400 (`--debug` báo `ExceedsBillingLimitError`), `--since 6h` ra "No logs found". Muốn xem một lần chạy (vd cron 01:00 UTC) thì xem trong giờ đó (M4.2b).
 - Secret không bao giờ in ra transcript. Đặt secret qua file tạm trong scratchpad rồi xóa ngay, hoặc để user tự gõ trong terminal riêng.
 - Neon (Postgres 18.6) ngủ sau 5 phút không có truy vấn; request đầu tiên khi đó chậm thêm khoảng 0,9 s.
   - SQL Editor của Neon console: tắt read-only mới chạy được UPDATE. Dòng "0 rows" là số dòng trả về, không phải số dòng bị đổi: kiểm lại qua API, vd `/api/auth/me` → `organization.demo.expiresAt` (M3.5).

@@ -66,6 +66,7 @@ export const onboardingSelect = {
     select: {
       id: true,
       name: true,
+      archivedAt: true,
       versions: {
         where: { status: 'PUBLISHED' },
         orderBy: { version: 'desc' },
@@ -187,7 +188,7 @@ export function toOnboarding(
     completedAt,
     canceledAt,
     employee,
-    template: { versions, ...template },
+    template: { versions, archivedAt, ...template },
     templateVersion,
   }: OnboardingRow,
   { at }: OrgClock,
@@ -204,7 +205,7 @@ export function toOnboarding(
     completedAt: completedAt && at(completedAt),
     canceledAt: canceledAt && at(canceledAt),
     employee,
-    template,
+    template: { ...template, archivedAt: archivedAt && at(archivedAt) },
     templateVersion: version,
   };
 }
@@ -441,7 +442,8 @@ export class OnboardingService {
       onboardings: await Promise.all(
         onboardings.map(async (row) => {
           const onboarding = toOnboarding(row, clock);
-          if (onboarding.status !== 'DRAFT') {
+          // A draft on an archived template can't be activated, so nothing is planned (BR-T12).
+          if (onboarding.status !== 'DRAFT' || onboarding.template.archivedAt) {
             return { ...onboarding, unassigned: [] };
           }
           const plan = await planFor(

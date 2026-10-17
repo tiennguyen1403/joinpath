@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  onboardingSummarySchema,
   type TaskDef,
   type Template,
   type TemplateVersion,
@@ -21,7 +22,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import { Edit, Loader, X } from 'reicon-react';
+import { ArchiveBox, Edit, Loader, More, X } from 'reicon-react';
 import { cn } from '@/components/beui/lib/utils';
 import {
   Alert,
@@ -41,6 +42,13 @@ import {
   CenterMorphModal,
   CenterMorphModalContent,
 } from '@/components/beui/motion/center-morph-modal';
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuLabel,
+  ContextMenuTrigger,
+} from '@/components/beui/motion/context-menu';
 import { Drawer } from '@/components/beui/motion/drawer';
 import { Tabs, TabsList, TabsTrigger } from '@/components/beui/motion/tabs';
 import { Tooltip } from '@/components/beui/motion/tooltip';
@@ -49,7 +57,7 @@ import { Notice, TINTED_DANGER } from '@/components/notice';
 import { TASK_TYPES } from '@/components/task-status';
 import { Steps } from '@/components/task-work';
 import { api, ApiError, messageOf } from '@/lib/api';
-import { formatDateIn } from '@/lib/format';
+import { capitalized, formatDateIn, inWords } from '@/lib/format';
 import { usePageCrumb } from '../../app-shell';
 import { type Draft, Editor, TYPE_HINTS, useDraft, useWide } from './editor';
 import {
@@ -65,6 +73,9 @@ import {
 type VersionSummary = Template['versions'][number];
 
 const GHOST = 'hover:bg-foreground/5 active:bg-foreground/8';
+// The header's ⋯, as tall as its buttons; open, it keeps the pressed layer.
+const MENU_BUTTON =
+  'flex size-10 shrink-0 items-center justify-center rounded-full text-muted-foreground outline-none hover:bg-foreground/5 hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary active:bg-foreground/8 aria-expanded:bg-foreground/8 aria-expanded:text-foreground aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:hover:bg-transparent aria-disabled:hover:text-muted-foreground';
 // A task's row opens its details; hovered or pressed it takes the list-row layer (ADR 009).
 const ROW =
   'flex w-full min-w-0 items-center gap-3 rounded-2xl border border-border bg-background p-3 text-left outline-none transition-colors hover:bg-[color-mix(in_srgb,var(--foreground)_5%,var(--background))] focus-visible:ring-2 focus-visible:ring-primary active:bg-[color-mix(in_srgb,var(--foreground)_8%,var(--background))]';
@@ -127,7 +138,11 @@ export function TemplateView({
           showToast={showToast}
         />
       ) : (
-        <PublishedView template={template} timeZone={timeZone} />
+        <PublishedView
+          template={template}
+          timeZone={timeZone}
+          showToast={showToast}
+        />
       )}
       <AnimatedToastStack toasts={toasts} onDismiss={dismissToast} fixed />
     </>
@@ -138,9 +153,11 @@ export function TemplateView({
 function PublishedView({
   template,
   timeZone,
+  showToast,
 }: {
   template: Template;
   timeZone: string;
+  showToast: (toast: ToastInput) => void;
 }) {
   const current = currentOf(template);
   const [tab, setTab] = useState(
@@ -155,6 +172,7 @@ function PublishedView({
         shown={shown}
         timeZone={timeZone}
         action={shown === current && <EditButton templateId={template.id} />}
+        menu={<TemplateMenu template={template} showToast={showToast} />}
       />
       <VersionTabs template={template} value={shown.id} onChange={setTab} />
       <ReadOnly key={shown.id} template={template} versionId={shown.id} />
@@ -266,6 +284,14 @@ function Drafting({
               showToast={showToast}
             />
           )
+        }
+        menu={
+          <TemplateMenu
+            template={template}
+            draft={draft}
+            busy={publish.isPending}
+            showToast={showToast}
+          />
         }
       />
       <VersionTabs template={template} value={shown.id} onChange={setTab} />
@@ -502,17 +528,261 @@ function DiscardDialog({
   );
 }
 
+/**
+ * The template's own actions, whichever tab is open: Archive, which is final (PLAN §8). Off
+ * while a publish is on its way, so the two never cross.
+ */
+function TemplateMenu({
+  template,
+  draft,
+  busy = false,
+  showToast,
+}: {
+  template: Template;
+  draft?: Draft;
+  busy?: boolean;
+  showToast: (toast: ToastInput) => void;
+}) {
+  const [archiving, setArchiving] = useState(false);
+  const more = useRef<HTMLButtonElement>(null);
+  if (template.archivedAt) return null;
+  return (
+    <>
+      <ContextMenu>
+        <ContextMenuTrigger openOnClick disabled={busy}>
+          <button
+            ref={more}
+            type="button"
+            aria-label={`More actions for ${template.name}`}
+            aria-disabled={busy || undefined}
+            className={MENU_BUTTON}
+          >
+            <More aria-hidden className="size-4.5" />
+          </button>
+        </ContextMenuTrigger>
+        <ContextMenuContent ariaLabel="Template actions">
+          <ContextMenuLabel className="max-w-64 truncate">
+            {template.name}
+          </ContextMenuLabel>
+          <ContextMenuItem
+            tone="destructive"
+            className="text-danger-strong"
+            onSelect={() => setArchiving(true)}
+          >
+            <ArchiveBox aria-hidden className="size-3.5" />
+            Archive template…
+          </ContextMenuItem>
+        </ContextMenuContent>
+      </ContextMenu>
+      <ArchiveDialog
+        open={archiving}
+        template={template}
+        draft={draft}
+        showToast={showToast}
+        onClose={() => {
+          setArchiving(false);
+          more.current?.focus();
+        }}
+      />
+    </>
+  );
+}
+
+// The only 409 archiving gives: someone archived it first.
+const archivedElsewhere = (error: unknown) =>
+  error instanceof ApiError && error.status === 409;
+
+/**
+ * Asks before archiving, with what it means for the onboardings on the template (BR-T12):
+ * running ones carry on, drafts need another template. A draft version stays as last saved.
+ */
+function ArchiveDialog({
+  open,
+  template,
+  draft,
+  showToast,
+  onClose,
+}: {
+  open: boolean;
+  template: Template;
+  draft?: Draft;
+  showToast: (toast: ToastInput) => void;
+  onClose: () => void;
+}) {
+  const queryClient = useQueryClient();
+  // A draft onboarding has no version yet, so only the list knows it; HR sees them all (§9).
+  const onboardings = useQuery({
+    queryKey: ['onboardings'],
+    queryFn: () => api('/onboardings', onboardingSummarySchema.array()),
+    enabled: open,
+  });
+  const archive = useMutation({
+    mutationFn: async () => {
+      if (draft) {
+        // The draft keeps the last change if it can be saved; nothing writes to it after.
+        await draft.save.flush().catch(() => undefined);
+        await draft.save.stop();
+      }
+      return api(`/templates/${template.id}/archive`, templateSchema, {
+        method: 'POST',
+      });
+    },
+    onSuccess: (archived) => {
+      queryClient.setQueryData(['template', archived.id], archived);
+      // Where onboardings start or get activated, it now reads as archived.
+      for (const queryKey of [['templates'], ['onboardings'], ['dashboard']]) {
+        void queryClient.invalidateQueries({ queryKey });
+      }
+      showToast({
+        status: 'success',
+        title: `${archived.name} archived`,
+        description:
+          'No new onboarding can start from it. Running ones carry on.',
+      });
+    },
+    // Not archived after all: the draft saves again.
+    onError: (error) => {
+      if (!archivedElsewhere(error)) draft?.save.resume();
+    },
+  });
+  const close = () => {
+    archive.reset();
+    onClose();
+  };
+  // The modal re-runs its focus effect whenever this callback changes, so it stays one function.
+  const keep = useRef(close);
+  useEffect(() => {
+    keep.current = close;
+  });
+  const onOpenChange = useCallback((open: boolean) => {
+    if (!open) keep.current();
+  }, []);
+  const running = template.versions.reduce((sum, v) => sum + v.running, 0);
+  const published = template.versions.some((v) => v.status === 'PUBLISHED');
+  const kept = template.versions.find((v) => v.status === 'DRAFT');
+  const drafts = onboardings.data?.filter(
+    (onboarding) =>
+      onboarding.status === 'DRAFT' && onboarding.template.id === template.id,
+  );
+  const title = `Archive ${template.name}?`;
+  return (
+    <CenterMorphModal open={open} onOpenChange={onOpenChange}>
+      <CenterMorphModalContent
+        ariaLabel={title}
+        closeButtonLabel="Close"
+        // The drawer's scrim (Foundations).
+        backdropClassName="bg-black/40"
+      >
+        <div className="flex flex-col gap-4.5 p-6">
+          <h2 className="pr-10 text-xl leading-7 font-semibold tracking-tight">
+            {title}
+          </h2>
+          <p className="-mt-3 text-[13px] leading-5 text-muted-foreground">
+            No new onboarding can start from it, and it can&apos;t be edited or
+            published again. This can&apos;t be undone.
+          </p>
+          <ul className="flex flex-col gap-2 text-[13px] leading-5">
+            <Point>
+              {!published
+                ? 'It was never published, so no onboarding uses it.'
+                : running === 0
+                  ? 'No onboarding is running on it.'
+                  : running === 1
+                    ? '1 running onboarding carries on, on the version it started with.'
+                    : `${running} running onboardings carry on, each on the version it started with.`}
+            </Point>
+            {kept && (
+              <Point>
+                Draft v{kept.version} is kept as it was last saved
+                {published && ", and can't be published"}.
+              </Point>
+            )}
+            {/* No onboarding ever started from a template never published (FR-07). */}
+            {published &&
+              (onboardings.isPending ? (
+                <li className="flex gap-2.5 text-muted-foreground">
+                  <Loader
+                    aria-hidden
+                    className="mt-0.75 size-3.5 shrink-0 animate-spin motion-reduce:animate-none"
+                  />
+                  Looking for draft onboardings that use it…
+                </li>
+              ) : !drafts ? (
+                <Point>Couldn&apos;t check for draft onboardings.</Point>
+              ) : drafts.length === 1 ? (
+                <Point>
+                  <span className="font-medium">
+                    {drafts[0].employee.fullName}&apos;s
+                  </span>{' '}
+                  draft onboarding needs another template before it can be
+                  activated.
+                </Point>
+              ) : (
+                drafts.length > 1 && (
+                  <Point>
+                    {capitalized(inWords(drafts.length))} draft onboardings need
+                    another template before they can be activated.
+                  </Point>
+                )
+              ))}
+          </ul>
+          {archive.error && (
+            <Notice
+              variant="destructive"
+              title={`Couldn't archive ${template.name}`}
+              text={
+                archivedElsewhere(archive.error)
+                  ? 'It was archived elsewhere. Reload the page to see it now.'
+                  : messageOf(archive.error)
+              }
+            />
+          )}
+          <div className="flex flex-col gap-2">
+            <Button
+              size="lg"
+              aria-disabled={archive.isPending || undefined}
+              onClick={() => {
+                if (!archive.isPending) archive.mutate();
+              }}
+              className={TINTED_DANGER}
+            >
+              {archive.isPending ? 'Archiving…' : 'Archive template'}
+            </Button>
+            <Button variant="secondary" className={GHOST} onClick={close}>
+              Keep template
+            </Button>
+          </div>
+        </div>
+      </CenterMorphModalContent>
+    </CenterMorphModal>
+  );
+}
+
+function Point({ children }: { children: ReactNode }) {
+  return (
+    <li className="flex gap-2.5">
+      <span
+        aria-hidden
+        className="mt-1.75 size-1.5 shrink-0 rounded-full bg-muted-foreground"
+      />
+      <span>{children}</span>
+    </li>
+  );
+}
+
 /** The template, and what the version on screen means for new onboardings. */
 function Header({
   template,
   shown,
   timeZone,
   action,
+  menu,
 }: {
   template: Template;
   shown: VersionSummary;
   timeZone: string;
   action: ReactNode;
+  menu: ReactNode;
 }) {
   const { archivedAt, versions } = template;
   const published = newestPublished(template);
@@ -547,7 +817,10 @@ function Header({
         </div>
         <span className="text-muted-foreground">{note}</span>
       </div>
-      {action}
+      <div className="flex items-start gap-2">
+        {action}
+        {menu}
+      </div>
     </div>
   );
 }

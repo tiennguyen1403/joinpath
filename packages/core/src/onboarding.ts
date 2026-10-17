@@ -300,7 +300,12 @@ export const onboardingSchema = z.object({
   // When HR canceled it (BR-C03).
   canceledAt: z.iso.datetime().nullable(),
   employee: employeeSchema.omit({ user: true }),
-  template: z.object({ id: z.uuid(), name: z.string() }),
+  // Archived, a draft can't be activated until it gets another template (BR-T12).
+  template: z.object({
+    id: z.uuid(),
+    name: z.string(),
+    archivedAt: z.iso.datetime().nullable(),
+  }),
   // The version the tasks came from. A draft has none yet, so it shows the one activating
   // now would use: the newest published (BR-A03).
   templateVersion: z.object({ id: z.uuid(), version: z.int() }),

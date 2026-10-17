@@ -10,6 +10,7 @@ import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { Fragment, type ReactNode } from 'react';
 import {
+  ArchiveBox,
   ArrowRight,
   Check,
   Clock,
@@ -67,6 +68,11 @@ const overdueTasks = ({ tasks }: DashboardData) =>
   tasks.filter(({ overdue }) => overdue);
 const drafts = ({ onboardings }: DashboardData) =>
   onboardings.filter(({ status }) => status === 'DRAFT');
+// A draft whose template was archived can't be activated until it gets another (BR-T12).
+const ready = (data: DashboardData) =>
+  drafts(data).filter(({ template }) => !template.archivedAt);
+const orphaned = (data: DashboardData) =>
+  drafts(data).filter(({ template }) => template.archivedAt);
 const dependentsOf = ({ tasks }: DashboardData, task: Task) =>
   tasks.filter(({ dependsOn }) => dependsOn.includes(task.id));
 
@@ -146,7 +152,8 @@ function sentenceOf(data: DashboardData) {
       task.availability !== 'BLOCKED' && dependentsOf(data, task).length > 0,
   );
   const stuck = new Set(holding.map(({ onboardingId }) => onboardingId)).size;
-  const waiting = drafts(data);
+  const orphans = orphaned(data);
+  const waiting = ready(data);
   if (stuck > 1) {
     return `${capitalized(inWords(stuck))} onboardings are stuck behind tasks that are past due.`;
   }
@@ -159,6 +166,12 @@ function sentenceOf(data: DashboardData) {
     return overdue.length === 1
       ? 'One task is past due.'
       : `${capitalized(inWords(overdue.length))} tasks are past due.`;
+  }
+  // A draft that can't go ahead comes before one that can.
+  if (orphans.length > 0) {
+    return orphans.length === 1
+      ? `${orphans[0].employee.fullName}'s onboarding needs another template.`
+      : `${capitalized(inWords(orphans.length))} onboardings need another template.`;
   }
   if (waiting.length > 0) {
     return waiting.length === 1
@@ -173,7 +186,8 @@ function sentenceOf(data: DashboardData) {
 function Counts({ data }: { data: DashboardData }) {
   const { today, onboardings, tasks } = data;
   const active = onboardings.filter(({ status }) => status === 'ACTIVE');
-  const waiting = drafts(data);
+  const waiting = ready(data);
+  const orphans = orphaned(data).length;
   const overdue = overdueTasks(data);
   const blocked = tasks.filter(
     ({ availability }) => availability === 'BLOCKED',
@@ -205,7 +219,9 @@ function Counts({ data }: { data: DashboardData }) {
         count={waiting.length}
         note={
           waiting.length === 0
-            ? 'None waiting'
+            ? orphans > 0
+              ? `${orphans} ${orphans === 1 ? 'needs' : 'need'} another template`
+              : 'None waiting'
             : waiting.length > 1
               ? namesOf(waiting)
               : draft.startDate < today
@@ -395,6 +411,29 @@ function Attention({
         );
       }),
     ...drafts(data).map((draft) => {
+      const { archivedAt } = draft.template;
+      // It can't be activated as it is, so its owners don't matter yet (BR-T12).
+      if (archivedAt) {
+        return (
+          <Row
+            key={draft.id}
+            tile={
+              <Tile className="bg-warning/10 text-warning-strong">
+                <ArchiveBox className="size-4.5" />
+              </Tile>
+            }
+            title={`${draft.employee.fullName}'s onboarding needs another template`}
+            body={`${draft.template.name} was archived ${formatDateIn(archivedAt, timeZone)}, so this draft can't be activated. It ${
+              draft.startDate < today ? 'was to start' : 'starts'
+            } ${formatDate(draft.startDate)}.`}
+            action={
+              <Action href={`/onboardings/${draft.id}`} primary>
+                Choose template
+              </Action>
+            }
+          />
+        );
+      }
       const { unassigned } = draft;
       // "Two IT tasks" when the rule left one role short, as the review of the draft says.
       const roles = new Set(

@@ -35,6 +35,7 @@ import {
   DateRangePickerHeader,
 } from '@/components/beui/motion/date-range-picker';
 import { RadioGroup, RadioGroupItem } from '@/components/beui/motion/radio';
+import { Notice } from '@/components/notice';
 import { Table, Td, Th, THead, Tr } from '@/components/table';
 import { api, ApiError } from '@/lib/api';
 import {
@@ -75,9 +76,14 @@ export function Wizard({
   usePageCrumb('New onboarding');
   const router = useRouter();
   const queryClient = useQueryClient();
-  const [step, setStep] = useState<Step>(draft ? 3 : 1);
+  // A draft whose template was archived can't be activated: it starts at picking another
+  // (BR-T12), with none picked, since the archived one isn't offered.
+  const stuck = draft?.template.archivedAt != null;
+  const [step, setStep] = useState<Step>(draft ? (stuck ? 2 : 3) : 1);
   const [employeeId, setEmployeeId] = useState(draft?.employee.id);
-  const [templateId, setTemplateId] = useState(draft?.template.id);
+  const [templateId, setTemplateId] = useState(
+    stuck ? undefined : draft?.template.id,
+  );
   const [startDate, setStartDate] = useState(draft?.startDate);
 
   const employees = useQuery({
@@ -231,6 +237,13 @@ export function Wizard({
         </>
       }
     >
+      {draft && stuck && (
+        <Notice
+          variant="warning"
+          title={`${draft.template.name} was archived`}
+          text={`Pick another template to activate ${draft.employee.fullName}'s onboarding. The start date stays as it was.`}
+        />
+      )}
       {loadError && <LoadError what="the templates" />}
       {templates.data && (
         <TemplateAndDate
