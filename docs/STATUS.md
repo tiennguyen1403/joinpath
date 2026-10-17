@@ -2,12 +2,12 @@
 
 > File này được nạp vào mọi session qua `CLAUDE.md`. Giữ ngắn: chỉ trạng thái hiện tại. Lịch sử chi tiết nằm trong `docs/sessions/`.
 
-**Cập nhật:** 2026-10-17 · session 037 (M4.2b · Archive)
-**Mốc hiện tại:** M4 · Editor và trực quan, 4/6 session. M3 xong sau 11 session.
+**Cập nhật:** 2026-10-17 · session 038 (M4.3a · Graph tab)
+**Mốc hiện tại:** M4 · Editor và trực quan, 5/7 session. M3 xong sau 11 session.
 
-M0–M3 đã xong. Demo public tại https://joinpath.vercel.app, đã push tới M3.4b (`a254d2d`); golden path (PLAN §11) bước 1–10 chạy trên production chỉ bằng UI, từ Try demo tới dashboard và Activity (M3.5). Có trên prod: HR đổi ngày bắt đầu, hủy, reassign, đổi deadline; thông báo trong app và email; Vercel Cron gọi tick mỗi ngày 01:00 UTC (chạy được với Services, `CRON_SECRET` đã đặt); sandbox 24 giờ kèm A, B, C, purge xóa cả file trên R2; mốc giờ theo ngày nghiệp vụ; Dynamic Island; dashboard HR và Activity. Chỉ ở local (chưa push): template editor (M4.1a–M4.2b): New template, sửa task và cấu trúc (kéo thả, validate tức thì, tự lưu); tab version, Publish, Discard draft, Archive; draft trên template đã archive mở ở bước chọn template.
+M0–M3 đã xong. Demo public tại https://joinpath.vercel.app, đã push tới M3.4b (`a254d2d`); golden path (PLAN §11) bước 1–10 chạy trên production chỉ bằng UI, từ Try demo tới dashboard và Activity (M3.5). Có trên prod: HR đổi ngày bắt đầu, hủy, reassign, đổi deadline; thông báo trong app và email; Vercel Cron gọi tick mỗi ngày 01:00 UTC (chạy được với Services, `CRON_SECRET` đã đặt); sandbox 24 giờ kèm A, B, C, purge xóa cả file trên R2; mốc giờ theo ngày nghiệp vụ; Dynamic Island; dashboard HR và Activity. Chỉ ở local (chưa push): template editor (M4.1a–M4.2b): New template, sửa task và cấu trúc (kéo thả, validate tức thì, tự lưu); tab version, Publish, Discard draft, Archive; draft trên template đã archive mở ở bước chọn template. Trang onboarding có tab Tasks | Graph: dependency graph bằng React Flow + dagre, mỗi phase một dải, màu theo trạng thái (M4.3a).
 
-**Session kế tiếp:** **M4.3 · Dependency graph** (xem bảng). Bước đầu: kiểm cron nếu mở session trong 01:00–02:00 UTC (log Vercel chỉ giữ khoảng 1 giờ; chưa kiểm từ handoff 033); pin version `@xyflow/react`, dagre; đề xuất chỗ đặt graph; canvas phương án, tự kiểm rồi mới đưa duyệt. Handoff mới nhất: `docs/sessions/037-M4.2b-archive.md`.
+**Session kế tiếp:** **M4.3b · Graph trong template editor** (xem bảng). Bước đầu: kiểm cron nếu mở session trong 01:00–02:00 UTC (log Vercel chỉ giữ khoảng 1 giờ; chưa kiểm từ handoff 033); đề xuất chỗ đặt graph trong editor và ở bản published chỉ đọc; canvas phương án, tự kiểm rồi mới đưa duyệt. Handoff mới nhất: `docs/sessions/038-M4.3a-graph-tab.md`.
 
 ## Quy ước session
 
@@ -28,11 +28,9 @@ Trạng thái: ✅ xong · ▶ kế tiếp · ⏳ chưa làm. Mốc M5 mới ở
 | M3.3a–M3.3d | Sandbox (`POST /demo/sandboxes`, scenarios A/B/C, purge, `switch-user`); mốc giờ theo ngày nghiệp vụ (`clock_advances`); Dynamic Island trên mọi trang của sandbox, cả 390 px; Try demo; notice dữ liệu giả; portal → My tasks | AT-31, BR-D01, BR-D05, BR-P06 pass; golden path bước 1–9 chạy ở local chỉ bằng UI (handoff 027–030) | ✅ |
 | M3.4a–M3.4b | API `GET /dashboard`, `GET /onboardings/:id/activity` (từ `audit_events`), schema và `blockersOf` trong `core`; web: dashboard HR, Activity là card ở cột phải trang chi tiết | Test FR-19 pass; golden path bước 10 ở local (handoff 031–032) | ✅ |
 | M3.5 | Push, demo public end-to-end; upload và xem file thật trên production; `CRON_SECRET`, Vercel Cron với Services; thời gian tạo sandbox, purge với R2 | **Mốc an toàn:** golden path 1–10 chạy trên production (handoff 033) | ✅ |
-| M4.1a | Template editor, sửa task của một DRAFT: `/templates/[id]` mở từ bảng Templates, template chưa có draft thì có nút tạo draft; panel Edit task đủ field như canvas; validate tức thì bằng `core` (Alert, badge "N problems", lỗi theo field), gợi ý BR-R01; tự lưu qua `PUT` | Qua UI ở 1440 px: tạo draft v3 của Engineering, nối vòng như canvas → đúng Alert, badge trên 2 task, lỗi ở Waits for; gỡ link thì hết lỗi; reload vẫn giữ (handoff 034) | ✅ |
-| M4.1b | Sửa cấu trúc: thêm, xóa task; thêm, đổi tên, xóa, sắp xếp phase; kéo thả task trong phase (`sortable-stack`); New template; drawer dưới 1280 px; 409 khi lưu | Qua UI dựng một template mới tới khi hết lỗi; 390 px không tràn ngang (handoff 035) | ✅ |
-| M4.2a | Tab version, bản published chỉ đọc; số onboarding mỗi version (API mới); Publish kèm tooltip; Discard draft (`DELETE /template-versions/:id`) | Qua UI publish v3, onboarding mới dùng v3; test của API mới pass (handoff 036) | ✅ |
-| M4.2b | Archive (nút ⋯, hộp xác nhận); `archivedAt` trên template của onboarding; draft trên template đã archive mở ở bước chọn template, dashboard không đếm | Qua UI archive một template: không tạo onboarding mới từ nó được, draft dùng nó không còn ghi "ready to activate" (handoff 037) | ✅ |
-| **M4.3** | Dependency graph (React Flow + dagre, chỉ xem): xem trước trong editor và ở chi tiết onboarding, tô màu theo trạng thái | Graph đúng dependency và màu trạng thái, ở 1440 và 390 px | ▶ |
+| M4.1a–M4.2b | Template editor: `/templates/[id]`, sửa task (panel, validate tức thì bằng `core`, gợi ý BR-R01, tự lưu); sửa cấu trúc (thêm, xóa, kéo thả, New template, drawer dưới 1280 px, 409); tab version, Publish kèm tooltip, Discard draft; Archive, `archivedAt` trên template của onboarding | Qua UI: dựng template tới khi hết lỗi, publish v3 rồi onboarding mới dùng v3, archive thì không tạo onboarding mới được; 390 px không tràn ngang (handoff 034–037) | ✅ |
+| M4.3a | Dependency graph trên trang onboarding: tab Tasks \| Graph, layout theo dải phase (dagre), card và mũi tên theo trạng thái, legend; pin `@xyflow/react` 12.12.0, `@dagrejs/dagre` 3.1.1; Vitest cho `apps/web` | Graph đúng dependency và màu trạng thái, ở 1440 và 390 px; test FR-23 pass (handoff 038) | ✅ |
+| **M4.3b** | Graph trong template editor (xem trước draft, cả khi có vòng phụ thuộc) và ở bản published chỉ đọc; dùng lại `DependencyGraph` | Graph của draft cập nhật theo từng thay đổi, đúng dependency (kể cả `reviews`), ở 1440 và 390 px | ▶ |
 | M4.4 | Analytics theo phòng ban + rà FR mức Must | **MVP cut line** | ⏳ |
 | M5.1 | Playwright: golden path + quyền xem file | | ⏳ |
 | M5.2 | Rà ma trận quyền, cross-tenant, upload; trạng thái rỗng và lỗi; a11y | | ⏳ |
@@ -43,6 +41,7 @@ Trạng thái: ✅ xong · ▶ kế tiếp · ⏳ chưa làm. Mốc M5 mới ở
 
 - Preview deployment: origin khác `APP_ORIGIN` nên mọi request ghi bị 403, preview dùng chung DB với production, và không có `S3_*` (chỉ đặt cho Production) nên API của preview không boot. Chốt khi bắt đầu dùng PR: tắt preview, hoặc cho phép origin của preview và dùng Neon branch.
 - Swagger `/api/docs` (PLAN §8) chưa thuộc session nào; khi thêm phải chỉnh CSP của `helmet`. Gắn vào session nào?
+- Dòng "React Flow" trên graph hiện nhưng không bấm được, vì cả khung graph `inert` (để vuốt cuộn được trang và trình đọc màn hình bỏ qua graph). Muốn link bấm được thì phải bỏ `inert` khỏi riêng panel đó: chốt ở M5.2?
 
 ## Chạy dự án
 
@@ -55,7 +54,7 @@ pnpm storage:init      # lần đầu, hoặc volume RustFS mới: tạo bucket 
 pnpm db:migrate        # prisma migrate dev (lần đầu, hoặc khi đổi schema)
 pnpm db:seed           # tạo lại org acme: lan.pham@acme.joinpath.demo (HR), duc.tran@… (IT), minh.nguyen@… (MEMBER), kèm onboarding
                        # A (An, nháp), B (Bao, chờ Lan duyệt ID), C (Chi, đã xong); cần RustFS + bucket. --no-scenarios: chỉ người và template
-pnpm dev               # web http://localhost:3000 (đăng nhập ở /login; thư mời ở /mock-inbox; portal của người mới ở /my-onboarding; duyệt tài liệu ở /tasks, nút Review documents; thông báo ở /notifications; sửa, publish, discard, archive (nút ⋯) template: bấm một dòng ở /templates, New template ở đó) · api http://localhost:3001/api/health
+pnpm dev               # web http://localhost:3000 (đăng nhập ở /login; thư mời ở /mock-inbox; portal của người mới ở /my-onboarding; duyệt tài liệu ở /tasks, nút Review documents; thông báo ở /notifications; sửa, publish, discard, archive (nút ⋯) template: bấm một dòng ở /templates, New template ở đó; graph của onboarding: tab Graph ở trang chi tiết) · api http://localhost:3001/api/health
 pnpm test              # cần Postgres + migration, RustFS + bucket; rồi pnpm lint · pnpm typecheck · pnpm format:check
 # Tua ngày: +1 day, Jump trên island (mọi trang trong sandbox, cả portal và mock inbox), hoặc POST /api/demo/clock/advance {days} (1–30, chỉ sandbox; acme là sandbox); ghi clock_advances rồi chạy tick.
 # Try demo: "Start a demo instead" ở /login (5 sandbox mỗi giờ mỗi IP; IP local là ::1). Đổi vai: island, hoặc POST /api/demo/switch-user {employeeId}, cả trong acme.

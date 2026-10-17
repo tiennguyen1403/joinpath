@@ -2,6 +2,7 @@ import type { Task, TaskDef } from '@joinpath/core';
 import {
   ArrowRight,
   Check,
+  CloseCircle,
   DocumentText,
   Eye,
   Link,
@@ -41,18 +42,21 @@ export function waitsFor(task: Task, tasks: Task[]) {
 
 /**
  * Whether a task can be worked on today (PLAN §4.4). A finished task has a badge only where
- * `done` asks for one.
+ * `done` asks for one. `compact`, on the graph's cards, says Waiting where arrows show what
+ * for, and gives a canceled task a badge too.
  */
 export function TaskBadge({
   task,
   tasks,
   size = 'sm',
   done = false,
+  compact = false,
 }: {
   task: Task;
   tasks: Task[];
   size?: 'sm' | 'md';
   done?: boolean;
+  compact?: boolean;
 }) {
   const icon = size === 'sm' ? 'size-3' : 'size-3.5';
   switch (task.availability) {
@@ -94,9 +98,19 @@ export function TaskBadge({
           className="border-warning/30 bg-warning/10 text-warning-strong"
           icon={<Link className={icon} />}
         >
-          Waits for {waitsFor(task, tasks)}
+          {compact ? 'Waiting' : `Waits for ${waitsFor(task, tasks)}`}
         </AnimatedBadge>
       );
+    case 'CANCELED':
+      return compact ? (
+        <AnimatedBadge
+          size={size}
+          status="neutral"
+          icon={<CloseCircle className={icon} />}
+        >
+          Canceled
+        </AnimatedBadge>
+      ) : null;
     case 'COMPLETED':
       return done ? (
         <AnimatedBadge

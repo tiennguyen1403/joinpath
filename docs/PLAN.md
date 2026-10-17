@@ -1,4 +1,4 @@
-# Joinpath — Kế hoạch triển khai v0.43
+# Joinpath — Kế hoạch triển khai v0.44
 
 > **Joinpath**: Employee Onboarding & Workflow Management Platform, dự án portfolio Full-stack.
 > Bản này tinh chỉnh SRS v0.4 trong thread ChatGPT "Thiết kế dự án onboarding" (14/10/2026).
@@ -41,6 +41,7 @@
 > **v0.41 (17/10/2026):** sửa cấu trúc template (M4.1b). Key của task và phase sinh từ title lúc thêm (`keyFor`); xóa task gỡ mọi link tới nó (`withoutTasks`), xóa phase kéo theo các task của nó (§4.2). Editor: thêm task, phase bằng ô nhập tại chỗ, menu ⋯ của phase (Rename, Move up, Move down, Delete), kéo thả task trong phase, hộp xác nhận xóa, New template từ trang Templates, draft rỗng, dưới 1280 px panel mở trong drawer, lưu bị 409 thì dừng (§10, §10.1).
 > **v0.42 (17/10/2026):** M4 chia thành 6 session: M4.2 tách thành Publish, Discard và tab version (M4.2a) và Archive (M4.2b) (§13). Mỗi version trong response template kèm `running` và `used`; `DELETE /template-versions/:id` trả template (§8); AT-33, AT-34 (§12). `tooltip` của beUI kéo theo `@floating-ui/dom` 1.8.0 (§6.2). Template editor: tab version, bản published chỉ đọc kèm chi tiết task, Publish kèm tooltip, Discard draft, lưu bị 404 (§10, §10.1).
 > **v0.43 (17/10/2026):** Archive (M4.2b): nút ⋯ trên header trang template, hộp xác nhận nêu onboarding đang chạy, draft onboarding và draft version (§10, §10.1). Template của mọi onboarding kèm `archivedAt`; dashboard không đếm draft trên template đã archive là "ready to activate", `unassigned` của nó rỗng (§8); trang của draft đó mở ở bước chọn template (§10).
+> **v0.44 (17/10/2026):** M4 chia thành 7 session: M4.3 tách thành graph trên trang onboarding (M4.3a) và xem trước trong editor (M4.3b) (§13). Pin `@xyflow/react` 12.12.0 và `@dagrejs/dagre` 3.1.1; `apps/web` có Vitest cho logic thuần (§6.2). Trang onboarding có hai tab Tasks | Graph, cho mọi người xem được onboarding: mỗi phase một dải cột, card viền theo trạng thái, mũi tên nét đứt khi còn chờ; Activity vẫn là card của tab Tasks (§10, §10.1).
 
 ## TL;DR: 6 thay đổi lớn nhất
 
@@ -449,13 +450,13 @@ Sơ đồ trên là ở local. Trên Vercel (ADR 011), router của Vercel chia 
 | Icons | `reicon-react` 1.2.6 (MIT) | Bộ Outline: lưới 24, nét 1.5px, `currentColor`. reicon không có icon grip nên tay kéo dùng `Reorder` (M4.1b). Component beUI nào import `lucide-react` thì đổi sang icon reicon tương ứng |
 | Design tokens | `theme.css` của beUI + `--primary-strong: #0067D1` + lớp hover + màu active nav | Ba chỗ lệch so với beUI: (1) chữ trắng trên `#0285F7` chỉ đạt 3.7:1 nên dùng `#0067D1`; (2) hover của mọi link điều hướng (sidebar, header) và dòng bảng/danh sách là lớp phủ foreground 5%, 8% khi nhấn, vì `muted/60` của beUI gần như không thấy; (3) active nav nền `#E3F0FC`, chữ `#0067D1`, icon `#0285F7` thay cho `muted/70`. Không shadow. Xem bảng Foundations trên canvas |
 | Motion | `motion/react` + `lib/ease.ts` của beUI, copy nguyên và giữ MIT notice | Các spring PRESS / SWAP / PANEL / LAYOUT; luôn có nhánh reduced motion |
-| Graph | React Flow + auto-layout (dagre) | Chỉ để xem, không phải builder |
+| Graph | React Flow (`@xyflow/react` 12.12.0) + auto-layout bằng `@dagrejs/dagre` 3.1.1, cả hai MIT, pin ở M4.3a | Chỉ để xem, không phải builder: viewport cố định, không kéo, pan hay zoom. `@dagrejs/dagre` là bản đang được duy trì của dagre (gói `dagre` 0.8.5 ngừng từ 2022). Giữ dòng attribution "React Flow": hướng dẫn của React Flow chỉ cho ẩn khi có subscription Pro |
 | API | NestJS 12 (ESM), REST, Swagger | Template của Nest 12 dùng ESM, Vitest và oxlint |
 | Schema và types | Zod trong `packages/core` | Dùng chung FE/BE |
 | DB | PostgreSQL 18 + Prisma 7.10 (pin cố định) | Tag `latest` của prisma CLI đang trỏ vào bản 8.0 RC, nên phải pin. Partial unique index khai báo ngay trong schema bằng preview `partialIndexes` (`@@unique([...], where: {...})`, dùng từ M1.3). CHECK thì Prisma schema chưa biểu diễn được, nên viết SQL tay trong migration (`migrate dev --create-only`) |
 | Storage | Bucket private S3-compatible: local và CI dùng RustFS 1.0.1, production dùng Cloudflare R2; client `aws4fetch` 1.0.20 | MinIO ngừng phát hành image từ 10/2025 và archive repo năm 2026; image cũ không còn tải được (M2.2). `aws4fetch` (MIT, không dependency) ký request `fetch` có sẵn của Node, kể cả presigned URL. Gọi bằng path-style URL qua cùng các biến env `S3_*`: RustFS, R2 và Amazon S3 đều nhận, Tigris thì không (bucket tạo từ 19/02/2025). R2 (chốt ở M2.5): `S3_REGION=auto`, location hint APAC, egress miễn phí, free 10 GB không hết hạn |
 | Việc định kỳ | Vercel Cron gọi `GET /internal/cron/tick` mỗi ngày (M3.2a) | Không dùng Redis, queue hay worker |
-| Test | Vitest 4, Supertest, Playwright | Một test runner cho cả repo. Vite 8 tự xử lý decorator metadata của Nest nên không cần plugin SWC |
+| Test | Vitest 4, Supertest, Playwright | Một test runner cho cả repo. Vite 8 tự xử lý decorator metadata của Nest nên không cần plugin SWC. `apps/web` chạy Vitest cho logic thuần không cần trình duyệt, vd layout của graph (từ M4.3a) |
 | Repo | pnpm workspaces, oxlint (type-aware), Prettier | Không dùng Turborepo. oxlint và Prettier mỗi công cụ một config ở gốc; Prettier có sẵn trong template Nest 12 nên giữ lại và áp cho code cả repo (không áp cho docs nội bộ) |
 | Runtime | Node 24 LTS, TypeScript 6.0 (pin cố định), pnpm 12 | TypeScript 7 chỉ còn `tsc` native, không có JS API mà Next.js và Nest CLI cần. Các thư viện khác lấy bản ổn định mới nhất lúc bắt đầu |
 | Host | Vercel Hobby, Services (web + api trong một project, region `sin1`) + Neon Postgres Free (Singapore, qua Vercel Marketplace) | Chọn ở M0.4 (§6.6, ADR 011). Không dùng được gói Nest dạng CommonJS (vd `@nestjs/throttler`), vì trên Vercel code CJS không `require()` được ESM của Nest 12 |
@@ -766,7 +767,7 @@ Lỗi luôn trả về dạng `{ code, message, details? }`:
 | Dashboard HR: overdue, bị chặn, sắp tới hạn, đang chạy | HR | P0 | M3 → M4 |
 | Demo controls (Dynamic Island của beUI, nổi giữa đầu trang; khi header không đủ chỗ thì ở một hàng riêng dưới header): đổi vai, ngày nghiệp vụ, "+1 ngày", "Tới ngày bắt đầu", "Demo mới", link inbox | Sandbox | P0 | M3 |
 | Template editor dạng form + validate tức thì + xem trước graph | HR | P0 | M4 |
-| Dependency graph (template và onboarding, tô màu theo trạng thái) | HR | P1 | M4 |
+| Dependency graph (template và onboarding, tô màu theo trạng thái) | Onboarding: HR, Manager, IT (ai xem được onboarding); template: HR | P1 | M4 |
 | Landing page + checklist hướng dẫn demo | Khách | P1 | M5 |
 
 Portal nhân viên mới phải dùng tốt trên điện thoại, vì người mới thường mở link mời trên mobile. Portal là trang `/my-onboarding`, nằm ngoài app shell (không có sidebar). Đây là trang đầu của người có `onboardingId` (§8): `/`, đăng nhập và nhận lời mời đều đưa tới đây. Task đang mở của người mới (upload, submit, Mark complete) làm ngay trong danh sách theo phase. Onboarding đã xong thì portal có nút "Go to My tasks" dưới lời chào, và từ 1024 px có thêm link My tasks trên header; trong app shell, ai có `onboardingId` thấy mục "Your onboarding" ở nhóm You để quay về portal (M3.3d).
@@ -781,11 +782,18 @@ Dashboard HR (M3.4b), từ `GET /dashboard`, web tự đếm và viết câu:
 - **Rồi bảng Onboardings** (`GET /onboardings`) và **Recent activity** (10 event).
 - Org chưa có onboarding nào: chỉ còn empty state của bảng. Tải lỗi: một Alert, bảng tải riêng.
 
-Activity trên trang chi tiết (M3.4b) là card ở cột phải, dưới Invitation (chỉ HR thấy Invitation), cho mọi người xem được onboarding; màn hẹp thì xuống dưới các phase. Chưa có tab tới khi có graph (M4.3). Câu chữ:
+Activity trên trang chi tiết (M3.4b) là card ở cột phải, dưới Invitation (chỉ HR thấy Invitation), cho mọi người xem được onboarding; màn hẹp thì xuống dưới các phase. Từ M4.3a card này thuộc tab Tasks (đoạn Dependency graph, ngay dưới). Câu chữ:
 - tên người đậm; trên dashboard thêm "for <người mới>", trừ khi chính người mới làm;
 - revision và quyết định nêu tên task: "submitted revision 1 of Upload ID documents", "approved revision 2 in Review ID documents";
 - người HR chọn lúc activate thành dòng phụ dưới dòng activated;
 - mốc giờ "today, 09:41" trong ngày nghiệp vụ hôm nay, còn lại "Oct 13, 17:05".
+
+Dependency graph trên trang chi tiết (M4.3a, FR-23):
+- **Hai tab** `Tasks | Graph` dưới các thẻ số, cho mọi người xem được onboarding (graph không lộ thêm dữ liệu nào so với tab Tasks). Tab Tasks giữ nguyên: các phase, cột phải Invitation và Activity. Tab Graph rộng hết trang. Tab không ghi vào URL: tải lại thì về Tasks. Onboarding không có task (draft bị hủy trước khi activate) thì không có tab.
+- **Layout** (`components/graph-layout.ts`): trái sang phải, mỗi phase một dải xám tên như khối phase của tab Tasks ("Day 1 · Thu, Oct 15" khi mọi task mở cùng ngày); trong phase, task đứng một cột bên phải task cùng phase mà nó chờ. dagre xếp thứ tự trong cột và tìm đường cho mũi tên qua các khe; nhiều mũi tên cùng một cạnh card cách nhau 16 px. Task chờ task ở phase sau (không luật nào cấm, BR-T07 chỉ xét ngày): mũi tên đi dưới mọi card rồi vào từ bên trái.
+- **Card** 168 × 112: tên task, người làm (" · overdue" màu đỏ khi quá hạn), badge của tab Tasks dạng ngắn: "Waiting" thay "Waits for …", thêm badge Canceled. Viền theo trạng thái: Ready và In progress viền xanh 2 px, Waiting viền cam, Locked nét đứt, Done viền xanh lá, Canceled xám. Không có quầng sáng (card không dùng shadow).
+- **Mũi tên** từ prerequisite tới task chờ nó: xám khi prerequisite đã xong, cam nét đứt khi task vẫn còn chờ; onboarding đã xong hoặc đã hủy chỉ có mũi tên xám. Legend dưới graph chỉ ghi những gì graph đang có.
+- **Chỉ để xem:** không kéo, pan, zoom; khung graph `inert`, nên vuốt trên graph cuộn trang, còn trình đọc màn hình bỏ qua graph và dùng danh sách ở tab Tasks. Graph rộng hơn trang thì cuộn ngang trong khung của nó (1024 px, điện thoại). Bỏ ô "still waiting on IT" của bảng S0: dashboard đã chỉ ra task gốc đang chặn.
 
 Template editor (M4.1a), mở từ một dòng của bảng Templates (`/templates/:id`):
 - Template chưa có draft: bản published mới nhất, chỉ đọc, kèm nút Edit tạo DRAFT kế tiếp (BR-T02). Đã archive: chỉ đọc, không có Edit.
@@ -822,7 +830,7 @@ Nguyên tắc (ADR 010): có component beUI thì dùng, không tự vẽ và kh�
 | Điều khiển demo (ngày nghiệp vụ, đổi vai) | `dynamic-island` (sửa tại chỗ: không có live region, `compactClassName`, hộp đo không co, ADR 010) | Mọi màn trong sandbox: app shell (M3.3c), portal và mock inbox (M3.3d); vị trí theo độ rộng ở §10 |
 | Đang ở đâu | `breadcrumb` | Header các trang |
 | Trạng thái task, onboarding và template | `animated-badge` | Danh sách, bảng, header |
-| Đổi chế độ xem, lọc danh sách | `tabs` | Onboarding detail và graph, My tasks, Mock inbox, Template editor, Review, Employees (People, Departments) |
+| Đổi chế độ xem, lọc danh sách | `tabs` | Onboarding detail (Tasks, Graph; M4.3a), My tasks, Mock inbox, Template editor, Review, Employees (People, Departments) |
 | Chọn một người | `select` | New onboarding (ô chọn và nút Change ở bước 3), Template editor, Employees (manager; phòng ban cũng dùng `select`) |
 | Chọn một mục trong danh sách | `radio` | New onboarding (nhân viên ở bước 1, template ở bước 2) |
 | Ngày bắt đầu | `date-range-picker` với prop `single` (sửa tại chỗ, ADR 010) | New onboarding |
@@ -845,7 +853,7 @@ Nguyên tắc (ADR 010): có component beUI thì dùng, không tự vẽ và kh�
 | Danh sách onboarding, nhân viên, phòng ban, template; bảng task theo phase | tự dựng (`components/table.tsx`), không dùng `table` của beUI | Dashboard, Onboardings, New onboarding, Employees, Templates |
 | Bề mặt, thông báo, công tắc, nút | `card`, `alert`, `switch`, `button-base` | Mọi nơi |
 
-Tự dựng theo token vì beUI không có: thanh tiến độ onboarding, avatar chữ cái đầu, các bước của wizard, textarea, canvas dependency graph (React Flow), thanh độ mạnh mật khẩu (chép cách chấm điểm và thanh 4 nấc của `signup-form`, MIT), danh sách thông báo (M3.2b: `notification-stack` của beUI là một nút duy nhất xổ ra 3 thẻ không bấm được, không mở được từng thông báo), timeline Activity và các khối của dashboard: thẻ số, Needs your attention, Due in the next 7 days, Recent activity (M3.4b). Bảng cũng tự dựng (M1.6a, ADR 010): `table` của beUI là data grid ảo hóa, khung cuộn cao cố định, mọi dòng cao bằng nhau và cần `@tanstack/react-virtual`, trong khi bảng của Joinpath ngắn và các dòng cao khác nhau.
+Tự dựng theo token vì beUI không có: thanh tiến độ onboarding, avatar chữ cái đầu, các bước của wizard, textarea, dependency graph (React Flow chỉ vẽ card và mũi tên; card, dải phase và legend dựng theo token, M4.3a), thanh độ mạnh mật khẩu (chép cách chấm điểm và thanh 4 nấc của `signup-form`, MIT), danh sách thông báo (M3.2b: `notification-stack` của beUI là một nút duy nhất xổ ra 3 thẻ không bấm được, không mở được từng thông báo), timeline Activity và các khối của dashboard: thẻ số, Needs your attention, Due in the next 7 days, Recent activity (M3.4b). Bảng cũng tự dựng (M1.6a, ADR 010): `table` của beUI là data grid ảo hóa, khung cuộn cao cố định, mọi dòng cao bằng nhau và cần `@tanstack/react-virtual`, trong khi bảng của Joinpath ngắn và các dòng cao khác nhau.
 
 ---
 
@@ -941,7 +949,7 @@ Tự dựng theo token vì beUI không có: thanh tiến độ onboarding, avata
 | **M1** Workflow engine | 1–2 | 11 (thực tế) | `core`: schema + `validateTemplate` + tính ngày + availability + activation plan, unit test kỹ. API template (tạo, `PUT` JSON, publish, archive; chưa có editor, template lấy từ seed). Nhân viên (CRUD tối thiểu). Draft → preview → activate. Checklist. Business clock + endpoint tua ngày (để tự test; UI demo bar làm ở M3). Ghi audit. Wizard, Onboarding detail, My Tasks | Activate được template seed; IT và Manager làm checklist; khóa theo ngày/dependency chạy đúng; onboarding tự COMPLETED; nhóm test T, A, E pass |
 | **M2** Tài liệu và duyệt | 3 | 7 (thực tế) | Invitation + mock inbox + nhận lời mời + resend; thêm RustFS vào docker compose và CI; upload (magic bytes → S3); submit revision; approve/reject/rework; signed download; need-to-know; portal nhân viên mới | Golden path (§11) chạy trọn vẹn ở local; nhóm test R, P pass |
 | **M3** Vận hành và demo | 4 | 11 (thực tế; chia ở M3.1; M3.3 tách ba ở M3.3a, M3.3c và M3.4 tách đôi) | Đổi ngày, reassign, override deadline, hủy; thông báo in-app; cron tick; sandbox + demo bar; dashboard HR cơ bản; timeline | **Mốc an toàn:** demo public chạy được end-to-end trên host |
-| **M4** Editor và trực quan | 5 | 6 (dự kiến; M4.1 tách đôi ở M4.1a, M4.2 ở M4.2a) | Template editor dạng form (phases, tasks, chọn `dependsOn`, rule, offset) + validate tức thì bằng `core` + lịch sử version; dependency graph; analytics theo phòng ban | **MVP cut line:** đủ mọi FR mức Must |
+| **M4** Editor và trực quan | 5 | 7 (dự kiến; M4.1, M4.2, M4.3 mỗi cái tách đôi ở M4.1a, M4.2a, M4.3a) | Template editor dạng form (phases, tasks, chọn `dependsOn`, rule, offset) + validate tức thì bằng `core` + lịch sử version; dependency graph; analytics theo phòng ban | **MVP cut line:** đủ mọi FR mức Must |
 | **M5** Hoàn thiện | 6 | 4 | Playwright golden path; rà lại ma trận quyền, cross-tenant, upload; trạng thái rỗng và lỗi; a11y; checklist hướng dẫn demo; landing page; README, ADR, sơ đồ, video demo | Sẵn sàng đưa vào portfolio |
 | Dự phòng | 7 | — | Dành cho phần bị trễ. Nếu đúng tiến độ: launch sớm, hoặc làm các mục Could | — |
 

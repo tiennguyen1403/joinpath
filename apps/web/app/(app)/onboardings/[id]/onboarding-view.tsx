@@ -9,7 +9,15 @@ import {
 } from '@joinpath/core';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
-import { type ReactNode, useRef, useState } from 'react';
+import {
+  type HTMLAttributes,
+  type ReactNode,
+  useCallback,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { Calendar, Envelope } from 'reicon-react';
 import { ActivityCard } from '@/components/activity';
 import { Avatar, newHireTint } from '@/components/avatar';
@@ -32,6 +40,8 @@ import {
   useAnimatedToastStack,
 } from '@/components/beui/motion/animated-toast-stack';
 import { Button, ButtonLink } from '@/components/beui/motion/button/base';
+import { Tabs, TabsList, TabsTrigger } from '@/components/beui/motion/tabs';
+import { ARROW, DependencyGraph } from '@/components/dependency-graph';
 import { EmptyState } from '@/components/empty-state';
 import { Notice } from '@/components/notice';
 import { TaskBadge, waitsFor } from '@/components/task-status';
@@ -68,6 +78,9 @@ export function OnboardingView({
   const router = useRouter();
   const { toasts, showToast, dismissToast } = useAnimatedToastStack();
   const [change, setChange] = useState<Change | null>(null);
+  // Tasks or Graph (M4.3a); not kept in the URL, so a reload opens the tasks.
+  const [view, setView] = useState('tasks');
+  const tabs = useId();
   // Where focus goes back to when the dialog closes: its button, or the task's ⋯.
   const opener = useRef<HTMLElement | null>(null);
   const openChange = (next: Change, from: Element | null) => {
@@ -126,6 +139,15 @@ export function OnboardingView({
           onPick={openChange}
         />
       );
+    // The tab panel the Tasks | Graph tabs show, once there are tasks.
+    const panel =
+      data.tasks.length > 0
+        ? {
+            role: 'tabpanel',
+            id: `${tabs}-panel`,
+            'aria-labelledby': `${tabs}-${view}`,
+          }
+        : undefined;
     page =
       data.status === 'DRAFT' ? (
         <Wizard
@@ -171,28 +193,55 @@ export function OnboardingView({
               )
             }
           />
-          {/* Beside the tasks, as the canvas lays them out: HR's invitation, then the timeline. */}
-          <div className="flex flex-wrap items-start gap-5">
-            <div className="min-w-0 flex-[999_1_560px]">
-              <Phases onboarding={data} timeZone={timeZone} menu={menu} />
-            </div>
-            <div className="flex min-w-0 flex-[1_1_300px] flex-col gap-3">
-              {data.invitation && (
-                <InvitationCard
-                  onboarding={data}
-                  invitation={data.invitation}
+          {/* A draft canceled before activation has no tasks, so nothing to switch. */}
+          {panel && (
+            <Tabs
+              value={view}
+              onValueChange={setView}
+              className="max-w-full self-start"
+            >
+              <TabsList aria-label="Onboarding views">
+                {['Tasks', 'Graph'].map((name) => (
+                  <TabsTrigger
+                    key={name}
+                    value={name.toLowerCase()}
+                    id={`${tabs}-${name.toLowerCase()}`}
+                    aria-controls={`${tabs}-panel`}
+                    // White on the stronger blue (ADR 009).
+                    indicatorClassName="bg-primary-strong"
+                  >
+                    {name}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </Tabs>
+          )}
+          {panel && view === 'graph' ? (
+            <Graph tasks={data.tasks} panel={panel} />
+          ) : (
+            // Beside the tasks, as the canvas lays them out: HR's invitation, then the timeline.
+            <div className="flex flex-wrap items-start gap-5" {...panel}>
+              <div className="min-w-0 flex-[999_1_560px]">
+                <Phases onboarding={data} timeZone={timeZone} menu={menu} />
+              </div>
+              <div className="flex min-w-0 flex-[1_1_300px] flex-col gap-3">
+                {data.invitation && (
+                  <InvitationCard
+                    onboarding={data}
+                    invitation={data.invitation}
+                    timeZone={timeZone}
+                    showToast={showToast}
+                    seeInvitation={seeInvitation}
+                  />
+                )}
+                <ActivityCard
+                  onboardingId={id}
+                  today={data.today}
                   timeZone={timeZone}
-                  showToast={showToast}
-                  seeInvitation={seeInvitation}
                 />
-              )}
-              <ActivityCard
-                onboardingId={id}
-                today={data.today}
-                timeZone={timeZone}
-              />
+              </div>
             </div>
-          </div>
+          )}
         </>
       );
   } else if (
@@ -242,8 +291,7 @@ export function OnboardingView({
   );
 }
 
-// The canvas's header, with HR's actions while it runs; tabs come with a second view (the
-// graph, M4.3).
+// The canvas's header, with HR's actions while it runs.
 function Header({
   onboarding,
   timeZone,
@@ -482,6 +530,176 @@ function TaskMeta({
       )}
       {waiting && ` · then waits for ${waitsFor(task, tasks)}`}
     </>
+  );
+}
+
+type Look = 'done' | 'ready' | 'waiting' | 'locked' | 'canceled';
+
+// A card's border by what its task can be, and how the legend names it; legend order.
+const LOOKS: Record<
+  Look,
+  { card: string; title?: string; swatch: string; legend: string }
+> = {
+  done: {
+    card: 'border-success/45',
+    swatch: 'border-success/45',
+    legend: 'Done',
+  },
+  ready: {
+    card: 'border-2 border-primary p-[11px]',
+    swatch: 'border-2 border-primary',
+    legend: 'Ready to work on',
+  },
+  waiting: {
+    card: 'border-warning/55',
+    swatch: 'border-warning/55',
+    legend: 'Waiting for another task',
+  },
+  locked: {
+    card: 'border-dashed border-foreground/20',
+    title: 'text-foreground/80',
+    swatch: 'border-dashed border-foreground/30',
+    legend: 'Locked until its date',
+  },
+  canceled: {
+    card: 'border-foreground/12',
+    title: 'text-muted-foreground',
+    swatch: 'border-foreground/12',
+    legend: 'Canceled',
+  },
+};
+
+function lookOf({ status, availability }: Task): Look {
+  if (status === 'COMPLETED') return 'done';
+  if (status === 'CANCELED') return 'canceled';
+  if (availability === 'READY') return 'ready';
+  return availability === 'BLOCKED' ? 'waiting' : 'locked';
+}
+
+// The arrow still waits while its prerequisite isn't done and the task after it is open.
+const waits = (from: Task, to: Task) =>
+  from.status !== 'COMPLETED' &&
+  (to.status === 'PENDING' || to.status === 'IN_PROGRESS');
+
+/**
+ * What waits for what (FR-23, PLAN §10): each phase a band, each task a card, arrows from
+ * each prerequisite. Drawn for sight only; screen readers get the Tasks tab's list instead.
+ */
+function Graph({
+  tasks,
+  panel,
+}: {
+  tasks: Task[];
+  panel: HTMLAttributes<HTMLElement>;
+}) {
+  const nodes = useMemo(
+    () => tasks.map((task) => ({ ...task, phase: task.phaseOrder })),
+    [tasks],
+  );
+  const phases = useMemo(
+    () => Map.groupBy(tasks, ({ phaseOrder }) => phaseOrder),
+    [tasks],
+  );
+  const card = useCallback(
+    (task: Task) => <GraphCard task={task} tasks={tasks} />,
+    [tasks],
+  );
+  // The legend names only what the graph shows.
+  const looks = new Set(tasks.map(lookOf));
+  const byId = new Map(tasks.map((task) => [task.id, task]));
+  const arrows = new Set(
+    tasks.flatMap((to) => to.dependsOn.map((id) => waits(byId.get(id)!, to))),
+  );
+  return (
+    <section {...panel} className="rounded-2xl border border-border p-2">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-3 pt-2.5 pb-3.5">
+        <h2 className="text-[15px] leading-[21px] font-semibold">
+          What waits for what
+        </h2>
+        <p className="text-[13px] text-muted-foreground">
+          Arrows point from a prerequisite to the task that waits for it
+        </p>
+      </div>
+      <div className="overflow-x-auto pb-1">
+        <p className="sr-only">
+          The Tasks tab lists the same tasks and what each waits for.
+        </p>
+        <DependencyGraph
+          tasks={nodes}
+          label={(phase) => phaseTitle(phases.get(phase)!)}
+          card={card}
+          waiting={waits}
+        />
+      </div>
+      <ul
+        aria-hidden
+        className="flex flex-wrap gap-x-5 gap-y-2.5 px-3 pt-1.5 pb-1.5 text-[13px] leading-5 text-muted-foreground"
+      >
+        {(Object.keys(LOOKS) as Look[])
+          .filter((look) => looks.has(look))
+          .map((look) => (
+            <li key={look} className="flex items-center gap-2">
+              <span
+                className={cn(
+                  'h-3.5 w-5.5 shrink-0 rounded-sm border bg-background',
+                  LOOKS[look].swatch,
+                )}
+              />
+              {LOOKS[look].legend}
+            </li>
+          ))}
+        {arrows.has(false) && (
+          <li className="flex items-center gap-2">
+            <Line color={ARROW.done} />
+            Prerequisite done
+          </li>
+        )}
+        {arrows.has(true) && (
+          <li className="flex items-center gap-2">
+            <Line color={ARROW.waiting} dashed />
+            Still waiting
+          </li>
+        )}
+      </ul>
+    </section>
+  );
+}
+
+/** A task on the graph: its title, who has it, and the Tasks tab's badge, short. */
+function GraphCard({ task, tasks }: { task: Task; tasks: Task[] }) {
+  const look = LOOKS[lookOf(task)];
+  return (
+    <div
+      className={cn(
+        'flex size-full flex-col justify-center gap-1 rounded-xl border border-border bg-background p-3 text-[13px] leading-[17px]',
+        look.card,
+      )}
+    >
+      <span className={cn('line-clamp-2 font-semibold', look.title)}>
+        {task.title}
+      </span>
+      <span className="truncate text-xs text-muted-foreground">
+        {task.assignee.fullName}
+        {task.overdue && <span className="text-danger-strong"> · overdue</span>}
+      </span>
+      <span className="mt-1 flex">
+        <TaskBadge task={task} tasks={tasks} done compact />
+      </span>
+    </div>
+  );
+}
+
+function Line({ color, dashed = false }: { color: string; dashed?: boolean }) {
+  return (
+    <svg width="22" height="8" viewBox="0 0 22 8" className="shrink-0">
+      <path
+        d="M 1 4 L 21 4"
+        stroke={color}
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeDasharray={dashed ? '6 6' : undefined}
+      />
+    </svg>
   );
 }
 

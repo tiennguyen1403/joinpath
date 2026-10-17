@@ -30,6 +30,7 @@
   - Đặt `h` của khung trong `canvas.json` và `$preview` của bảng bằng chiều cao đo được. Hướng dẫn của loại canvas Design bảo không tự kiểm khi user chưa yêu cầu: dự án này thì kiểm.
   - Khung cố định chiều cao (vd 1024 × 768) có cột flex tràn thì header co lại: header thêm `flex-shrink: 0` (M4.2a).
   - Chép bảng cũ rồi thêm style: kiểm tên class chưa bị dùng. `.jp-more` của các bảng editor là nút ⋯ 28 px của phase; thêm `.jp-more` 40 px cho header làm mọi phase cao thêm (bảng 390 px dài hơn bảng "before" 33 px). Nút ⋯ của header dùng `.jp-hmore` (M4.2b).
+  - Bảng có graph: lấy tọa độ card và mũi tên từ chính `layoutGraph`. Node 24 chạy thẳng file `.ts` (bỏ type), nên một script trong scratchpad import được `apps/web/components/graph-layout.ts` (chạy trong `apps/web` để tìm thấy `@dagrejs/dagre`; `--no-warnings` tắt cảnh báo MODULE_TYPELESS_PACKAGE_JSON). Bảng khi đó khớp bản build tới từng px (M4.3a).
 - Kéo thả của `sortable-stack` (motion `Reorder`) chạy với `page.mouse`: `down` trên tay nắm, `move` từng bước nhỏ (vd 8 px, chờ 16 ms), rồi `up`. Bàn phím: `focus` tay nắm rồi `ArrowUp`, `ArrowDown`, `Home`, `End` (M4.1b).
 - `click` nhận locator thay cho ref: `click "getByRole('button', { name: 'Lan Pham, HR' })"`, đỡ phải `snapshot` trước mỗi bước (M3.3d).
   - Tên khớp theo chuỗi con, không phân biệt hoa thường: "Mock inbox" khớp cả "Open mock inbox", locator trùng hai phần tử thì không bấm gì. Thêm `exact: true`.
@@ -64,4 +65,9 @@
 - Neon (Postgres 18.6) ngủ sau 5 phút không có truy vấn; request đầu tiên khi đó chậm thêm khoảng 0,9 s.
   - SQL Editor của Neon console: tắt read-only mới chạy được UPDATE. Dòng "0 rows" là số dòng trả về, không phải số dòng bị đổi: kiểm lại qua API, vd `/api/auth/me` → `organization.demo.expiresAt` (M3.5).
 - Proxy dev của Next (rewrite `/api` → :3001) đôi khi trả 500 "Failed to proxy … read ECONNRESET": API đóng socket keep-alive (Node mặc định 5 s) đúng lúc proxy dùng lại, hay gặp khi nhiều query refetch cùng lúc (vd sau +1 day). Request sau thì bình thường; chỉ có ở dev (M3.3c).
+- Playwright với graph (React Flow, M4.3a):
+  - edge là `<g>` trong SVG, `waitFor()` coi là ẩn và chờ tới timeout: chờ bằng `waitFor({ state: 'attached' })`;
+  - span nhãn của tab beUI cũng có `inert`, nên `querySelector('[inert]')` bắt nhầm nó: tìm khung graph qua `.react-flow`;
+  - `Input.synthesizeScrollGesture` kiểu touch (CDP) không cuộn gì trong Chrome headed ở máy này, cả ở vùng không có graph. Kiểm vuốt bằng `document.elementFromPoint` tại điểm trên graph rồi đọc `touch-action` từ phần tử đó lên tới khung cuộn.
+- Chrome trên Windows, cửa sổ 1440 px: thanh cuộn chiếm 15 px, nên trên trang chi tiết onboarding vùng trong card của graph chỉ rộng 1087 px. Graph 1080 px vừa khít khi khung cuộn không có padding ngang; thêm 4 px là hiện thanh cuộn ngang vì 1 px (M4.3a).
 - Thử trạng thái chờ và lỗi mạng trên UI: Playwright `eval` thay `window.fetch` bằng một promise reject sau vài giây (một dòng, nháy đơn). Thử 429 của Try demo: chèn org giả có `created_ip_hash = encode(sha256('::1'::bytea), 'hex')` (IP local qua proxy dev là `::1`), thử xong thì xóa (M3.3c).
